@@ -43,7 +43,8 @@ project(":client").projectDir = file("client")
 | 文件页上一级 | `FilesScreen.kt` / `NewSessionDialog.kt` / `FileMentionDialog.kt` | 根路径（`/`、`C:/`）不再往上；相对 `fsDir` 先补到基准根再切父目录 |
 | Git「上一次提交」 | `AppModel.loadGit` | committed 模式传 `base=HEAD~1`；工作区干净时自动切过去 |
 | 会话列表去重 | `SessionsScreen.kt` | 时间视图必须用 `groupedRest`（`recent` 已从 `rest` 取走前 3 条），否则同一会话出现两次 |
-| 键盘跟随滚动 | `ChatScreen.kt` | 往下翻（看更早）`hide()` IME，往回/到底 `show()`；只对已聚焦输入框生效，系统 IME 不能逐像素跟手 |
+| 键盘跟随滚动 | `ChatScreen.kt` | 只在**底部附近起手**的滑动才控制键盘（index 0 且未超过一屏，或 index 1；中部手势完全不碰）。把「内容 + 键盘」当成一个整体：手指往上（离开底部）→ `show()`；手指往下 → `hide()`。只看用户手势，流式内容/程序滚动不管；回答结束也不会动键盘。系统 IME 不能逐像素跟手 |
+| 流式内容不顶行 | `ChatScreen.kt` | 不在底部时冻结 live 气泡（文本/思考），避免生成中的文字不断改变底部 item 高度、把用户正在看的行顶下去；回到底部自动解冻 |
 | PTY | `AppModel.createPty` | 远端终端先让服务端用自己的默认 shell（Windows 上是 Git Bash/cmd），旧服务端再退回 `bash`；**Adia 本机终端不走这里**，由宿主注入 Termux/proot shell |
 
 
