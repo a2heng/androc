@@ -13,7 +13,7 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VERSION_FILE = os.path.join(ROOT, "opencode.version")
-RELEASES_API = "https://api.github.com/repos/anomalyco/opencode/releases?per_page=30"
+RELEASES_API = "https://api.github.com/repos/anomalyco/opencode/releases?per_page=100"
 
 
 def read_pinned():
