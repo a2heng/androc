@@ -70,6 +70,7 @@ fun SettingsScreen(model: AppModel) {
     var showProviderConnect by remember { mutableStateOf(false) }
     var showLocalRuntime by remember { mutableStateOf(false) }
     var showPlugins by remember { mutableStateOf(false) }
+    var confirmDisconnect by remember { mutableStateOf(false) }
     var removeId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         model.loadMeta()
@@ -102,7 +103,7 @@ fun SettingsScreen(model: AppModel) {
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                     horizontalAlignment = Alignment.End,
                 ) {
                     PillAction("切换", Icons.Rounded.Dns) { showServers = true }
@@ -110,7 +111,7 @@ fun SettingsScreen(model: AppModel) {
                         "断开",
                         Icons.Rounded.Logout,
                         danger = true,
-                    ) { model.disconnect() }
+                    ) { confirmDisconnect = true }
                 }
             }
         }
@@ -369,6 +370,22 @@ fun SettingsScreen(model: AppModel) {
         }
         if (showLocalRuntime) {
             LocalRuntimeDialog(model) { showLocalRuntime = false }
+        }
+        if (confirmDisconnect) {
+            AlertDialog(
+                onDismissRequest = { confirmDisconnect = false },
+                title = { Text("断开连接？") },
+                text = { Text("会停止当前保活和实时同步；已保存的连接和草稿不受影响。") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmDisconnect = false
+                        model.disconnect()
+                    }) { Text("断开", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDisconnect = false }) { Text("取消") }
+                },
+            )
         }
         if (showPlugins) {
             PluginsDialog(model, onDismiss = { showPlugins = false }) { removeId = it }

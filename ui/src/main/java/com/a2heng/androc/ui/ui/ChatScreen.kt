@@ -384,6 +384,25 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             overflow = TextOverflow.Ellipsis,
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            StatusChip(
+                                "模型",
+                                effectiveModel?.let { modelDisplay(it, model.modelGroupById) }
+                                    ?.takeIf { it.isNotBlank() } ?: "服务端默认",
+                                onClick = {
+                                    model.loadMeta(session.directory)
+                                    pickModel = true
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            StatusChip(
+                                "模式",
+                                agentDisplay,
+                                onClick = {
+                                    model.loadMeta(session.directory)
+                                    pickAgent = true
+                                },
+                            )
+                            Spacer(Modifier.width(6.dp))
                             MetaText(
                                 aggregateTokens?.let {
                                     "↑${formatTokens(it.input)} ↓${formatTokens(it.output)}"
@@ -1347,24 +1366,6 @@ private fun ChatStatusBar(
             .padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            StatusChip(
-                "模型",
-                modelLabel,
-                onClick = onPickModel,
-                modifier = Modifier.weight(2f),
-            )
-            StatusChip(
-                "模式",
-                agentLabel,
-                onClick = onPickAgent,
-                modifier = Modifier.weight(1f),
-            )
-        }
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
