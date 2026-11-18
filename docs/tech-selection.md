@@ -303,7 +303,10 @@ interface Market {
   - termlib 只留 `zh/en` 资源；
   - 去掉 2.1 MB 内置字体，终端用系统 `monospace`（或子集化）；
   - 根布局不引 appcompat/material Views。
-- 目标：thin release **10–14 MB**，激进 7–9 MB。
+- 目标：thin release **10–14 MB**，激进 7–9 MB；**实测 7.1 MB**（2026-11-19）。
+- 本机组件入口：登录页与设置共用 `LocalRuntimeDialog`。未安装时显示组件体积/来源；
+  安装后一键启动，由宿主注入 `127.0.0.1` 地址与密码，用户不需要手填。
+- 设置里的插件列表改为**弹框**（不再平铺卡片）；登录页和设置看到的是同一个组件弹框。
 - 功能补齐（硬线 = 比 OpenCode Web 好；Mobile 项标“可选”）：
   | 项 | 现状 | 目标 |
   |---|---|---|

@@ -170,6 +170,33 @@ public class MobileFrontendActivity extends AppCompatActivity {
         mounted = true;
         String pwd = LocalRuntime.serverPassword(this);
         try {
+            // Expose the local component to the shared login/settings dialog.
+            // Full builds bundle it; thin builds leave the launcher null.
+            com.a2heng.androc.ui.data.LocalRuntimeHost.INSTANCE.setLauncher(
+                    new com.a2heng.androc.ui.data.LocalRuntimeLauncher() {
+                        @Override
+                        public boolean getInstalled() {
+                            return true;
+                        }
+
+                        @Override
+                        public String getVersion() {
+                            return BuildConfig.OPENCODE_VERSION;
+                        }
+
+                        @Override
+                        public void start(
+                                kotlin.jvm.functions.Function2<? super String, ? super String, kotlin.Unit> onReady,
+                                kotlin.jvm.functions.Function1<? super String, kotlin.Unit> onError) {
+                            LocalServerService.start(MobileFrontendActivity.this);
+                            onReady.invoke(URL, LocalRuntime.serverPassword(MobileFrontendActivity.this));
+                        }
+
+                        @Override
+                        public void stop() {
+                            LocalServerService.stop(MobileFrontendActivity.this);
+                        }
+                    });
             // El explorador y los terminales usan el sistema de archivos real:
             // "/" es la raiz Android y "~" el HOME de la app. Antes se pasaba
             // un rootfs de enlaces, pero el servidor v2 no lista symlinks y

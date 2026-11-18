@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,6 +65,8 @@ fun SettingsScreen(model: AppModel) {
     var showModelPicker by remember { mutableStateOf(false) }
     var showServers by remember { mutableStateOf(false) }
     var showProviderConnect by remember { mutableStateOf(false) }
+    var showLocalRuntime by remember { mutableStateOf(false) }
+    var showPlugins by remember { mutableStateOf(false) }
     var removeId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         model.loadMeta()
@@ -118,49 +121,19 @@ fun SettingsScreen(model: AppModel) {
         }
 
         Spacer(Modifier.height(8.dp))
+        Text("本机 OpenCode", style = MaterialTheme.typography.titleSmall)
+        SettingsRow(
+            title = "本机运行",
+            subtitle = "安装组件后自动启动，地址和密码由 App 注入",
+        ) { showLocalRuntime = true }
+
+        Spacer(Modifier.height(8.dp))
         Text("插件", style = MaterialTheme.typography.titleSmall)
-        if (!model.isLocalServer()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    "当前连接的是远程服务器。插件只装在本机，切回 127.0.0.1 后才能安装、更新或卸载。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                )
-            }
-        } else {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (model.plugins.isEmpty()) {
-                        Text(
-                            "还没有插件信息。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        model.plugins.forEach { plugin ->
-                            PluginCard(model, plugin) { removeId = it }
-                        }
-                    }
-                    Text(
-                        "插件 = Skill + 它需要的工具链。卸载只删插件本身，不动项目、会话和内核。",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
+        SettingsRow(
+            title = "组件与插件",
+            subtitle = if (model.plugins.isEmpty()) "Skill + 工具链，独立安装/更新"
+            else "${model.plugins.size} 个插件 · Skill + 工具链",
+        ) { showPlugins = true }
 
         Spacer(Modifier.height(8.dp))
         Text(if (model.current != null) "当前模型" else "最近使用", style = MaterialTheme.typography.titleSmall)
@@ -419,6 +392,12 @@ fun SettingsScreen(model: AppModel) {
         if (showProviderConnect) {
             ProviderConnectDialog(model) { showProviderConnect = false }
         }
+        if (showLocalRuntime) {
+            LocalRuntimeDialog(model) { showLocalRuntime = false }
+        }
+        if (showPlugins) {
+            PluginsDialog(model, onDismiss = { showPlugins = false }) { removeId = it }
+        }
         removeId?.let { id ->
             val plugin = model.plugins.firstOrNull { it.id() == id }
             AlertDialog(
@@ -441,6 +420,94 @@ fun SettingsScreen(model: AppModel) {
             )
         }
     }
+}
+
+@Composable
+private fun SettingsRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickableNoRipple(onClick)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                Icons.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PluginsDialog(
+    model: AppModel,
+    onDismiss: () -> Unit,
+    onUninstall: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("组件与插件") },
+        text = {
+            if (!model.isLocalServer()) {
+                Text(
+                    "当前连接的是远程服务器。插件只装在本机，切回 127.0.0.1 后才能安装、更新或卸载。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                LazyColumn(
+                    Modifier.fillMaxWidth().heightIn(max = 440.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (model.plugins.isEmpty()) {
+                        item {
+                            Text(
+                                "还没有插件信息。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        items(model.plugins, key = { it.id() }) { plugin ->
+                            PluginCard(model, plugin, onUninstall)
+                        }
+                    }
+                    item {
+                        Text(
+                            "插件 = Skill + 它需要的工具链。卸载只删插件本身，不动项目、会话和内核。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { model.refreshPlugins() }) { Text("刷新") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        },
+    )
 }
 
 @Composable

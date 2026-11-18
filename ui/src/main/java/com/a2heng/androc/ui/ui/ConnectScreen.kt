@@ -25,6 +25,8 @@ import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -33,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +58,7 @@ fun ConnectScreen(model: AppModel) {
     var password by rememberSaveable { mutableStateOf(model.password) }
     var showPassword by remember { mutableStateOf(false) }
     var savedMenuOpen by remember { mutableStateOf(false) }
+    var showLocalRuntime by remember { mutableStateOf(false) }
 
     Box(
         Modifier
@@ -92,6 +96,32 @@ fun ConnectScreen(model: AppModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(26.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("在这台手机上运行 OpenCode", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "安装组件后自动启动，地址和密码由 App 注入",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = { showLocalRuntime = true }) { Text("本机") }
+                }
+            }
+            Spacer(Modifier.height(18.dp))
 
             OutlinedTextField(
                 value = url,
@@ -247,6 +277,9 @@ fun ConnectScreen(model: AppModel) {
             }
             Spacer(Modifier.height(40.dp))
         }
+    }
+    if (showLocalRuntime) {
+        LocalRuntimeDialog(model) { showLocalRuntime = false }
     }
 }
 
