@@ -12,3 +12,6 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn org.conscrypt.**
+# net.i2p.crypto:eddsa references JDK-only X.509 helpers; Android uses its own.
+-dontwarn sun.security.x509.**
+-dontwarn sun.security.util.**

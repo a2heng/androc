@@ -39,6 +39,7 @@ dependencies {
     // The UI only knows how to talk to a RuntimeConnection; it never imports
     // the kernel or starts a process.
     api(project(":contracts"))
+    implementation(project(":market"))
 
     val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     implementation(composeBom)
