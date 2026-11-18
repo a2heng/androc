@@ -22,6 +22,10 @@
         <service android:name=".ToolboxService" tools:node="remove" />
         <provider android:name=".LocalServerInfoProvider" tools:node="remove" />
         <receiver android:name=".BootReceiver" tools:node="remove" />
+        <service android:name=".ThinRuntimeService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <receiver android:name=".WatchdogReceiver" tools:node="remove" />
     </application>
 </manifest>

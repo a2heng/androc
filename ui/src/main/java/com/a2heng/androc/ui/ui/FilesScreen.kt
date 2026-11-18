@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -118,78 +119,29 @@ private fun FsListPane(model: AppModel) {
     var folderName by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize()) {
-        // 预设文件夹胶囊：~、当前会话目录、最近项目（自动换行，最多约 5 行后滚动）。
-        // 不提供 "/" 和 "/tmp/opencode"：Androc 的应用沙箱读不到真实根目录，
-        // 点开只会是空的，反而让人以为文件系统坏了。
-        val presets = remember(model.homeDir, model.current?.id, model.sessions, model.fsDir, model.fsRootOverride) {
-            buildList {
-                if (model.homeDir.isNotBlank()) add("~" to model.homeDir)
-                model.expandSessionDir(model.current?.directory)?.let { add("当前会话" to it) }
-                model.sessions.forEach { s ->
-                    val dir = model.expandSessionDir(s.directory) ?: return@forEach
-                    if (none { it.second == dir }) {
-                        add(dir.trimEnd('/').substringAfterLast('/').ifBlank { dir } to dir)
-                    }
-                }
-            }.take(24)
-        }
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 168.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-        ) {
-            androidx.compose.foundation.layout.FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                presets.forEach { (label, dir) ->
-                    val selected = model.fsDir.trimEnd('/') == dir.trimEnd('/')
-                    Surface(
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(
-                            1.dp,
-                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
-                        ),
-                        modifier = Modifier.clickableNoRipple {
-                            model.closeFile()
-                            model.loadDir(dir)
-                        },
-                    ) {
-                        Text(
-                            label,
-                            fontSize = 10.sp,
-                            lineHeight = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-            }
-        }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
                 onClick = { parentDir(model.fsDir, rootBase)?.let { model.loadDir(it) } },
                 enabled = parentDir(model.fsDir, rootBase) != null,
             ) {
-                Icon(Icons.Rounded.ArrowUpward, contentDescription = "上级目录")
+                Icon(
+                    Icons.Rounded.ArrowUpward,
+                    contentDescription = "上级目录",
+                    modifier = Modifier.size(20.dp),
+                )
             }
+            Text("文件", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.width(10.dp))
             Text(
                 pathLabel(rootBase, model.fsDir),
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End,
                 modifier = Modifier.weight(1f),
             )
             if (model.fsLoading) {

@@ -3,11 +3,13 @@ package com.a2heng.androc.ui
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.a2heng.androc.ui.data.AppModel
+import com.a2heng.androc.ui.data.AutomationBridge
 import com.a2heng.androc.ui.data.SharedPayload
 import com.a2heng.androc.ui.ui.AppRoot
 import com.a2heng.androc.ui.ui.OcTheme
@@ -64,6 +66,12 @@ fun OpenCodeMobileRoot(
     onSharedConsumed: () -> Unit = {},
 ) {
     val model: AppModel = viewModel()
+    DisposableEffect(model) {
+        AutomationBridge.model = model
+        onDispose {
+            if (AutomationBridge.model === model) AutomationBridge.model = null
+        }
+    }
     model.overrideFsRoot(fsRoot)
     model.setBundled(kernelBundled, toolsBundled)
     model.setPluginManager(plugins)

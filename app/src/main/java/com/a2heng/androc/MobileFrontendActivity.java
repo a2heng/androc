@@ -42,6 +42,7 @@ public class MobileFrontendActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AutomationServer.start(this);
         if (!"mobile".equals(BuildConfig.UI_MODE)) {
             // Respaldo: el frontend WebView clasico.
             startActivity(new android.content.Intent(this, MainActivity.class));
@@ -72,6 +73,9 @@ public class MobileFrontendActivity extends AppCompatActivity {
         if (BuildConfig.THIN) {
             // UI-only build: no local kernel, no server wait. The saved remote
             // connection (or the login screen) is mounted immediately.
+            // The installed pack is started by the thin runtime shell.
+            com.a2heng.androc.ui.data.LocalRuntimeHost.INSTANCE.setLauncher(
+                    new ThinRuntimeLauncher(this));
             com.a2heng.androc.ui.OpenCodeMobileHost.showStandalone(this);
             return;
         }

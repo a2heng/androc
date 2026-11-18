@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.a2heng.androc.market.MarketClient
 import com.a2heng.androc.ui.data.AppModel
@@ -47,6 +48,23 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
     var installedVersion by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableStateOf(0f) }
 
+    fun startLocal() {
+        val l = launcher ?: return
+        busy = true
+        error = null
+        l.start(
+            { url, password ->
+                busy = false
+                model.connect(url, password, remember = true)
+                onDismiss()
+            },
+            { message ->
+                busy = false
+                error = message
+            },
+        )
+    }
+
     fun install() {
         busy = true
         error = null
@@ -67,10 +85,16 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
                 }
                 installedVersion = file.parentFile?.name
                 progress = 1f
+                if (launcher != null) {
+                    // The component is installed: start it and inject the local
+                    // address/password into the normal login flow.
+                    startLocal()
+                } else {
+                    busy = false
+                }
             } catch (e: Exception) {
-                error = e.message ?: e.toString()
-            } finally {
                 busy = false
+                error = e.message ?: e.toString()
             }
         }
     }
@@ -80,28 +104,17 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
         title = { Text("本机 OpenCode") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (launcher == null || !launcher.installed) {
-                    if (installedVersion != null) {
-                        Text(
-                            "OpenCode 组件已安装 · $installedVersion",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            "运行时启动器接入后，这里会直接启动本机服务并自动连接。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        Text(
-                            "组件未安装。安装后由 App 启动本机服务，地址和密码自动注入，不需要手动填写。",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            "OpenCode 组件 ≈ 89 MB 下载 / 247 MB 安装；从官方 release 检查更新。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                val installed = launcher?.installed == true || installedVersion != null
+                if (!installed) {
+                    Text(
+                        "组件未安装。安装后由 App 启动本机服务，地址和密码自动注入，不需要手动填写。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "OpenCode 组件 ≈ 89 MB 下载 / 247 MB 安装；从官方 release 检查更新。",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     if (busy) {
                         LinearProgressIndicator(
                             progress = { progress },
@@ -115,7 +128,7 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
                     }
                 } else {
                     Text(
-                        "组件已安装" + (launcher.version?.let { " · $it" } ?: ""),
+                        "组件已安装" + ((installedVersion ?: launcher?.version)?.let { " · $it" } ?: ""),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
@@ -128,39 +141,35 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.size(8.dp))
-                        Text("正在启动本机服务…", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            if (progress < 1f) "正在安装/校验…" else "正在启动本机服务…",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
                 error?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         },
         confirmButton = {
-            if (launcher != null && launcher.installed) {
-                TextButton(
+            val installed = launcher?.installed == true || installedVersion != null
+            when {
+                installed && launcher != null -> TextButton(
                     enabled = !busy,
-                    onClick = {
-                        busy = true
-                        error = null
-                        launcher.start(
-                            { url, password ->
-                                busy = false
-                                model.connect(url, password, remember = false)
-                                onDismiss()
-                            },
-                            { message ->
-                                busy = false
-                                error = message
-                            },
-                        )
-                    },
-                ) { Text("启动并连接") }
-            } else {
-                TextButton(
-                    enabled = !busy && installedVersion == null,
+                    onClick = { startLocal() },
+                ) { Text("启动并登录") }
+                installed -> TextButton(enabled = false, onClick = {}) { Text("已安装") }
+                else -> TextButton(
+                    enabled = !busy,
                     onClick = { install() },
-                ) { Text(if (installedVersion == null) "安装组件" else "已安装") }
+                ) { Text("安装组件") }
             }
         },
         dismissButton = {

@@ -112,71 +112,86 @@ fun NewSessionDialog(
 
     AppDialog(
         onDismissRequest = onDismiss,
-        title = { Text("新建会话") },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = { upTarget?.let { path = it } },
-                        enabled = upTarget != null,
-                    ) {
-                        Icon(Icons.Rounded.ArrowUpward, contentDescription = "上一级", modifier = Modifier.size(20.dp))
-                    }
-                    Text(
-                        sessionPathLabel(path, home),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+        title = {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { upTarget?.let { path = it } },
+                    enabled = upTarget != null,
+                ) {
+                    Icon(
+                        Icons.Rounded.ArrowUpward,
+                        contentDescription = "上一级",
+                        modifier = Modifier.size(18.dp),
                     )
                 }
-                HorizontalDivider()
+                Text("新建会话", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    sessionPathLabel(path, home),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 5.dp),
+                        .padding(vertical = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    sessionChip(
-                        label = "HOME",
-                        selected = path.trimEnd('/') == home,
-                    ) { if (home.isNotBlank()) path = home }
-                    val workspace = model.sessionRoot()
-                    sessionChip(
-                        label = "项目区",
-                        selected = workspace.isNotBlank() && path.trimEnd('/') == workspace,
-                    ) { path = workspace.ifBlank { home } }
-                }
-                if (recents.isNotEmpty()) {
-                    Text(
-                        "最近使用",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(vertical = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        recents.forEach { dir ->
-                            sessionChip(
-                                label = shortDir(dir, model.homeDir),
-                                selected = path.trimEnd('/') == dir.trimEnd('/'),
-                            ) { path = dir }
-                        }
+                    sessionChip("HOME", path.trimEnd('/') == home) {
+                        if (home.isNotBlank()) path = home
+                    }
+                    recents.forEach { dir ->
+                        sessionChip(
+                            shortDir(dir, model.homeDir),
+                            path.trimEnd('/') == dir.trimEnd('/'),
+                        ) { path = dir }
                     }
                 }
                 HorizontalDivider()
-                Box(Modifier.fillMaxWidth().height(260.dp)) {
+                if (creatingFolder) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = folderName,
+                            onValueChange = { folderName = it },
+                            placeholder = { Text("新文件夹名") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            enabled = folderName.isNotBlank(),
+                            onClick = {
+                                val name = folderName.trim()
+                                val parent = path.ifBlank { baseRoot }
+                                model.createFolder(parent, name) {
+                                    path = fullPath(parent, name)
+                                    folderName = ""
+                                    creatingFolder = false
+                                    reload++
+                                }
+                            },
+                        ) { Text("创建") }
+                        TextButton(onClick = {
+                            creatingFolder = false
+                            folderName = ""
+                        }) { Text("取消") }
+                    }
+                }
+                Box(Modifier.fillMaxWidth().height(290.dp)) {
                     when {
-                        loading -> Box(Modifier.fillMaxWidth().height(260.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(strokeWidth = 2.dp)
-                        }
+                        loading -> Box(
+                            Modifier.fillMaxWidth().height(290.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { CircularProgressIndicator(strokeWidth = 2.dp) }
                         error != null -> Text(
                             error ?: "",
                             style = MaterialTheme.typography.bodySmall,
@@ -192,7 +207,7 @@ fun NewSessionDialog(
                                         .clickableNoRipple {
                                             path = fullPath(path.ifBlank { baseRoot }, entry.path)
                                         }
-                                        .padding(vertical = 9.dp, horizontal = 4.dp),
+                                        .padding(vertical = 8.dp, horizontal = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
@@ -207,6 +222,7 @@ fun NewSessionDialog(
                                         style = MaterialTheme.typography.bodyMedium,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -219,8 +235,15 @@ fun NewSessionDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    TextButton(onClick = { creatingFolder = true }) {
-                        Icon(Icons.Rounded.CreateNewFolder, contentDescription = null, modifier = Modifier.size(16.dp))
+                    TextButton(onClick = {
+                        creatingFolder = !creatingFolder
+                        folderName = ""
+                    }) {
+                        Icon(
+                            Icons.Rounded.CreateNewFolder,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
                         Spacer(Modifier.width(4.dp))
                         Text("新建文件夹")
                     }
@@ -233,61 +256,15 @@ fun NewSessionDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(model.expandSessionDir(path)) }) {
-                Text("在这里创建")
-            }
+            TextButton(
+                enabled = path.isNotBlank(),
+                onClick = { onCreate(model.expandSessionDir(path)) },
+            ) { Text("在这里创建") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
-
-    if (creatingFolder) {
-        AppDialog(
-            onDismissRequest = { creatingFolder = false },
-            title = { Text("新建文件夹") },
-            text = {
-                Column {
-                    Text(
-                        "在 ${sessionPathLabel(path, home)} 下创建",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = folderName,
-                        onValueChange = { folderName = it },
-                        placeholder = { Text("文件夹名，例如 PureVox") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = folderName.isNotBlank(),
-                    onClick = {
-                        val name = folderName.trim()
-                        creatingFolder = false
-                        folderName = ""
-                        if (name.isNotEmpty()) {
-                            val parent = path.ifBlank { baseRoot }
-                            model.createFolder(parent, name) {
-                                path = fullPath(parent, name)
-                                reload++
-                            }
-                        }
-                    },
-                ) { Text("创建") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    creatingFolder = false
-                    folderName = ""
-                }) { Text("取消") }
-            },
-        )
-    }
 }
 
 @Composable
