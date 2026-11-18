@@ -65,7 +65,11 @@ Termux 的 ELF 把 `/data/data/com.termux/files/usr/lib` 编译进了
   未实现项。
 - **[`docs/plugins.md`](docs/plugins.md)** — 插件 APK 契约、分类、来源/网址、
   安装/更新/卸载。
-- **[`docs/model.md`](docs/model.md)** — 只有一个 Server Default，及对应 API。
+- **[`docs/plugin-catalog.md`](docs/plugin-catalog.md)** — 远期插件目录；
+  Writing 第一个样例与参考工作流。
+- **[`docs/plugin-repos.md`](docs/plugin-repos.md)** — 插件仓库、CI、
+  OpenCode 每日自动更新、签名。
+- **[`docs/model.md`](docs/model.md)** — 当前会话 / recent / 免费 / 服务器默认。
 - **[`docs/connections.md`](docs/connections.md)** — 多服务器、新建/编辑 API、
   排序与记忆。
 - **[`docs/packs.md`](docs/packs.md)** — 插件包仓库、独立发版、签名 manifest。

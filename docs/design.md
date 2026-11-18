@@ -67,6 +67,8 @@
 | 文档 | 内容 |
 |---|---|
 | [`plugins.md`](plugins.md) | 插件 APK 契约、分类、来源/网址管理、安装更新卸载 |
+| [`plugin-catalog.md`](plugin-catalog.md) | 远期插件目录；Writing 第一个样例与参考工作流 |
+| [`plugin-repos.md`](plugin-repos.md) | 插件仓库、CI、每日自动更新、签名 |
 | [`model.md`](model.md) | 服务器默认模型、API 事实、写入方式 |
 | [`connections.md`](connections.md) | 多服务器、新建/编辑 API、排序、记忆 |
 | [`series.md`](series.md) | 模块分层、阶段路线 |
