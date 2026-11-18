@@ -181,7 +181,9 @@ public class MobileFrontendActivity extends AppCompatActivity {
             // puede leer la raiz Android y esa vista solo mostraba vacio.
             com.a2heng.androc.ui.OpenCodeMobileHost.show(
                     this, URL, pwd, shell,
-                    LocalRuntime.homeDir(this).getAbsolutePath());
+                    LocalRuntime.homeDir(this).getAbsolutePath(),
+                    true, true,
+                    new AppPluginManager(this));
         } catch (Throwable t) {
             Log.w(TAG, "frontend Compose fallo; se abre el WebView", t);
             mounted = false;

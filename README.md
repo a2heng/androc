@@ -5,8 +5,8 @@
 
 - 应用名：**Androc**
 - 包名：`com.a2heng.androc`
-- 形态：**一个 App，三层能力**——UI（基础）→ kernel pack（本机 opencode）→
-  tools pack（Android 构建链），按需安装；另出 `thin` / `full` 两个构建
+- 形态：**一个 App + 插件**——基础 UI 和 proot 引擎随 APK；OpenCode、Android
+  构建、本地 AI、调试、Termux 都是按需安装的插件（每个插件 = Skill + 工具链）
 - opencode：**2.3.2**（musl arm64，跑在 proot 内）
 - 目标：把「opencode + JDK + Android SDK + Gradle + 调试工具」装进手机，
   不依赖电脑、不依赖 Termux 外部应用；离线用户用 full 构建
@@ -18,8 +18,8 @@ Androc 不再拆成三个 APK。同一个 `com.a2heng.androc` 有三种状态：
 | 状态 | 装了什么 | 能做什么 |
 |---|---|---|
 | **UI only** | 基础 APK | 连接电脑 / 远程 opencode、官方 App 配对 |
-| **UI + kernel** | + kernel pack | 本机跑 opencode、会话、终端 |
-| **UI + kernel + tools** | + tools pack | 端侧构建 Android APK |
+| **UI + OpenCode 内核** | + OpenCode 插件 | 本机跑 opencode、会话、终端 |
+| **UI + 内核 + Android 构建** | + Android 构建插件 | 端侧构建 Android APK |
 
 为什么能这样：`proot` 引擎必须随 APK 分发（约 2–3 MB），但 `opencode`、Termux
 toolbox、JDK/SDK/Gradle 都可以下载后在 proot 内执行。完整分层、pack 格式、
@@ -59,8 +59,9 @@ Termux 的 ELF 把 `/data/data/com.termux/files/usr/lib` 编译进了
 - **[`docs/commands.md`](docs/commands.md)** — 所有 `oc-*` 命令的全名与用法、
   **唯一运行时 = proot**、命令↔路径矩阵、原理解释表、系统命令包装、
   迭代检查清单。
-- **[`docs/series.md`](docs/series.md)** — 一个 App、三层能力（UI / kernel pack /
-  tools pack）、pack 格式、设置页设计。
+- **[`docs/series.md`](docs/series.md)** — 一个 App + 插件（Skill + 工具链）、
+  插件目录、设置页设计。
+- **[`docs/packs.md`](docs/packs.md)** — 插件包仓库、独立发版、签名 manifest。
 - **[`docs/integration.md`](docs/integration.md)** — 官方 App、其他应用、API、
   Console 的接入方式。
 - **[`docs/storage.md`](docs/storage.md)** — 应用私有目录、SAF、MediaStore、
@@ -119,16 +120,16 @@ python3 app/src/main/assets/skills/android-build/scripts/check-16kb.py \
 
 ## 现在能做什么
 
-- **本机 opencode（kernel pack）**：官方 `linux-arm64-musl` 在 proot 内启动，
+- **本机 opencode（OpenCode 插件）**：官方 `linux-arm64-musl` 在 proot 内启动，
   WebView 或 Compose 界面打开本地 UI；不需要 Termux、不需要 root。
 - **文件分享（0.3.0）**：悬浮菜单 → **Archivos** 浏览 `~` 下的文件和文件夹；
   文件可分享给其他应用或保存到手机，文件夹会先打成 ZIP 再分享/保存。
 - **默认 Home 项目**：打开就是应用私有 HOME，不预置示例项目，也不会自动
   创建 git 仓库；需要 Android 项目时让 agent 用 `android-project` skill 生成。
-- **端侧构建 Android（tools pack）**：Termux 的 `openjdk-21` + Android platform 36 +
+- **端侧构建 Android（Android 构建插件）**：Termux 的 `openjdk-21` + Android platform 36 +
   aarch64 `aapt2` + Gradle，直接在手机上执行 `assembleDebug`。
-- **一种代码，两种分发**：`thin` 按需下载 kernel/tools pack；`full` 把同样的 pack
-  打进 assets，给不能联网的设备。首次启动只做本地解压/安装。
+- **一种代码，两种分发**：`thin` 按需下载插件；`full` 把同样的插件包放进 assets，
+  给不能联网的设备。首次启动只做本地解压/安装。
 - **opencode skill**：`android-build` skill 告诉 agent 如何初始化工具链、构建项目、
   找到产物 APK。
 - **可扩展**：保留上游的 Termux 风格 toolbox、`pkg/apt`、设备 API（剪贴板、Toast、

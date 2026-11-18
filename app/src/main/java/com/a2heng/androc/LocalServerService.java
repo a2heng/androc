@@ -63,8 +63,12 @@ public class LocalServerService extends Service {
         startForeground(NID, notification());
         // El toolchain offline (SDK/Gradle/cache) se extrae en paralelo para
         // no retrasar el arranque de opencode. Los scripts esperan al marcador.
-        new Thread(() -> ToolchainInstaller.ensure(getApplicationContext()),
-                "toolchain-install").start();
+        // CapabilityManager puede desactivarlo (tools.payload eliminado).
+        if (!getSharedPreferences("app", MODE_PRIVATE)
+                .getBoolean("capability_disabled_tools_payload", false)) {
+            new Thread(() -> ToolchainInstaller.ensure(getApplicationContext()),
+                    "toolchain-install").start();
+        }
         // El arranque nativo hace health checks HTTP: nunca en el hilo
         // principal (NetworkOnMainThreadException). El servicio ya es
         // foreground, asi que puede esperar en segundo plano.

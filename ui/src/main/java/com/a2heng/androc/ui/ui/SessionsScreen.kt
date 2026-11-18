@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
@@ -72,6 +73,7 @@ fun SessionsScreen(
     var query by rememberSaveable { mutableStateOf("") }
     val grouped = model.sessionsGroupByFolder
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var showServers by rememberSaveable { mutableStateOf(false) }
     val list = remember(model.sessions, query) {
         val q = query.trim().lowercase()
         if (q.isEmpty()) model.sessions
@@ -164,6 +166,15 @@ fun SessionsScreen(
                     )
                 } else {
                     Icon(
+                        Icons.Rounded.Dns,
+                        contentDescription = "切换服务器",
+                        modifier = Modifier
+                            .size(17.dp)
+                            .clickableNoRipple { showServers = true },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
                         Icons.Rounded.Search,
                         contentDescription = "搜索",
                         modifier = Modifier
@@ -244,6 +255,9 @@ fun SessionsScreen(
                     item { Spacer(Modifier.height(16.dp)) }
                 }
             }
+        }
+        if (showServers) {
+            ServerSwitchDialog(model) { showServers = false }
         }
     }
 }

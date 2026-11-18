@@ -121,7 +121,7 @@ fun ConnectScreen(model: AppModel) {
                                 expanded = savedMenuOpen,
                                 onDismissRequest = { savedMenuOpen = false },
                             ) {
-                                model.savedConnections.forEach { saved ->
+                                model.savedConnectionsSorted().forEach { saved ->
                                     DropdownMenuItem(
                                         text = {
                                             Column {

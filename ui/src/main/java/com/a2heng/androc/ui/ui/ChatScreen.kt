@@ -538,35 +538,18 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                         requireUnconsumed = false,
                                         pass = PointerEventPass.Initial,
                                     )
-                                    // 只在「底部附近」起手的滑动才控制键盘：
-                                    // 1) 最新一条（index 0）且没往上滚超过一屏，或
-                                    // 2) 还在倒数第二条（index 1）。
-                                    // 中部起手的滑动完全不碰键盘，避免看历史时被切来切去。
-                                    val viewport = listState.layoutInfo.viewportSize.height.coerceAtLeast(1)
-                                    val startedNearBottom = (listState.firstVisibleItemIndex == 0 &&
-                                        listState.firstVisibleItemScrollOffset <= viewport) ||
-                                        listState.firstVisibleItemIndex == 1
                                     var lastY = down.position.y
                                     var totalY = 0f
-                                    var shown = false
                                     var hidden = false
                                     while (true) {
                                         val event = awaitPointerEvent(PointerEventPass.Initial)
                                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                         totalY += change.position.y - lastY
                                         lastY = change.position.y
-                                        // 把「内容 + 键盘」看成一个整体：
-                                        // 手指往上（内容往上滚、已经离开底部）-> 键盘跟着出来；
-                                        // 手指往下（内容往下滚）-> 键盘跟着收起。
-                                        if (startedNearBottom) {
-                                            if (!shown && totalY < -threshold && listState.canScrollBackward) {
-                                                shown = true
-                                                runCatching { composerFocus.requestFocus() }
-                                                keyboard?.show()
-                                            } else if (!hidden && totalY > threshold) {
-                                                hidden = true
-                                                keyboard?.hide()
-                                            }
+                                        // 只处理往下滚：收起键盘。往上滚不做任何事。
+                                        if (!hidden && totalY > threshold) {
+                                            hidden = true
+                                            keyboard?.hide()
                                         }
                                         if (change.changedToUpIgnoreConsumed() || !change.pressed) break
                                     }

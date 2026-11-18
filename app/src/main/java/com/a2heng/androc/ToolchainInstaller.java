@@ -41,14 +41,19 @@ public final class ToolchainInstaller {
     public static boolean installed(Context ctx) {
         File root = root(ctx);
         File marker = new File(root, ".installed");
-        File version = new File(root, "version");
-        if (!marker.isFile() || !version.isFile()) return false;
+        if (!marker.isFile()) return false;
+        return VERSION.equals(installedVersion(ctx));
+    }
+
+    /** Version del toolchain instalado, o cadena vacia si no hay marcador. */
+    public static String installedVersion(Context ctx) {
+        File version = new File(root(ctx), "version");
+        if (!version.isFile()) return "";
         try {
-            String v = new String(java.nio.file.Files.readAllBytes(version.toPath()),
+            return new String(java.nio.file.Files.readAllBytes(version.toPath()),
                     java.nio.charset.StandardCharsets.UTF_8).trim();
-            return VERSION.equals(v);
         } catch (Exception e) {
-            return false;
+            return "";
         }
     }
 

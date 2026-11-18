@@ -8,6 +8,8 @@ import org.connectbot.terminal.TerminalDimensions
 import org.connectbot.terminal.TerminalEmulator
 import org.connectbot.terminal.TerminalEmulatorFactory
 import com.a2heng.androc.ui.ConnectionService
+import com.a2heng.androc.contracts.PluginInfo
+import com.a2heng.androc.contracts.PluginManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -139,6 +141,108 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         if (input.isBlank()) return null
         val normalized = runCatching { OcClient.normalize(input) }.getOrNull() ?: return null
         return savedConnections.firstOrNull { it.url == normalized }
+    }
+
+    /**
+     * 本机内核还是远程服务器。只用于设置页展示插件，不参与连接逻辑。
+     */
+    fun isLocalServer(): Boolean = isLocalUrl(serverUrl)
+
+    fun isLocalUrl(url: String): Boolean {
+        if (url.isBlank()) return false
+        val host = runCatching { java.net.URI(url).host }
+            .getOrNull()?.lowercase() ?: return false
+        return host == "127.0.0.1" || host == "localhost" ||
+            host == "::1" || host == "[::1]"
+    }
+
+    /**
+     * 连接选择器的顺序：本机永远第一，其余保持“最近使用”顺序。
+     */
+    fun savedConnectionsSorted(): List<SavedConnection> {
+        return savedConnections.sortedByDescending { if (isLocalUrl(it.url)) 1 else 0 }
+    }
+
+    /**
+     * full 构建把 kernel/tools 都打在 APK 里；standalone UI 构建传 false。
+     * PackManager 落地后，这两个值改由安装状态驱动。
+     */
+    var kernelBundled by mutableStateOf(false)
+        private set
+    var toolsBundled by mutableStateOf(false)
+        private set
+
+    fun setBundled(kernel: Boolean, tools: Boolean) {
+        kernelBundled = kernel
+        toolsBundled = tools
+    }
+
+    // ---- 能力层（插件） ----------------------------------------------------
+    var plugins by mutableStateOf<List<PluginInfo>>(emptyList())
+        private set
+    var pluginBusy by mutableStateOf<String?>(null)
+        private set
+    private var pluginManager: PluginManager? = null
+
+    fun setPluginManager(manager: PluginManager?) {
+        pluginManager = manager
+        refreshPlugins()
+    }
+
+    fun refreshPlugins() {
+        plugins = runCatching {
+            pluginManager?.list() ?: emptyList()
+        }.getOrDefault(emptyList())
+    }
+
+    fun installPlugin(id: String) = runPlugin(id) { manager, callback ->
+        manager.install(id, callback)
+    }
+
+    fun updatePlugin(id: String) = runPlugin(id) { manager, callback ->
+        manager.update(id, callback)
+    }
+
+    fun uninstallPlugin(id: String) = runPlugin(id) { manager, callback ->
+        manager.uninstall(id, callback)
+    }
+
+    fun checkPluginUpdates(id: String) = runPlugin(id) { manager, callback ->
+        manager.checkUpdates(id, callback)
+    }
+
+    private fun runPlugin(
+        id: String,
+        action: (PluginManager, PluginManager.Callback) -> Unit,
+    ) {
+        val manager = pluginManager ?: return
+        pluginBusy = id
+        val callback = PluginManager.Callback { _, ok, message ->
+            pluginBusy = null
+            refreshPlugins()
+            Toast.makeText(
+                getApplication(),
+                message,
+                if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+            ).show()
+        }
+        action(manager, callback)
+    }
+
+    /**
+     * 切换到另一个已保存的服务器。先断开（取消流、清空当前会话），
+     * 再用新地址连接；失败会停在登录页，不会把两个服务器的会话混在一起。
+     */
+    fun switchTo(saved: SavedConnection) {
+        if (saved.url == serverUrl && connected) return
+        disconnect()
+        serverUrl = saved.url
+        password = saved.password
+        connect(saved.url, saved.password)
+    }
+
+    fun switchTo(url: String, pwd: String) {
+        switchTo(SavedConnection(OcClient.normalize(url), pwd))
     }
 
     /**
@@ -655,6 +759,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         current = null
         messages = emptyList()
         sessions = emptyList()
+        openSessions = emptyList()
         caches = emptyList()
         permissions = emptyList()
         forms = emptyList()

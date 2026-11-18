@@ -7,16 +7,15 @@
 
 ## 0. 结论
 
-> **不拆三个 APK。** 一个 `com.a2heng.androc`，三层能力按需安装：
-> UI（基础）→ kernel pack（本机 opencode）→ tools pack（Android 构建链）。
+> 一个 App：基础 UI + proot 引擎，其余按**插件**安装（每个插件 = Skill + 工具链）。
 
 三个“产物”变成同一个 App 的三种状态：
 
 | 状态 | 装了什么 | 能做什么 |
 |---|---|---|
 | **UI only** | 基础 APK | 连接电脑 / 远程 opencode、官方 App 配对 |
-| **UI + kernel** | + kernel pack | 本机跑 opencode、会话、终端 |
-| **UI + kernel + tools** | + tools pack | 端侧构建 Android APK |
+| **UI + OpenCode 内核** | + OpenCode 插件 | 本机跑 opencode、会话、终端 |
+| **UI + 内核 + Android 构建** | + Android 构建插件 | 端侧构建 Android APK |
 
 发布两种构建，代码同源：
 
@@ -40,15 +39,30 @@
 
 ---
 
-## 2. 三层能力
+## 2. 插件：Skill + 工具链
 
-| 层 | 内容 | 安装方式 | 体积（当前） |
+基础不是插件；**每个插件 = 一组 Skill + 它需要的工具链**。
+
+| 插件 | Skill | 工具链 | 更新 |
 |---|---|---|---|
-| **基础** | Compose UI、proot 引擎（proot + loader + musl）、连接/设置 | 随 APK | 约 10–20 MB |
-| **kernel pack** | `opencode` musl 二进制、Termux toolbox（bash/readline/git/python/pkg…） | 下载或 full 内置 | 约 100–350 MB |
-| **tools pack** | JDK 21、Android SDK、aarch64 `aapt2`、Gradle、Maven 缓存、skills | 下载或 full 内置 | 约 700 MB |
+| **OpenCode 内核** | shell 约定 | opencode、proot userland、bash/readline | **独立检查上游 opencode**，由 `RuntimeUpdateService` 下载 |
+| **Android 构建** | android-build、android-project、android-gradle、android-deps、android-release、android-16kb、android-lib-cache | JDK 21、SDK 36、aapt2、Gradle 9.9、Maven 缓存 | pack 版本；随 App 或 `androc-packs` |
+| **本地 AI** | android-ai | ONNX / TFLite / llama.cpp / MNN | pack 版本 |
+| **Android 调试** | android-debug、android-install | adb / platform-tools | 随内核 |
+| **Termux 工具** | termux | git、python、pkg/apt | 随内核 |
+| **基础**（不是插件） | — | Compose UI + proot 引擎（proot + loader + musl） | 随 APK |
 
-基础 APK 只保留**必须**的 native 部分；其余都能下载后在 proot 里执行。
+规则：
+
+- 卸载一个插件 = 删它的 skills + 工具链；项目、会话、其他插件不受影响；
+- 插件只在**连接本机**时可管理；连远程服务器时设置页只显示提示；
+- 插件动作只有 **安装 / 更新 / 卸载**（没有“修复/删除”两套说法）；
+- OpenCode 内核可以独立检查上游版本并更新，不需要发新 APK；
+- 工具链大头（JDK/SDK/Gradle）不随 App 强制下载，按需安装。
+
+> **Termux 的边界**：不需要安装 Termux App。OpenCode/Termux 插件带的是 Termux
+> 的 `.deb`，解到应用私有 `$PREFIX`，由 proot 提供 Termux 路径。终端和 agent
+> shell 必须有这套 userland；没有它时，App 仍可连接远程服务器。
 
 ---
 
@@ -66,7 +80,7 @@
 所以：
 
 1. 基础 APK 永远带一个约 2–3 MB 的 proot 引擎；它是“内核”的引信，不是完整内核。
-2. kernel pack 下载的是 `opencode` + toolbox，装到 `$HOME`/`$PREFIX` 的私有目录。
+2. `OpenCode` 插件下载的是 `opencode` + toolbox，装到 `$HOME`/`$PREFIX` 的私有目录。
 3. 任何下载的 ELF **不得**在 proot 外直接 `exec`；否则 Android 10+ 会
    `Permission denied`，这是 `docs/paths.md` 的同一类问题。
 4. 如果哪天要把基础 APK 做到几 MB，只有 proot 引擎仍需随包；其余都可以做成 pack。
@@ -81,14 +95,31 @@
 kernel.pack/
 ├─ manifest.json
 ├─ bin/opencode          # musl，arm64
-├─ prefix/               # Termux toolbox 文件（或 .deb + 安装脚本）
+├─ prefix/               # Termux userland（或 .deb + 安装脚本）
 └─ scripts/              # 可选的修复/自检脚本
 
-tools.pack/
+tools.bootstrap.zip      # 很轻，可随 APK 或本地文档一起给
 ├─ manifest.json
-├─ toolchain/            # JDK、SDK、Gradle、Maven
-└─ skills/               # android-build 等
+├─ skills/               # android-build 等
+└─ scripts/              # build.sh / setup-toolchain.sh / check-16kb.py
+
+tools.payload/           # 大头，按需下载或从本地 zip 导入
+├─ manifest.json
+├─ jdk/                  # JDK 21
+├─ sdk/                  # platform / build-tools / aapt2
+├─ gradle/               # 发行版 + 共享缓存
+└─ maven/                # 可选的本地库
 ```
+
+**hot-plug 规则**：
+
+- `tools.bootstrap.zip` 很小，可以随 APK、随 release 附件，或放在手机的
+  `Documents/Androc/` 里；设置页“从文件导入”即可；
+- `tools.payload` 的大头按组件下载（jdk/sdk/gradle/maven 分开），也可以导入
+  别人准备好的本地 zip；
+- 卸载/禁用 tools 只删 payload 和 skills，不影响 kernel、会话和终端；
+- 没有 tools 时，kernel 仍然能跑 opencode、shell、文件；只是没有构建链。
+
 
 `manifest.json` 至少包含：
 
@@ -121,13 +152,13 @@ tools.pack/
 | 区块 | 内容 |
 |---|---|
 | **连接** | 本机内核（启动/停止/状态）、局域网/远程（URL + 密码）、官方 App 配对（链接/二维码） |
-| **能力包** | kernel pack / tools pack：版本、体积、已安装/可更新、安装/修复/卸载、进度、剩余空间 |
-| **存储** | 各层占用、清理缓存、导入离线 pack |
+| **插件** | 每个插件显示 Skill、工具链、已安装/可更新、体积；动作只有安装/更新/卸载；仅在连接本机时出现 |
+| **存储** | 各插件占用、清理缓存、导入离线 pack |
 | **诊断** | `oc-doctor`、日志、重置 |
 
 行为：
 
-- 首次启动 → 设置页；选“在这台手机上运行”就安装 kernel pack，选“连接已有服务器”
+- 首次启动 → 设置页；选“在这台手机上运行”就安装 OpenCode 插件，选“连接已有服务器”
   就只填 URL/密码，选“配对官方 App”就显示配对链接。
 - 只有连接成功（本机或远程）才进入会话列表；断线时回到设置页。
 - 设置页后续随时打开，和首次启动是同一个 Composable，不做两份。
@@ -158,20 +189,21 @@ tools.pack/
 
 ---
 
-## 7. 能力包 API（phase 2 落到 `:contracts`）
+## 7. 插件 API（phase 2 落到 `:contracts`）
 
 ```java
-interface PackManager {
-    PackState state(String id);          // NOT_INSTALLED / DOWNLOADING / INSTALLING / READY / FAILED
-    void install(String id, PackCallback cb);
-    void repair(String id, PackCallback cb);
-    void remove(String id, PackCallback cb);
-    PackInfo info(String id);            // version, size, installedSize, updateAvailable
+interface PluginManager {
+    List<PluginInfo> list();             // id, name, skills, toolchain, version, size, state
+    void refresh();
+    void checkUpdates(String id, Callback cb);  // OpenCode: upstream; tools: pack manifest
+    void install(String id, Callback cb);
+    void update(String id, Callback cb);
+    void uninstall(String id, Callback cb);
 }
 ```
 
 `RuntimeController` 保持现有的启动/停止/连接/配对接口；`ToolsController` 被
-`PackManager` 取代或包一层。
+`PluginManager` 取代或包一层。
 
 ---
 
@@ -222,9 +254,9 @@ App 拒绝 `minAppVersion` 高于自身的 pack；pack 可以独立更新，不�
 |---|---|---|
 | **0（本次）** | Androc 改名、`:contracts`、`:kernel`/`:tools` 骨架、合并 UI 仓库 | 五个模块可配置 |
 | **1** | Setup 页合并登录/设置；连接本机/远程 | 一个页面完成连接与状态 |
-| **2** | PackManager + kernel pack（opencode + toolbox）；thin 基础包 | 不装 pack 只能连远程；装完能本机会话 |
-| **3** | tools pack（JDK/SDK/Gradle/skills） | 端侧构建成功 |
-| **4** | thin / full 两个 flavor + CI 产物（APK + packs） | 一次 tag 出 2 APK + 2 pack |
+| **2** | PluginManager + OpenCode 插件（opencode + toolbox）；thin 基础包 | 不装插件只能连远程；装完能本机会话 |
+| **3** | Android 构建 / 本地 AI / 调试 / Termux 插件 | 端侧构建成功 |
+| **4** | thin / full 两个 flavor + CI 产物（APK + 插件包） | 一次 tag 出 2 APK + 插件包 |
 | **5** | 按需拆 repo / 发布 AAR | 外部只依赖 Maven 坐标 |
 
 ---
@@ -234,8 +266,8 @@ App 拒绝 `minAppVersion` 高于自身的 pack；pack 可以独立更新，不�
 1. **一个应用、一个 applicationId、一个运行时（proot）、一个前缀。**
 2. **下载的 ELF 只能在 proot 内执行**；proot 引擎必须在 APK 的 `nativeLibraryDir`。
 3. **pack 先校验后安装**；失败回滚，不留“半完成但标记完成”。
-4. **UI 不启动进程**；kernel 拥有 server 和 pack 安装。
-5. **tools 可选**：不装 tools pack，会话/终端仍然工作。
+4. **UI 不启动进程**；kernel 拥有 server 和插件安装。
+5. **Android 构建/本地 AI 插件可选**：不装它们，会话/终端仍然工作。
 6. **官方 App 只走 HTTP + pairing**，不依赖我们的 ContentProvider。
-7. **thin / full 同源**：full 只是把同样的 pack 放进 assets，不允许两份代码。
+7. **thin / full 同源**：full 只是把同样的插件包放进 assets，不允许两份代码。
 8. 文档、skills、验收清单同步更新。

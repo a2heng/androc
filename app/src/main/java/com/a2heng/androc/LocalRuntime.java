@@ -928,9 +928,41 @@ public final class LocalRuntime {
      */
     private static void installSkills(Context app, File config) {
         try {
-            copyAssetDir(app, "skills", new File(config, "skills"));
+            File dest = new File(config, "skills");
+            String[] children = app.getAssets().list("skills");
+            if (children == null) return;
+            for (String child : children) {
+                if (!PluginCatalog.skillEnabled(app, child)) continue;
+                copyAssetDir(app, "skills/" + child, new File(dest, child));
+            }
         } catch (Exception e) {
             Log.w(TAG, "no se pudieron instalar las skills: " + e);
+        }
+    }
+
+    /** Reinstala las skills y los helpers empaquetados; usado por CapabilityManager. */
+    public static void installBundledSkills(Context ctx) {
+        Context app = ctx.getApplicationContext();
+        File home = homeDir(app);
+        installTools(app, new File(home, ".config/opencode"));
+        installTools(app, new File(home, ".config/opencode-android"));
+    }
+
+    /** Borra solo skills/helpers; no toca proyectos, sesiones ni el kernel. */
+    public static void removeBundledSkills(Context ctx) {
+        File home = homeDir(ctx.getApplicationContext());
+        deleteTree(new File(home, ".config/opencode/skills"));
+        deleteTree(new File(home, ".config/opencode-android/skills"));
+        deleteTree(new File(home, ".config/opencode/tools"));
+        deleteTree(new File(home, ".config/opencode-android/tools"));
+    }
+
+    /** Borra las skills de un plugin concreto. */
+    public static void removePluginSkills(Context ctx, java.util.List<String> skills) {
+        File home = homeDir(ctx.getApplicationContext());
+        for (String skill : skills) {
+            deleteTree(new File(home, ".config/opencode/skills/" + skill));
+            deleteTree(new File(home, ".config/opencode-android/skills/" + skill));
         }
     }
 
