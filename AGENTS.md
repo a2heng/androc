@@ -34,7 +34,7 @@ If a change makes the user learn an internal detail, it is probably wrong.
 
    ```sh
    source /d/AndroidDevToolchain/env.sh
-   cd /d/005_dev/android-dev-in-android
+   cd /d/005_dev/androc
    python scripts/verify-toolbox.py
    ./gradlew :app:assembleDebug
    ```

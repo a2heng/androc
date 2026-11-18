@@ -7,7 +7,7 @@
 
 ## 0. 一分钟了解
 
-- 仓库：`https://github.com/a2heng/androc`（本地 `D:\005_dev\android-dev-in-android`）
+- 仓库：`https://github.com/a2heng/androc`（本地 `D:\005_dev\androc`）
 - 应用：Androc，`com.a2heng.androc`（debug `.debug`，beta `.beta`）
 - 技术栈：Android + Java/Kotlin + Compose + WebView + Termux/proot + opencode
 - 目标：**薄 UI + 无界面插件 APK**；所有能力（运行时、Android、写作…）都是插件
