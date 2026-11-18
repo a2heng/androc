@@ -178,6 +178,52 @@ interface IRuntimePlugin {
 
 ---
 
+## 8. 独立更新：为什么必须切碎
+
+一个 APK 只有一个 `versionCode`，更新就是整包替换。要让每层独立更新，必须把
+“更新节奏相同”的东西放在一个 APK 里，不同节奏的拆开：
+
+| 插件 APK | 内容 | 更新节奏 |
+|---|---|---|
+| `runtime` | proot、opencode、Termux userland | 上游 opencode/Termux 变时；opencode 二进制可在插件内部单独更新 |
+| `android-build` | JDK、SDK、aapt2、Gradle、构建 skills | SDK/Gradle 变时 |
+| `android-ai` | ONNX/TFLite/llama.cpp/MNN + android-ai skill | AI runtime 变时 |
+| `android-debug` | adb/platform-tools + debug/install skills | platform-tools 变时 |
+| `android-skills` | ui/test/architecture/networking… 纯 skill | 跟 App/文档变时 |
+| 社区插件 | 作者自己的 skill + 工具链 | 作者决定 |
+
+不建议“一个 skill 一个 APK”：20+ 个安装包管理成本高；纯 skill 用
+`android-skills` 一个包，或后续改成 skill zip/payload，仍可独立更新。
+
+### 8.1 APK 与 payload 分开
+
+- APK 带：契约、manifest、安装器、少量脚本；
+- 大头（JDK/SDK/Gradle、AI 模型）作为 payload 下载/缓存；
+- 更新 payload 不需要发新 APK；只有契约/安装器变了才更新 APK。
+
+### 8.2 跨 APK 的数据问题（关键）
+
+不同 APK 的数据目录互不相通；而 proot/构建必须在 **runtime 插件**的
+`$HOME/$PREFIX` 里执行。所以不能“android-build APK 自己解压 JDK 就完事”。
+
+正确做法：
+
+- runtime 插件拥有 `$HOME`、`$PREFIX`、skills 目录；
+- 其他插件通过 AIDL 把**已校验**的 payload/skill 交给 runtime 安装：
+  ```aidl
+  void installPayload(String id, String url, String sha256, long size);
+  void installSkill(String id, byte[] zip, String sha256);
+  void removeCapability(String id);
+  ```
+- runtime 负责下载/校验/解压/回滚；插件 APK 只是“清单 + 安装请求”；
+- 这样每个插件仍可独立更新，执行和存储仍只有一套。
+
+### 8.3 版本
+
+- 每个插件 APK：`versionCode` / `versionName`；
+- 每个 payload：独立版本 + `sha256`；
+- 基础 UI 只关心“插件是否安装、payload 是否可更新”，不关心内部实现。
+
 ## 9. 当前实现（MVP）
 
 已经落地的骨架：
