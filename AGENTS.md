@@ -5,12 +5,13 @@ transparent. One runtime (proot), one authoritative path per thing, no
 command-name whitelists, and every failure must be self-healing or resumable.
 If a change makes the user learn an internal detail, it is probably wrong.
 
-1. **Read [`docs/design.md`](docs/design.md),
+1. **Read [`docs/handover.md`](docs/handover.md),
+   [`docs/design.md`](docs/design.md),
    [`docs/paths.md`](docs/paths.md), [`docs/commands.md`](docs/commands.md),
    [`docs/series.md`](docs/series.md), [`docs/plugins.md`](docs/plugins.md),
    [`docs/model.md`](docs/model.md) and [`docs/connections.md`](docs/connections.md)
-   first.** They are the contract for the product model, paths, proot mounts,
-   command execution, packaging, plugins, the server default model and
+   first.** They are the contract for the handover, product model, paths, proot
+   mounts, command execution, packaging, plugins, the server default model and
    connections.
 2. **Never execute a Termux ELF outside proot.** The only exceptions are the
    leaf tools in `CommandResolver.SAFE_NATIVE` (they are launched with

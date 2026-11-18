@@ -63,6 +63,8 @@ Termux 的 ELF 把 `/data/data/com.termux/files/usr/lib` 编译进了
   插件目录、设置页设计。
 - **[`docs/design.md`](docs/design.md)** — 总览：薄 UI、插件 APK、路线图、
   未实现项。
+- **[`docs/handover.md`](docs/handover.md)** — **交接文档**：现状、坑、
+  下一步、验收清单。
 - **[`docs/plugins.md`](docs/plugins.md)** — 插件 APK 契约、分类、来源/网址、
   安装/更新/卸载。
 - **[`docs/plugin-catalog.md`](docs/plugin-catalog.md)** — 远期插件目录；
