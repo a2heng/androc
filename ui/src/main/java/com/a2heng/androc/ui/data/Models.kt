@@ -431,6 +431,26 @@ data class SharedPayload(val text: String?, val image: Attachment?)
  */
 data class SavedConnection(val url: String, val password: String)
 
+/** 模型 Provider / 集成（官方 /api/integration）。 */
+data class IntegrationMethod(
+    val id: String,
+    val type: String,
+    val label: String,
+    val envNames: List<String> = emptyList(),
+)
+
+data class IntegrationInfo(
+    val id: String,
+    val name: String,
+    val connections: Int,
+    val methods: List<IntegrationMethod>,
+) {
+    val connected: Boolean get() = connections > 0
+    val keyMethod: IntegrationMethod? get() = methods.firstOrNull { it.type == "key" }
+    val oauthMethod: IntegrationMethod? get() = methods.firstOrNull { it.type == "oauth" }
+    val envMethod: IntegrationMethod? get() = methods.firstOrNull { it.type == "env" }
+}
+
 data class PtyInfo(
     val id: String,
     val title: String,

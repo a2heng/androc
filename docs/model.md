@@ -122,7 +122,66 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 
 ---
 
-## 4. UI 行为
+## 4. Provider 连接 / 斜杠 `/model`
+
+官方 Mobile/Web 的“Connect”不是模型 API，而是 **Integration** API；模型页和
+`/model` 命令共用同一个入口。
+
+### 4.1 官方接口
+
+| 动作 | 接口 |
+|---|---|
+| 列出 Provider/集成 | `GET /api/integration` |
+| API Key 连接 | `POST /api/integration/:id/connect/key` `{ key, label? }` |
+| OAuth 开始 | `POST /api/integration/:id/connect/oauth` `{ methodID }` |
+| OAuth 状态 | `GET /api/integration/:id/connect/oauth/:attemptID` |
+| OAuth 完成（code/paste） | `POST /api/integration/:id/connect/oauth/:attemptID/complete` `{ code? }` |
+| OAuth 取消 | `DELETE /api/integration/:id/connect/oauth/:attemptID` |
+| 环境变量方式 | `GET /api/integration` 里 `type=env` 的 `names`，由服务器环境提供 |
+| 服务器命令方式 | `POST /api/integration/:id/connect/command` `{ methodID }` + 轮询 status |
+| 添加 well-known 源 | `POST /api/experimental/integration/wellknown` `{ url }` |
+
+`GET /api/integration` 返回：
+
+```json
+{
+  "id": "anthropic",
+  "name": "Anthropic",
+  "methods": [
+    { "type": "key", "label": "API Key" },
+    { "type": "oauth", "id": "oauth", "label": "Sign in" }
+  ],
+  "connections": [{ "id": "…", "label": "…" }]
+}
+```
+
+### 4.2 我们的 UI
+
+模型选择页（设置和 `/model` 共用）顶部增加：
+
+```text
+连接 Provider / API                2/5
+```
+
+点开列出所有集成：
+
+- 已连接 → “已连接”；
+- `key` → 输入 API Key → `connect/key`；
+- `oauth` → 打开浏览器 + 轮询 attempt；`paste`/`code` 模式给输入框 →
+  `complete`；
+- `env` → 显示需要设置的环境变量名；
+- `command` → 显示需要在服务器执行的命令。
+
+连接成功后刷新 `/api/model`、`/api/model/default`，新模型立即出现在列表里。
+
+### 4.3 `/model`
+
+聊天里的 `/model` 已经打开同一个 `ModelPickerPage`；因此“连接 Provider”和
+“切换模型”是同一个页面，不需要两套 UI。
+
+---
+
+## 5. UI 行为
 
 - 设置 → 默认模型：显示 `服务器默认 · provider/model`；
 - 选择模型 = 写服务器配置，不是写本地偏好；
@@ -132,7 +191,7 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 
 ---
 
-## 5. 安全
+## 6. 安全
 
 写服务器配置文件是强能力：
 
@@ -143,13 +202,16 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 
 ---
 
-## 6. 状态
+## 7. 状态
 
 | 项 | 状态 |
 |---|---|
-| 移除 App 本地 default | `[进行中]` |
+| 移除 App 本地 default | `[已实现]` |
 | `GET /api/model/default` 展示 | `[已实现]` |
-| `fs.write` 通用写入 | `[进行中]` |
-| 本机配置文件回退 | `[已实现]`（代码已加） |
-| 远程能力探测/只读提示 | `[进行中]` |
+| `fs.write` 通用写入 | `[已实现]` |
+| 本机配置文件回退 | `[已实现]` |
+| Provider API Key / OAuth 连接 | `[已实现]`（首版） |
+| `/model` 与设置页共用模型选择 | `[已实现]` |
+| `env` / `command` 连接方式 | `[进行中]`（env 只展示变量名） |
+| 远程能力探测/只读提示 | `[已实现]` |
 | 官方 Mobile 对齐 | `[计划]` |

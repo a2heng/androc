@@ -405,6 +405,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var modelGroupById by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
 
+    /** 模型 Provider / 集成；用于“连接 API / OAuth”。 */
+    var integrations by mutableStateOf<List<IntegrationInfo>>(emptyList())
+        private set
+    var integrationBusy by mutableStateOf<String?>(null)
+        private set
+
     // ---- 缓存看板 -----------------------------------------------------------
     var caches by mutableStateOf<List<SessionCache>>(emptyList())
         private set
@@ -840,6 +846,126 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     Toast.LENGTH_LONG,
                 ).show()
             }
+        }
+    }
+
+    fun loadIntegrations() {
+        val c = client ?: return
+        viewModelScope.launch {
+            integrations = withContext(Dispatchers.IO) {
+                runCatching { c.integrations() }.getOrDefault(emptyList()).mapNotNull { o ->
+                    val id = o.str("id") ?: return@mapNotNull null
+                    val methods = (o["methods"] as? JsonArray)?.mapNotNull { raw ->
+                        val m = raw as? JsonObject ?: return@mapNotNull null
+                        val type = m.str("type") ?: return@mapNotNull null
+                        val envs = (m["names"] as? JsonArray)?.mapNotNull {
+                            (it as? JsonPrimitive)?.content?.takeIf { s -> s.isNotBlank() }
+                        } ?: emptyList()
+                        IntegrationMethod(
+                            id = m.str("id") ?: "",
+                            type = type,
+                            label = m.str("label") ?: type,
+                            envNames = envs,
+                        )
+                    } ?: emptyList()
+                    val connections = (o["connections"] as? JsonArray)?.size ?: 0
+                    IntegrationInfo(id, o.str("name") ?: id, connections, methods)
+                }
+            }
+        }
+    }
+
+    fun connectIntegrationKey(info: IntegrationInfo, key: String, label: String? = null) {
+        val c = client ?: return
+        integrationBusy = info.id
+        viewModelScope.launch {
+            val ok = runCatching {
+                withContext(Dispatchers.IO) { c.connectIntegrationKey(info.id, key, label) }
+            }.isSuccess
+            integrationBusy = null
+            Toast.makeText(
+                getApplication(),
+                if (ok) "${info.name} 已连接" else "连接失败，请检查 API key",
+                if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+            ).show()
+            if (ok) {
+                loadIntegrations()
+                loadMeta()
+            }
+        }
+    }
+
+    fun startOAuthConnect(
+        info: IntegrationInfo,
+        method: IntegrationMethod,
+        onAttempt: (JsonObject?) -> Unit,
+    ) {
+        val c = client ?: return
+        integrationBusy = info.id
+        viewModelScope.launch {
+            val attempt = runCatching {
+                withContext(Dispatchers.IO) { c.startOAuth(info.id, method.id) }
+            }.getOrNull()
+            integrationBusy = null
+            onAttempt(attempt)
+        }
+    }
+
+    fun pollOAuth(
+        info: IntegrationInfo,
+        attemptID: String,
+        onResult: (Boolean, String) -> Unit,
+    ) {
+        val c = client ?: return
+        viewModelScope.launch {
+            repeat(120) {
+                delay(1000)
+                val status = runCatching {
+                    withContext(Dispatchers.IO) { c.oauthStatus(info.id, attemptID) }
+                }.getOrNull()
+                when (status?.str("status")) {
+                    "complete" -> {
+                        loadIntegrations()
+                        loadMeta()
+                        onResult(true, "已连接")
+                        return@launch
+                    }
+                    "failed" -> {
+                        onResult(false, status.str("message") ?: "授权失败")
+                        return@launch
+                    }
+                    "expired" -> {
+                        onResult(false, "授权已过期")
+                        return@launch
+                    }
+                }
+            }
+            onResult(false, "授权超时")
+        }
+    }
+
+    fun completeOAuth(info: IntegrationInfo, attemptID: String, code: String) {
+        val c = client ?: return
+        viewModelScope.launch {
+            val ok = runCatching {
+                withContext(Dispatchers.IO) { c.completeOAuth(info.id, attemptID, code) }
+            }.isSuccess
+            Toast.makeText(
+                getApplication(),
+                if (ok) "授权已提交" else "授权提交失败",
+                if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+            ).show()
+            if (ok) {
+                loadIntegrations()
+                loadMeta()
+            }
+        }
+    }
+
+    fun cancelOAuth(info: IntegrationInfo, attemptID: String) {
+        val c = client ?: return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { c.cancelOAuth(info.id, attemptID) } }
         }
     }
 

@@ -444,6 +444,52 @@ class OcClient(rawBase: String, private val password: String) {
 
     suspend fun configEntries(): List<JsonElement> = unwrapArray(get("/api/config"))
 
+    // ---- provider / integration connect ------------------------------------
+
+    suspend fun integrations(): List<JsonObject> =
+        unwrapArray(get("/api/integration")).mapNotNull { it as? JsonObject }
+
+    suspend fun connectIntegrationKey(
+        integrationID: String,
+        key: String,
+        label: String? = null,
+    ) {
+        val body = buildJsonObject {
+            this.put("key", JsonPrimitive(key))
+            if (!label.isNullOrBlank()) this.put("label", JsonPrimitive(label))
+        }
+        post("/api/integration/${urlEncode(integrationID)}/connect/key", body)
+    }
+
+    suspend fun startOAuth(integrationID: String, methodID: String): JsonObject? =
+        post(
+            "/api/integration/${urlEncode(integrationID)}/connect/oauth",
+            buildJsonObject { this.put("methodID", JsonPrimitive(methodID)) },
+        ) as? JsonObject
+
+    suspend fun oauthStatus(integrationID: String, attemptID: String): JsonObject? =
+        get(
+            "/api/integration/${urlEncode(integrationID)}/connect/oauth/${urlEncode(attemptID)}",
+        ) as? JsonObject
+
+    suspend fun completeOAuth(integrationID: String, attemptID: String, code: String?) {
+        post(
+            "/api/integration/${urlEncode(integrationID)}/connect/oauth/${urlEncode(attemptID)}/complete",
+            buildJsonObject { if (!code.isNullOrBlank()) this.put("code", JsonPrimitive(code)) },
+        )
+    }
+
+    suspend fun cancelOAuth(integrationID: String, attemptID: String) {
+        delete("/api/integration/${urlEncode(integrationID)}/connect/oauth/${urlEncode(attemptID)}")
+    }
+
+    suspend fun addWellKnownIntegration(url: String) {
+        post(
+            "/api/experimental/integration/wellknown",
+            buildJsonObject { this.put("url", JsonPrimitive(url)) },
+        )
+    }
+
     private fun encodePath(path: String): String =
         path.split('/').joinToString("/") { urlEncode(it) }
 
