@@ -23,6 +23,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -186,7 +187,7 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
-    var input by rememberSaveable { mutableStateOf("") }
+    var input by remember(session.id) { mutableStateOf(model.draft(session.id)) }
     var pickModel by remember { mutableStateOf(false) }
     var pickAgent by remember { mutableStateOf(false) }
     var revertTarget by remember { mutableStateOf<Msg?>(null) }
@@ -257,6 +258,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     }
 
     LaunchedEffect(session.id) { model.loadMeta(session.directory) }
+    LaunchedEffect(input, session.id) { model.saveDraft(session.id, input) }
 
     LaunchedEffect(session.id) {
         while (true) {
@@ -383,24 +385,10 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             MetaText(
-                                "ctx " + (contextPct?.let { "${it.roundToInt()}%" } ?: "—"),
-                                color = contextColor,
-                            )
-                            MetaDot()
-                            MetaText(
                                 aggregateTokens?.let {
                                     "↑${formatTokens(it.input)} ↓${formatTokens(it.output)}"
                                 } ?: "↑— ↓—",
                             )
-                            MetaDot()
-                            MetaText(
-                                detailLevelLabel(model.detailLevel),
-                                onClick = {
-                                    model.updateDetailLevel(nextDetailLevel(model.detailLevel))
-                                },
-                            )
-                            MetaDot()
-                            MetaText("Git", onClick = { model.openGit(session.directory) })
                             MetaDot()
                             MetaText(
                                 "会话 ${model.openSessions.size}",
@@ -465,6 +453,12 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                         rateColor(it.hitRate, MaterialTheme.colorScheme.background.luminanceIsDark())
                     } ?: MaterialTheme.colorScheme.onSurfaceVariant,
                     costLabel = session.cost.takeIf { it > 0 }?.let { formatCost(it) },
+                    contextPct = contextPct,
+                    contextColor = contextColor,
+                    onToggleDetail = {
+                        model.updateDetailLevel(nextDetailLevel(model.detailLevel))
+                    },
+                    onGit = { model.openGit(session.directory) },
                     onPickModel = {
                         model.loadMeta(session.directory)
                         pickModel = true
@@ -1339,26 +1333,74 @@ private fun ChatStatusBar(
     hitLabel: String,
     hitColor: Color,
     costLabel: String?,
+    contextPct: Double?,
+    contextColor: Color,
+    onToggleDetail: () -> Unit,
+    onGit: () -> Unit,
     onPickModel: () -> Unit,
     onPickAgent: () -> Unit,
     onCache: () -> Unit,
 ) {
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
             .padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        StatusChip(
-            "模型",
-            modelLabel,
-            onClick = onPickModel,
-            modifier = Modifier.weight(1f),
-        )
-        StatusChip("模式", agentLabel, onClick = onPickAgent)
-        StatusChip("命中", hitLabel, valueColor = hitColor, onClick = onCache)
-        StatusChip("花费", costLabel ?: "—")
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusChip(
+                "模型",
+                modelLabel,
+                onClick = onPickModel,
+                modifier = Modifier.weight(2f),
+            )
+            StatusChip(
+                "模式",
+                agentLabel,
+                onClick = onPickAgent,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusChip(
+                "ctx",
+                contextPct?.let { "${it.roundToInt()}%" } ?: "—",
+                valueColor = contextColor,
+                modifier = Modifier.weight(1f),
+            )
+            StatusChip(
+                "显示",
+                detailLevelLabel(model.detailLevel),
+                onClick = onToggleDetail,
+                modifier = Modifier.weight(1f),
+            )
+            StatusChip(
+                "Git",
+                "diff",
+                onClick = onGit,
+                modifier = Modifier.weight(1f),
+            )
+            StatusChip(
+                "命中",
+                hitLabel,
+                valueColor = hitColor,
+                onClick = onCache,
+                modifier = Modifier.weight(1f),
+            )
+            StatusChip(
+                "花费",
+                costLabel ?: "—",
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -1375,7 +1417,19 @@ private fun StatusChip(
         modifier
             .height(26.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape)
-            .then(if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .clickable(onClick = onClick)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            shape,
+                        )
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),

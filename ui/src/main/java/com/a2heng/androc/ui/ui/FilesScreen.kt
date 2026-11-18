@@ -156,6 +156,37 @@ private fun FsListPane(model: AppModel) {
             }
         }
 
+        // 快速入口：第一个永远是 home，权限/路径迷路时可以一键回来。
+        val quickDirs = remember(model.homeDir, model.current?.id, model.sessions, model.fsDir) {
+            buildList {
+                if (model.homeDir.isNotBlank()) add("home" to model.homeDir)
+                model.expandSessionDir(model.current?.directory)?.let { add("当前会话" to it) }
+                model.sessions.forEach { s ->
+                    val dir = model.expandSessionDir(s.directory) ?: return@forEach
+                    if (none { it.second == dir }) {
+                        add(dir.trimEnd('/').substringAfterLast('/').ifBlank { dir } to dir)
+                    }
+                }
+            }.distinctBy { it.second }.take(10)
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            quickDirs.forEach { (label, dir) ->
+                FsChip(
+                    label = label,
+                    selected = model.fsDir.trimEnd('/') == dir.trimEnd('/'),
+                ) {
+                    model.closeFile()
+                    model.loadDir(dir)
+                }
+            }
+        }
+
         model.fsError?.let {
             Text(
                 it,
@@ -271,6 +302,33 @@ private fun pathLabel(base: String, dir: String): String {
         b.isNotEmpty() && d == b -> "~"
         b.isNotEmpty() && b != "/" && d.startsWith("$b/") -> "~" + d.removePrefix(b)
         else -> d
+    }
+}
+
+
+@Composable
+private fun FsChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+            else MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+        ),
+        modifier = Modifier.clickableNoRipple(onClick),
+    ) {
+        Text(
+            label,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+        )
     }
 }
 

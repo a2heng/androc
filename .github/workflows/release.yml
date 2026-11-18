@@ -59,10 +59,10 @@ jobs:
 
       - name: Restore release keystore
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROC_KEYSTORE_BASE64 }}
-          KEY_ALIAS: ${{ secrets.ANDROC_KEY_ALIAS }}
-          KEYSTORE_PASS: ${{ secrets.ANDROC_KEYSTORE_PASS }}
-          KEY_PASS: ${{ secrets.ANDROC_KEY_PASS }}
+          KEYSTORE_B64: ${{ secrets.ANDROC_KEYSTORE_BASE64 || secrets.ADIA_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROC_KEY_ALIAS || secrets.ADIA_KEY_ALIAS }}
+          KEYSTORE_PASS: ${{ secrets.ANDROC_KEYSTORE_PASS || secrets.ADIA_KEYSTORE_PASS }}
+          KEY_PASS: ${{ secrets.ANDROC_KEY_PASS || secrets.ADIA_KEY_PASS }}
         run: |
           missing=""
           [ -z "$KEYSTORE_B64" ] && missing="$missing ANDROC_KEYSTORE_BASE64"
@@ -106,35 +106,39 @@ jobs:
       - name: Build signed release
         env:
           ANDROC_KEYSTORE: ${{ runner.temp }}/signing/release.jks
-          ANDROC_KEY_ALIAS: ${{ secrets.ANDROC_KEY_ALIAS }}
-          ANDROC_KEYSTORE_PASS: ${{ secrets.ANDROC_KEYSTORE_PASS }}
-          ANDROC_KEY_PASS: ${{ secrets.ANDROC_KEY_PASS }}
+          ANDROC_KEY_ALIAS: ${{ secrets.ANDROC_KEY_ALIAS || secrets.ADIA_KEY_ALIAS }}
+          ANDROC_KEYSTORE_PASS: ${{ secrets.ANDROC_KEYSTORE_PASS || secrets.ADIA_KEYSTORE_PASS }}
+          ANDROC_KEY_PASS: ${{ secrets.ANDROC_KEY_PASS || secrets.ADIA_KEY_PASS }}
         run: |
-          ./gradlew :app:assembleFullRelease --console=plain --stacktrace --no-daemon \
+          ./gradlew :app:assembleRelease --console=plain --stacktrace --no-daemon \
             -PandrocVersionName="${{ steps.version.outputs.name }}" \
             -PandrocVersionCode="${{ steps.version.outputs.code }}" \
             -PandrocRequireSigning=1
 
-      - name: 16 KB check
+      - name: 16 KB check (thin + full)
         env:
           ANDROC_16KB_STRICT: "1"
         run: |
-          APK=$(ls app/build/outputs/apk/full/release/*.apk | head -1)
-          python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py "$APK"
+          for APK in app/build/outputs/apk/*/release/*.apk; do
+            python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py "$APK"
+          done
 
-      - name: Verify signature
+      - name: Verify signatures
         run: |
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          APK=$(ls app/build/outputs/apk/full/release/*.apk | head -1)
-          "$BT/apksigner" verify --print-certs "$APK"
+          for APK in app/build/outputs/apk/*/release/*.apk; do
+            "$BT/apksigner" verify --print-certs "$APK"
+          done
 
       - name: Rename and checksum
         run: |
           mkdir -p out
-          SRC=$(ls app/build/outputs/apk/full/release/*.apk | head -1)
-          NAME="androc-${{ steps.version.outputs.name }}.apk"
-          cp "$SRC" "out/$NAME"
-          (cd out && sha256sum "$NAME" > "$NAME.sha256")
+          for FLAVOR in thin full; do
+            SRC=$(ls app/build/outputs/apk/$FLAVOR/release/*.apk | head -1)
+            NAME="androc-${{ steps.version.outputs.name }}-$FLAVOR.apk"
+            cp "$SRC" "out/$NAME"
+            (cd out && sha256sum "$NAME" > "$NAME.sha256")
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

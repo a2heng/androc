@@ -240,7 +240,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         disconnect()
         serverUrl = saved.url
         password = saved.password
-        connect(saved.url, saved.password)
+        connectSmart(saved.url, saved.password)
     }
 
     fun switchTo(url: String, pwd: String) {
@@ -701,6 +701,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
                 serverUrl = target
                 password = pwd
+                recentModel = loadRecentFor(target)
                 client = c
                 serverVersion = info?.str("version") ?: ""
                 runCatching { withContext(Dispatchers.IO) { c.locationRoot() } }
@@ -776,7 +777,26 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun autoConnect() {
-        if (serverUrl.isNotBlank() && !connected && !connecting) connect(serverUrl, password)
+        if (serverUrl.isNotBlank() && !connected && !connecting) connectSmart(serverUrl, password)
+    }
+
+    /**
+     * Local URLs are not just HTTP: the component owns the process. If it is
+     * installed, start it first and connect when healthy; otherwise fall back
+     * to a plain HTTP connect (and show the normal error).
+     */
+    fun connectSmart(url: String, pwd: String, remember: Boolean = true) {
+        if (isLocalUrl(url)) {
+            val launcher = LocalRuntimeHost.launcher
+            if (launcher != null && launcher.installed) {
+                launcher.start(
+                    { localUrl, localPwd -> connect(localUrl, localPwd, remember) },
+                    { connect(url, pwd, remember) },
+                )
+                return
+            }
+        }
+        connect(url, pwd, remember)
     }
 
     fun clearError() {
@@ -810,12 +830,36 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     fun useRecentModel(ref: ModelRef) = rememberRecentModel(ref)
 
-    fun rememberRecentModel(ref: ModelRef) {        recentModel = ref
+    /** 输入框草稿：按会话持久化，退出聊天/杀进程后仍在。 */
+    fun draft(sessionID: String): String =
+        if (sessionID.isBlank()) "" else prefs.getString("draft_$sessionID", "").orEmpty()
+
+    fun saveDraft(sessionID: String, text: String) {
+        if (sessionID.isBlank()) return
+        if (text.isEmpty()) prefs.edit().remove("draft_$sessionID").apply()
+        else prefs.edit().putString("draft_$sessionID", text).apply()
+    }
+
+    fun rememberRecentModel(ref: ModelRef) {
+        recentModel = ref
+        val key = serverUrl.ifBlank { "global" }
         prefs.edit()
             .putString("recent_model_id", ref.id)
             .putString("recent_model_provider", ref.providerID)
             .putString("recent_model_variant", ref.variant ?: "")
+            .putString("recent_model_id@$key", ref.id)
+            .putString("recent_model_provider@$key", ref.providerID)
+            .putString("recent_model_variant@$key", ref.variant ?: "")
             .apply()
+    }
+
+    /** 最近模型按服务器隔离，切到本机不会沿用远程的模型。 */
+    private fun loadRecentFor(url: String): ModelRef? {
+        val key = url.ifBlank { "global" }
+        val id = prefs.getString("recent_model_id@$key", "") ?: ""
+        val provider = prefs.getString("recent_model_provider@$key", "") ?: ""
+        val variant = prefs.getString("recent_model_variant@$key", "")?.takeIf { it.isNotBlank() }
+        return if (id.isBlank() || provider.isBlank()) null else ModelRef(id, provider, variant)
     }
 
     /**

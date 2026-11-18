@@ -29,6 +29,18 @@ import java.util.Map;
  * This is a development surface; it is not exposed on the LAN.
  */
 public final class AutomationServer {
+    private static final class AutomationServerHolder {
+        private static Context context;
+
+        static void set(Context ctx) {
+            context = ctx;
+        }
+
+        static Context context() {
+            return context;
+        }
+    }
+
     private static final String TAG = "AutomationServer";
     private static final int PORT = 42100;
     private static final String TOKEN = "androc-local-dev";
@@ -38,6 +50,7 @@ public final class AutomationServer {
     }
 
     public static synchronized void start(Context ctx) {
+        if (ctx != null) AutomationServerHolder.set(ctx.getApplicationContext());
         if (started) return;
         started = true;
         Thread thread = new Thread(() -> loop(), "automation-api");
@@ -80,6 +93,19 @@ public final class AutomationServer {
                 respond(out, 401, "{\"error\":\"token\"}");
                 return;
             }
+            int contentLength = 0;
+            try {
+                contentLength = Integer.parseInt(headers.getOrDefault("content-length", "0"));
+            } catch (Exception ignored) {
+            }
+            byte[] bodyBytes = new byte[Math.min(contentLength, 1 << 20)];
+            int bodyRead = 0;
+            while (bodyRead < bodyBytes.length) {
+                int n = in.read(bodyBytes, bodyRead, bodyBytes.length - bodyRead);
+                if (n <= 0) break;
+                bodyRead += n;
+            }
+            String requestBody = new String(bodyBytes, 0, bodyRead, StandardCharsets.UTF_8);
             int q = target.indexOf('?');
             String path = q < 0 ? target : target.substring(0, q);
             String query = q < 0 ? "" : target.substring(q + 1);
@@ -96,6 +122,19 @@ public final class AutomationServer {
                 body = AutomationBridge.INSTANCE.startLocal();
             } else if ("/ping".equals(path)) {
                 body = "{\"ok\":true}";
+            } else if ("/logs".equals(path)) {
+                body = new org.json.JSONObject()
+                        .put("log", ThinRuntime.logTail(AutomationServerHolder.context()))
+                        .toString();
+            } else if ("/proxy".equals(path)) {
+                body = proxy(params.getOrDefault("path", "/api/info"), method, requestBody);
+            } else if ("/local".equals(path)) {
+                body = new org.json.JSONObject()
+                        .put("installed", ThinRuntime.installed(AutomationServerHolder.context()))
+                        .put("version", ThinRuntime.installedVersion(AutomationServerHolder.context()))
+                        .put("running", ThinRuntime.running())
+                        .put("url", "http://127.0.0.1:" + ThinRuntime.port(AutomationServerHolder.context()))
+                        .toString();
             } else {
                 respond(out, 404, "{\"error\":\"not found\"}");
                 return;
@@ -104,6 +143,45 @@ public final class AutomationServer {
         } catch (Exception e) {
             Log.w(TAG, "request failed", e);
         }
+    }
+
+    private static String proxy(String apiPath, String method, String requestBody) throws Exception {
+        Context ctx = AutomationServerHolder.context();
+        int port = ThinRuntime.port(ctx);
+        String url = "http://127.0.0.1:" + port + (apiPath.startsWith("/") ? apiPath : "/" + apiPath);
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+        c.setConnectTimeout(2000);
+        c.setReadTimeout(15000);
+        c.setUseCaches(false);
+        String auth = android.util.Base64.encodeToString(
+                ("opencode:" + LocalRuntime.serverPassword(ctx)).getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                android.util.Base64.NO_WRAP);
+        c.setRequestProperty("Authorization", "Basic " + auth);
+        c.setRequestProperty("Accept", "application/json");
+        if ("POST".equals(method)) {
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            byte[] payload = requestBody.getBytes(StandardCharsets.UTF_8);
+            c.setFixedLengthStreamingMode(payload.length);
+            c.getOutputStream().write(payload);
+            c.getOutputStream().close();
+        }
+        int code = c.getResponseCode();
+        InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        if (in != null) {
+            byte[] buf = new byte[1 << 16];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            in.close();
+        }
+        c.disconnect();
+        if (code >= 400) {
+            return new org.json.JSONObject().put("status", code)
+                    .put("body", out.toString("UTF-8")).toString();
+        }
+        return out.toString("UTF-8");
     }
 
     private static Map<String, String> parseQuery(String query) throws Exception {

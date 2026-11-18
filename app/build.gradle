@@ -12,9 +12,9 @@ if (!opencodeVersion) {
 // CI passes -PandrocVersionName / -PandrocVersionCode / -PandrocRequireSigning.
 // The old -Padia* names are still accepted so an existing release job keeps working.
 def androcVersionCode = (findProperty("androcVersionCode")
-        ?: findProperty("adiaVersionCode") ?: "8").toInteger()
+        ?: findProperty("adiaVersionCode") ?: "9").toInteger()
 def androcVersionName = findProperty("androcVersionName")
-        ?: findProperty("adiaVersionName") ?: "0.5.0-androc"
+        ?: findProperty("adiaVersionName") ?: "0.6.0-androc"
 def androcRequireSigning = (findProperty("androcRequireSigning")
         ?: findProperty("adiaRequireSigning")) == "1"
 

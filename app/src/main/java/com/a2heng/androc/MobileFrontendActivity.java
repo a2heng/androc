@@ -42,7 +42,7 @@ public class MobileFrontendActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        AutomationServer.start(this);
+        if (BuildConfig.DEBUG) AutomationServer.start(this);
         if (!"mobile".equals(BuildConfig.UI_MODE)) {
             // Respaldo: el frontend WebView clasico.
             startActivity(new android.content.Intent(this, MainActivity.class));

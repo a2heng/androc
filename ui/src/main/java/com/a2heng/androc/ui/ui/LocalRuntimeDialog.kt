@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +47,16 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var installedVersion by remember { mutableStateOf<String?>(null) }
+    var marketVersion by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        marketVersion = withContext(Dispatchers.IO) {
+            runCatching {
+                MarketClient().refresh().find("kernel-opencode")?.upstreamVersion
+            }.getOrNull()
+        }
+    }
 
     fun startLocal() {
         val l = launcher ?: return
@@ -86,6 +96,7 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
                 installedVersion = file.parentFile?.name
                 progress = 1f
                 if (launcher != null) {
+                    launcher.stop()
                     // The component is installed: start it and inject the local
                     // address/password into the normal login flow.
                     startLocal()
@@ -136,6 +147,14 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    val installedVer = installedVersion ?: launcher?.version
+                    if (marketVersion != null && installedVer != null && marketVersion != installedVer) {
+                        Text(
+                            "市场可更新：$marketVersion（当前 $installedVer）",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
                 if (busy) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -160,7 +179,14 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
         },
         confirmButton = {
             val installed = launcher?.installed == true || installedVersion != null
+            val installedVer = installedVersion ?: launcher?.version
+            val hasUpdate = installed && marketVersion != null &&
+                installedVer != null && marketVersion != installedVer
             when {
+                hasUpdate -> TextButton(
+                    enabled = !busy,
+                    onClick = { install() },
+                ) { Text("更新") }
                 installed && launcher != null -> TextButton(
                     enabled = !busy,
                     onClick = { startLocal() },

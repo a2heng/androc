@@ -28,6 +28,7 @@ import java.util.Map;
 public final class ThinRuntime {
     private static final String TAG = "ThinRuntime";
     private static Process process;
+    private static String runningVersion;
 
     private ThinRuntime() {
     }
@@ -64,10 +65,12 @@ public final class ThinRuntime {
     }
 
     public static synchronized boolean start(Context ctx) throws IOException {
-        if (running()) return true;
         Context app = ctx.getApplicationContext();
         File bin = installedBinary(app);
         if (bin == null) throw new IOException("OpenCode 组件未安装");
+        String want = installedVersion(app);
+        if (running() && want != null && want.equals(runningVersion)) return true;
+        if (running()) stop();
         killStale(app);
 
         File nd = new File(app.getApplicationInfo().nativeLibraryDir);
@@ -87,6 +90,7 @@ public final class ThinRuntime {
 
         String password = LocalRuntime.serverPassword(app);
         int port = port(app);
+        int proxyPort = LocalNetworkProxy.start();
         String libPath = lib.getAbsolutePath() + ":" + nd.getAbsolutePath();
         File log = new File(logs, "thin-runtime.log");
         // Do not carry the previous failure's text into the dialog.
@@ -119,9 +123,18 @@ public final class ThinRuntime {
         env.put("OPENCODE_SERVER_USERNAME", "opencode");
         env.put("OPENCODE_SERVER_PASSWORD", password);
         env.put("OPENCODE_PASSWORD", password);
-        Log.i(TAG, "starting " + bin + " v" + installedVersion(app));
+        String proxy = "http://127.0.0.1:" + proxyPort;
+        env.put("HTTP_PROXY", proxy);
+        env.put("HTTPS_PROXY", proxy);
+        env.put("http_proxy", proxy);
+        env.put("https_proxy", proxy);
+        env.put("ALL_PROXY", proxy);
+        env.put("NO_PROXY", "127.0.0.1,localhost");
+        env.put("no_proxy", "127.0.0.1,localhost");
+        Log.i(TAG, "starting " + bin + " v" + installedVersion(app) + " proxy=" + proxy);
 
         process = pb.start();
+        runningVersion = want;
         return true;
     }
 
@@ -136,6 +149,8 @@ public final class ThinRuntime {
             if (process.isAlive()) process.destroyForcibly();
             process = null;
         }
+        runningVersion = null;
+        LocalNetworkProxy.stop();
     }
 
     /** Blocking health wait; call from a worker thread. */

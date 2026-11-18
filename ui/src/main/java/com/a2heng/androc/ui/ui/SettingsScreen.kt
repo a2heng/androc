@@ -1,5 +1,7 @@
 package com.a2heng.androc.ui.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.Dns
@@ -98,24 +101,16 @@ fun SettingsScreen(model: AppModel) {
                     LabelValue("认证", if (model.password.isBlank()) "无密码" else "Basic · opencode")
                 }
                 Spacer(Modifier.width(8.dp))
-                TextButton(onClick = { showServers = true }) {
-                    Icon(
-                        Icons.Rounded.Dns,
-                        contentDescription = null,
-                        modifier = Modifier.size(17.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("切换")
-                }
-                TextButton(onClick = { model.disconnect() }) {
-                    Icon(
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    PillAction("切换", Icons.Rounded.Dns) { showServers = true }
+                    PillAction(
+                        "断开",
                         Icons.Rounded.Logout,
-                        contentDescription = null,
-                        modifier = Modifier.size(17.dp),
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("断开连接", color = MaterialTheme.colorScheme.error)
+                        danger = true,
+                    ) { model.disconnect() }
                 }
             }
         }
@@ -152,31 +147,8 @@ fun SettingsScreen(model: AppModel) {
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.Tune,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        if (model.current != null) "当前会话模型" else "最近使用的模型",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    val shown = model.current?.model
-                        ?: model.recentModel
-                        ?: model.firstFreeModel()
-                        ?: model.serverDefaultModel
+                    val shown = model.current?.model ?: model.fallbackModel()
                     Text(
                         shown?.let {
                             modelDisplay(it, model.modelGroupById) + " · " + variantLabel(it.variant)
@@ -265,39 +237,45 @@ fun SettingsScreen(model: AppModel) {
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("运行中发送消息时", style = MaterialTheme.typography.titleSmall)
-        OptionRow(
-            title = "steer（默认）",
-            subtitle = "在下一个步骤前插入，引导当前这轮回答；opencode 默认行为",
-            selected = model.sendMode == "steer",
-        ) { model.updateSendMode("steer") }
-        OptionRow(
-            title = "queue",
-            subtitle = "不打断当前回答；这轮结束后作为下一轮输入",
-            selected = model.sendMode == "queue",
-        ) { model.updateSendMode("queue") }
-        OptionRow(
-            title = "中断后发送",
-            subtitle = "先中断当前回答再发送；本 App 的客户端行为，不是 opencode delivery",
-            selected = model.sendMode == "interrupt",
-        ) { model.updateSendMode("interrupt") }
+        TripleOptionRow(
+            titles = listOf("steer", "queue", "中断后发送"),
+            subtitles = listOf("下一步前插入", "本轮结束后", "先中断再发"),
+            selected = when (model.sendMode) {
+                "queue" -> 1
+                "interrupt" -> 2
+                else -> 0
+            },
+            onSelect = {
+                model.updateSendMode(
+                    when (it) {
+                        1 -> "queue"
+                        2 -> "interrupt"
+                        else -> "steer"
+                    },
+                )
+            },
+        )
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("聊天显示", style = MaterialTheme.typography.titleSmall)
-        OptionRow(
-            title = "精简",
-            subtitle = "工具压成一行，点一下用气泡看完整内容",
-            selected = model.detailLevel == "compact",
-        ) { model.updateDetailLevel("compact") }
-        OptionRow(
-            title = "适中",
-            subtitle = "工具/思考先预览一部分，超出点「展开」看完整",
-            selected = model.detailLevel == "full",
-        ) { model.updateDetailLevel("full") }
-        OptionRow(
-            title = "完整",
-            subtitle = "全部平铺，不再折叠或展开",
-            selected = model.detailLevel == "expanded",
-        ) { model.updateDetailLevel("expanded") }
+        TripleOptionRow(
+            titles = listOf("精简", "适中", "完整"),
+            subtitles = listOf("一行 + 气泡", "预览 + 展开", "全部平铺"),
+            selected = when (model.detailLevel) {
+                "full" -> 1
+                "expanded" -> 2
+                else -> 0
+            },
+            onSelect = {
+                model.updateDetailLevel(
+                    when (it) {
+                        1 -> "full"
+                        2 -> "expanded"
+                        else -> "compact"
+                    },
+                )
+            },
+        )
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("更新", style = MaterialTheme.typography.titleSmall)
@@ -372,10 +350,7 @@ fun SettingsScreen(model: AppModel) {
             ModelPickerPage(
                 model = model,
                 title = if (model.current != null) "当前会话模型" else "最近使用 / 新会话模型",
-                selected = model.current?.model
-                    ?: model.recentModel
-                    ?: model.firstFreeModel()
-                    ?: model.serverDefaultModel,
+                selected = model.current?.model ?: model.fallbackModel(),
                 allowNone = false,
                 onPick = { ref ->
                     if (ref != null) {
@@ -650,6 +625,101 @@ private fun PluginRow(name: String, status: String, ok: Boolean) {
             color = if (ok) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+
+
+@Composable
+private fun PillAction(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    danger: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Surface(
+        color = if (danger) MaterialTheme.colorScheme.errorContainer
+        else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (danger) MaterialTheme.colorScheme.onErrorContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.clickableNoRipple(onClick),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(text, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun TripleOptionRow(
+    titles: List<String>,
+    subtitles: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        titles.forEachIndexed { index, title ->
+            val active = index == selected
+            val bg by animateColorAsState(
+                if (active) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                label = "option-bg",
+            )
+            val fg by animateColorAsState(
+                if (active) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                label = "option-fg",
+            )
+            Surface(
+                color = bg,
+                contentColor = fg,
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = if (active) 2.dp else 0.dp,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickableNoRipple { onSelect(index) },
+            ) {
+                Column(Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (active) {
+                            Icon(
+                                Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                    }
+                    Text(
+                        subtitles.getOrElse(index) { "" },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (active) {
+                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 

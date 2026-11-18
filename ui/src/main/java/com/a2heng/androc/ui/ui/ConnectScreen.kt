@@ -244,7 +244,7 @@ fun ConnectScreen(model: AppModel) {
             Spacer(Modifier.height(18.dp))
             Button(
                 onClick = {
-                    if (model.connecting) model.cancelConnect() else model.connect(url, password)
+                    if (model.connecting) model.cancelConnect() else model.connectSmart(url, password)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
