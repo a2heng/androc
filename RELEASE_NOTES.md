@@ -1,4 +1,4 @@
-# Androc v0.6.0
+# Androc v0.5.1
 
 第一个可用的 **UI-only + 组件市场** 版本。基础 APK 不再内置 OpenCode，也不内置 Termux 前缀。
 

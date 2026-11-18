@@ -1378,14 +1378,14 @@ private fun ChatStatusBar(
                 modifier = Modifier.weight(1f),
             )
             StatusChip(
-                "显示",
+                "",
                 detailLevelLabel(model.detailLevel),
                 onClick = onToggleDetail,
                 modifier = Modifier.weight(1f),
             )
             StatusChip(
                 "Git",
-                "diff",
+                "",
                 onClick = onGit,
                 modifier = Modifier.weight(1f),
             )
@@ -1397,7 +1397,7 @@ private fun ChatStatusBar(
                 modifier = Modifier.weight(1f),
             )
             StatusChip(
-                "花费",
+                "",
                 costLabel ?: "—",
                 modifier = Modifier.weight(1f),
             )
@@ -1416,8 +1416,8 @@ private fun StatusChip(
     val shape = RoundedCornerShape(8.dp)
     Row(
         modifier
-            .height(26.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape)
+            .height(22.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f), shape)
             .then(
                 if (onClick != null) {
                     Modifier
@@ -1435,14 +1435,16 @@ private fun StatusChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Text(
-            label,
-            fontSize = 9.sp,
-            lineHeight = 10.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-        Text(
+        if (label.isNotBlank()) {
+            Text(
+                label,
+                fontSize = 9.sp,
+                lineHeight = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        if (value.isNotBlank()) Text(
             value,
             fontSize = 10.sp,
             lineHeight = 11.sp,

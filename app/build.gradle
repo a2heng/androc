@@ -14,7 +14,7 @@ if (!opencodeVersion) {
 def androcVersionCode = (findProperty("androcVersionCode")
         ?: findProperty("adiaVersionCode") ?: "9").toInteger()
 def androcVersionName = findProperty("androcVersionName")
-        ?: findProperty("adiaVersionName") ?: "0.6.0-androc"
+        ?: findProperty("adiaVersionName") ?: "0.5.1-androc"
 def androcRequireSigning = (findProperty("androcRequireSigning")
         ?: findProperty("adiaRequireSigning")) == "1"
 

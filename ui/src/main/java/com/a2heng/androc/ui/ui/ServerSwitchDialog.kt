@@ -36,7 +36,7 @@ fun ServerSwitchDialog(model: AppModel, onDismiss: () -> Unit) {
         text = {
             if (model.savedConnections.isEmpty()) {
                 Text(
-                    "还没有保存的服务器。先连接一次，成功后会出现在这里。",
+                    "还没有保存的服务器。点「打开登录页」输入地址和密码。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
@@ -98,7 +98,7 @@ fun ServerSwitchDialog(model: AppModel, onDismiss: () -> Unit) {
             TextButton(onClick = {
                 onDismiss()
                 model.disconnect()
-            }) { Text("管理 / 添加") }
+            }) { Text("打开登录页") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("关闭") }
