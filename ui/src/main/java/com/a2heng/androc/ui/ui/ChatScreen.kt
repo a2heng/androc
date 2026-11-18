@@ -361,7 +361,13 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             model.closeSession()
                             model.refreshSessions()
                         },
-                        modifier = Modifier.size(38.dp),
+                        modifier = Modifier
+                            .size(38.dp)
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                CircleShape,
+                            ),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -376,13 +382,17 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                     Spacer(Modifier.width(8.dp))
                     // 顶栏：名字一行，下面一行是没放进底栏的信息（上下文 / tokens / 显示 / Git / 会话）。
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            session.shortTitle,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                session.shortTitle,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            SessionPill("会话 ${model.openSessions.size}") { openMenu = true }
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StatusChip(
                                 "模型",
@@ -408,11 +418,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                     "↑${formatTokens(it.input)} ↓${formatTokens(it.output)}"
                                 } ?: "↑— ↓—",
                             )
-                            MetaDot()
-                            MetaText(
-                                "会话 ${model.openSessions.size}",
-                                onClick = { openMenu = true },
-                            )
+
                         }
                     }
                 }
@@ -1375,31 +1381,26 @@ private fun ChatStatusBar(
                 "ctx",
                 contextPct?.let { "${it.roundToInt()}%" } ?: "—",
                 valueColor = contextColor,
-                modifier = Modifier.weight(1f),
             )
             StatusChip(
                 "",
                 detailLevelLabel(model.detailLevel),
                 onClick = onToggleDetail,
-                modifier = Modifier.weight(1f),
             )
             StatusChip(
                 "Git",
                 "",
                 onClick = onGit,
-                modifier = Modifier.weight(1f),
             )
             StatusChip(
                 "命中",
                 hitLabel,
                 valueColor = hitColor,
                 onClick = onCache,
-                modifier = Modifier.weight(1f),
             )
             StatusChip(
                 "",
                 costLabel ?: "—",
-                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -1424,7 +1425,7 @@ private fun StatusChip(
                         .clickable(onClick = onClick)
                         .border(
                             1.dp,
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
                             shape,
                         )
                 } else {
@@ -1453,12 +1454,26 @@ private fun StatusChip(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (onClick != null) {
+    }
+}
+
+@Composable
+private fun SessionPill(text: String, onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text, fontSize = 9.sp, lineHeight = 10.sp)
             Icon(
                 Icons.Rounded.KeyboardArrowDown,
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

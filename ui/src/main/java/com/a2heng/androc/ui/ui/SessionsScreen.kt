@@ -264,16 +264,22 @@ fun SessionsScreen(
 
 @Composable
 private fun SortLabel(text: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        color = if (selected) MaterialTheme.colorScheme.primary
+    Surface(
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
         else MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        modifier = Modifier
-            .clickableNoRipple(onClick)
-            .padding(horizontal = 2.dp, vertical = 4.dp),
-    )
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+        modifier = Modifier.clickableNoRipple(onClick),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+        )
+    }
 }
 
 @Composable

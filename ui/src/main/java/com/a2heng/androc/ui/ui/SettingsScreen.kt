@@ -633,6 +633,7 @@ private fun PillAction(
         contentColor = if (danger) MaterialTheme.colorScheme.onErrorContainer
         else MaterialTheme.colorScheme.onSurfaceVariant,
         shape = RoundedCornerShape(50),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
         modifier = Modifier.clickableNoRipple(onClick),
     ) {
         Row(
