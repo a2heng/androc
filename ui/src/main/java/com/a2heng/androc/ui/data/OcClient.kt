@@ -411,6 +411,62 @@ class OcClient(rawBase: String, private val password: String) {
         return ModelRef(id, data.str("providerID") ?: "")
     }
 
+    /**
+     * 在所有内核上都可用：读 /api/config 找到最高优先级的配置文件，
+     * 用 experimental fs.write 写入 model，然后等服务端 config.updated
+     * 重载 provider。返回 false 表示服务端没有可写的配置文档。
+     */
+    suspend fun setDefaultModel(ref: ModelRef): Boolean {
+        val entries = configEntries()
+        val path = entries.asReversed()
+            .mapNotNull { (it as? JsonObject)?.str("path") }
+            .firstOrNull { it.isNotBlank() }
+            ?: return false
+        val raw = getBytes("/api/fs/read" + encodePath(path))
+        val text = raw.toString(Charsets.UTF_8)
+        val obj = (json.parseToJsonElement(text) as? JsonObject)?.toMutableMap()
+            ?: mutableMapOf()
+        val value = buildString {
+            append(ref.providerID)
+            append('/')
+            append(ref.id)
+            ref.variant?.let { append('#'); append(it) }
+        }
+        obj["model"] = JsonPrimitive(value)
+        val body = JsonObject(obj).toString().toByteArray(Charsets.UTF_8)
+        postBytes("/api/experimental/fs/write?path=" + urlEncode(path), body)
+        repeat(20) {
+            kotlinx.coroutines.delay(250)
+            if (defaultModel() == ref) return true
+        }
+        return true
+    }
+
+    suspend fun configEntries(): List<JsonElement> = unwrapArray(get("/api/config"))
+
+    private fun encodePath(path: String): String =
+        path.split('/').joinToString("/") { urlEncode(it) }
+
+    private suspend fun getBytes(path: String): ByteArray {
+        val resp = http.newCall(request(path).get().build()).execute()
+        return resp.use { r ->
+            if (!r.isSuccessful) throw errorOf(r)
+            r.body?.bytes() ?: ByteArray(0)
+        }
+    }
+
+    private suspend fun postBytes(path: String, bytes: ByteArray): JsonElement? {
+        val req = request(path)
+            .post(bytes.toRequestBody("application/json".toMediaType()))
+            .build()
+        val resp = http.newCall(req).execute()
+        return resp.use { r ->
+            if (!r.isSuccessful) throw errorOf(r)
+            val text = r.body?.string().orEmpty()
+            if (text.isBlank()) null else json.parseToJsonElement(text)
+        }
+    }
+
     suspend fun permissions(): List<PermissionReq> =
         unwrapArray(get("/api/permission/request")).mapNotNull {
             (it as? JsonObject)?.let(::parsePermission)

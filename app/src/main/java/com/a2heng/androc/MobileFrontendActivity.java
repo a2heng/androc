@@ -179,6 +179,10 @@ public class MobileFrontendActivity extends AppCompatActivity {
             };
             // El explorador arranca en HOME, no en el "/" real: la app no
             // puede leer la raiz Android y esa vista solo mostraba vacio.
+            // El modelo por defecto es el del servidor; este writer es el
+            // fallback local cuando el servidor no expone fs.write.
+            com.a2heng.androc.ui.OpenCodeMobileHost.setServerModelWriter(
+                    new AppServerModelWriter(this));
             com.a2heng.androc.ui.OpenCodeMobileHost.show(
                     this, URL, pwd, shell,
                     LocalRuntime.homeDir(this).getAbsolutePath(),

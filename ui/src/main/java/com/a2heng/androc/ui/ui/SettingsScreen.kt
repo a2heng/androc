@@ -196,11 +196,10 @@ fun SettingsScreen(model: AppModel) {
                 Column(Modifier.weight(1f)) {
                     Text("选择模型", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Text(
-                        model.defaultModel?.let {
-                            modelDisplay(it, model.modelGroupById) + " · " + variantLabel(it.variant)
-                        } ?: model.serverDefaultModel?.let {
-                            "服务器默认 · " + modelDisplay(it, model.modelGroupById)
-                        } ?: "服务器默认",
+                        model.serverDefaultModel?.let {
+                            "服务器默认 · " + modelDisplay(it, model.modelGroupById) +
+                                " · " + variantLabel(it.variant)
+                        } ?: "服务器默认（未配置）",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -345,17 +344,13 @@ fun SettingsScreen(model: AppModel) {
         Spacer(Modifier.height(24.dp))
     }
 
-        val noneLabel = model.serverDefaultModel?.let {
-            "服务器默认（${modelDisplay(it, model.modelGroupById)}）"
-        } ?: "服务器默认"
         PickerPageHost(visible = showModelPicker, onBack = { showModelPicker = false }) {
             ModelPickerPage(
                 model = model,
-                title = "默认模型",
-                selected = model.defaultModel,
-                allowNone = true,
-                noneLabel = noneLabel,
-                onPick = { ref -> model.updateDefaultModel(ref) },
+                title = "服务器默认模型",
+                selected = model.serverDefaultModel,
+                allowNone = false,
+                onPick = { ref -> model.updateServerDefaultModel(ref) },
                 onDismiss = { showModelPicker = false },
             )
         }

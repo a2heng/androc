@@ -2272,6 +2272,8 @@ public class MainActivity extends AppCompatActivity {
             try {
                 // adjustResize: el sistema encoge la ventana y el input sube con
                 // el teclado. La UI Compose ya respeta los insets que recibe.
+                com.a2heng.androc.ui.OpenCodeMobileHost.setServerModelWriter(
+                        new AppServerModelWriter(this));
                 com.a2heng.androc.ui.OpenCodeMobileHost.show(this, URL, pwd, null, null,
                         true, true, new AppPluginManager(this));
             } catch (Throwable t) {

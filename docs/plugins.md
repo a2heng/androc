@@ -1,0 +1,191 @@
+# 插件系统：无界面 APK + Skill + 工具链
+
+状态：`[计划]` 总体；`[进行中]` 当前仅有一版进程内插件管理雏形。
+
+---
+
+## 1. 插件是什么
+
+> **插件 = 一个无界面的独立 APK。**
+> 每个插件带一组 Skill，以及这些 Skill 需要的工具链；安装在系统里，
+> 用 `PackageInstaller` 安装/更新/卸载。
+
+不是插件的东西：基础 UI、proot 引擎（在运行时插件里）。
+
+插件 APK：
+
+- **没有 Activity**，不显示界面；
+- 导出一个 `Service`（AIDL）或 `ContentProvider` 给基础 App；
+- 用签名级权限保护；
+- 在 `assets/plugin.json`（或 `res/xml/plugin.xml`）里声明元数据；
+- 可以有 native 库（例如运行时插件里的 proot/opencode），由插件进程自己执行。
+
+```json
+{
+  "schema": 1,
+  "id": "android-build",
+  "name": "Android 构建",
+  "category": "android",
+  "version": "36.0-1",
+  "versionCode": 3601,
+  "minAppVersion": 8,
+  "skills": ["android-build", "android-project", "android-gradle"],
+  "toolchain": ["jdk21", "sdk36", "aapt2", "gradle"],
+  "homepage": "https://github.com/a2heng/androc-plugins",
+  "updateSource": "https://github.com/a2heng/androc-packs/releases/latest/download/plugins.json"
+}
+```
+
+基础 App 通过 `PackageManager.getResourcesForApplication(pkg)` 读取
+`assets/plugin.json`；通过 `queryIntentServices` 发现插件。
+
+---
+
+## 2. 分类与粒度
+
+四类：
+
+| 分类 | 插件 | 说明 |
+|---|---|---|
+| **核心** | 基础 UI、插件宿主 | 不可卸载；随 App |
+| **运行时** | OpenCode 内核、Termux | 内核不可卸载但可更新；Termux 可更新 |
+| **Android** | 每个 Skill 一个插件 | android-build、android-project、android-ui、android-test、android-debug、android-ai、android-ndk… |
+| **其他** | 社区/工具插件 | 独立作者，按签名信任 |
+
+粒度规则：
+
+- **一个插件 = 一个 Skill（或强相关的一组 Skill） + 它需要的工具链**；
+- 共享工具链放在“提供者”插件里，其他插件声明 `depends`；
+  - `android-build` 提供 JDK/SDK/Gradle/aapt2；
+  - `android-debug` 只带 adb；
+  - `android-ai` 只带 ONNX/TFLite/llama.cpp/MNN；
+  - 纯 Skill 插件（android-ui、android-test…）只声明依赖，不重复带工具链。
+- 卸载提供者前，必须先卸载/禁用依赖它的插件；UI 要提示。
+
+当前代码里的 5 个插件（opencode、termux、android-build、android-ai、
+android-debug）是过渡形态；目标是把 Android 拆细。
+
+---
+
+## 3. 插件源（仓库 URL）
+
+基础 App 维护一个“插件源”列表，每个源是一个 `plugins.json`：
+
+```json
+{
+  "schema": 1,
+  "name": "Androc 官方",
+  "url": "https://github.com/a2heng/androc-packs/releases/latest/download/plugins.json",
+  "plugins": [
+    {
+      "id": "android-build",
+      "version": "36.0-1",
+      "apk": "https://…/android-build-36.0-1.apk",
+      "sha256": "…",
+      "minAppVersion": 8,
+      "size": 734003200
+    }
+  ]
+}
+```
+
+规则：
+
+- 一个源可以有很多插件；一个插件也可以被多个源声明（按 `versionCode` 取高）；
+- 安装前校验 `sha256`、`versionCode`、`minAppVersion`、签名；
+- 源可以禁用/删除；已安装插件不受影响；
+- 支持本地 APK 安装（不走源）。
+
+---
+
+## 4. 添加 / 查看 / 修改网址
+
+### 添加插件
+
+1. **从源安装**：插件 → 源 → 新增源（粘贴 `plugins.json` URL）→ 刷新 → 安装；
+2. **从文件安装**：插件 → 从文件安装 → 选 APK；
+3. **内置插件**：随 App 或首次启动安装，不经过源。
+
+### 查看网址
+
+插件详情显示：
+
+- `主页`：插件作者/项目地址（来自 APK 的 `plugin.json`，只读）；
+- `更新源`：这条插件从哪个 `plugins.json` / APK URL 更新；
+- `签名`：签名指纹（社区插件显示，官方插件可隐藏）；
+- `路径/包名/版本/大小`。
+
+### 修改网址
+
+- **源地址**：插件 → 源 → 编辑 URL；
+- **单个插件的更新源**：插件详情 → 编辑更新源（存基础 App 的偏好，覆盖源里的值）；
+- APK 自带的 `homepage` 只读；不能改别人的 APK 元数据，只能改“我从哪里更新它”。
+
+---
+
+## 5. 安装 / 更新 / 卸载
+
+| 动作 | 行为 |
+|---|---|
+| 安装 | 下载 APK → 校验 → `PackageInstaller` 会话 → 用户确认 |
+| 更新 | 同包名、更高 `versionCode`；保留插件数据 |
+| 卸载 | `PackageInstaller.uninstall`；只删插件自己的数据 |
+| 内置运行时 | 更新走同一流程；**卸载按钮禁用** |
+| 失败 | 删除临时文件；已安装版本保持不变 |
+
+进度、失败原因、签名错误都要在插件详情里可见。
+
+---
+
+## 6. 通信契约
+
+推荐 AIDL（后续也可用 `ContentProvider.call`）：
+
+```aidl
+interface IRuntimePlugin {
+  String start();                 // 返回 http://127.0.0.1:<port>
+  void stop();
+  String connectionJson();        // url / username / password / running
+  String pairingLink();
+  String pluginInfoJson();
+}
+```
+
+- 基础 App `bindService`；
+- 权限：`com.a2heng.androc.permission.PLUGIN`；
+- 官方插件用 `signature`；社区插件用用户信任 + 指纹确认；
+- 运行时插件启动后，基础 UI 用标准 HTTP + pairing 连接，和远程服务器同一条路。
+
+---
+
+## 7. 安全
+
+- 插件 APK 是代码，安全等级等同 App；
+- 官方源 + 签名校验；社区源明确提示“未验证”；
+- 基础 App 不把本机密码交给未信任插件；
+- 插件只能访问自己的数据目录；需要共享数据时走明确的 Provider/AIDL；
+- 安装前展示包名、版本、签名、权限、来源。
+
+---
+
+## 8. 体积与 payload
+
+- 小插件（skills/scripts）直接放 APK；
+- 大工具链（JDK/SDK/Gradle）可以：
+  - 放插件 APK（简单，但更新要重下大包）；
+  - 或 APK 只带 manifest/安装器，payload 下载/缓存（推荐）；
+- 无论哪种，**管理单位仍是插件 APK**；payload 是插件内部实现。
+
+---
+
+## 9. 当前状态与下一步
+
+| 项 | 状态 |
+|---|---|
+| 进程内 PluginManager + 插件卡片 | `[已实现]`（过渡） |
+| 本机优先、独立 OpenCode 更新 | `[已实现]` |
+| 插件 APK 契约 + SDK | `[计划]` |
+| 插件源/网址管理 UI | `[计划]` |
+| 运行时插件 APK | `[计划]` |
+| Android 细粒度插件 | `[计划]` |
+| 官方/社区签名策略 | `[待定]` |

@@ -26,6 +26,25 @@ object LocalShellHost {
     val available: Boolean get() = spawner != null
 }
 
+/** 修改服务器默认模型的宿主能力；只有本机内核能实现。 */
+interface ServerModelWriter {
+    fun setDefaultModel(
+        providerID: String,
+        modelID: String,
+        variant: String?,
+        callback: Callback,
+    )
+
+    fun interface Callback {
+        fun onResult(ok: Boolean, message: String)
+    }
+}
+
+object ServerModelHost {
+    @Volatile
+    var writer: ServerModelWriter? = null
+}
+
 /**
  * 整个 Compose 客户端的根组合。
  *
@@ -61,11 +80,15 @@ fun OpenCodeMobileRoot(
             }
         }
         LaunchedEffect(serverUrl, password) {
-            if (!serverUrl.isNullOrBlank()) {
-                // 同进程服务：不写入 SharedPreferences，避免把独立客户端的配置覆盖掉。
-                model.connect(serverUrl, password.orEmpty(), remember = false)
-            } else {
-                model.autoConnect()
+            val last = model.serverUrl
+            when {
+                // 上次连的是远程：优先恢复它，不要被宿主的本机 URL 覆盖。
+                last.isNotBlank() && !model.isLocalUrl(last) ->
+                    model.connect(last, model.password, remember = false)
+                // 上次是本机（或首次启动）：用宿主刚启动的本机 URL/密码。
+                !serverUrl.isNullOrBlank() ->
+                    model.connect(serverUrl, password.orEmpty(), remember = false)
+                else -> model.autoConnect()
             }
         }
         AppRoot(model)
@@ -77,6 +100,11 @@ fun OpenCodeMobileRoot(
  * 启动本地 opencode 之后直接调用它，整个界面就是这套 Compose 客户端。
  */
 object OpenCodeMobileHost {
+    @JvmStatic
+    fun setServerModelWriter(writer: ServerModelWriter?) {
+        ServerModelHost.writer = writer
+    }
+
     @JvmStatic
     fun show(activity: ComponentActivity, url: String, password: String) {
         show(activity, url, password, null, null, false, false)

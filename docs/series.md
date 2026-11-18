@@ -1,7 +1,10 @@
-# Androc：一个 App，三层能力
+# Androc：一个 App + 插件
 
-本文是**产品形态、打包方式和模块边界**的唯一说明。路径/命令仍以
-[`paths.md`](paths.md)、[`commands.md`](commands.md) 为准。
+本文是**产品形态、打包方式和模块边界**的说明。总览与未实现项见
+[`design.md`](design.md)，插件 APK 契约见 [`plugins.md`](plugins.md)，
+默认模型见 [`model.md`](model.md)，连接管理见 [`connections.md`](connections.md)。
+
+路径/命令仍以 [`paths.md`](paths.md)、[`commands.md`](commands.md) 为准。
 
 ---
 

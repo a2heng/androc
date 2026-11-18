@@ -8,6 +8,8 @@ import org.connectbot.terminal.TerminalDimensions
 import org.connectbot.terminal.TerminalEmulator
 import org.connectbot.terminal.TerminalEmulatorFactory
 import com.a2heng.androc.ui.ConnectionService
+import com.a2heng.androc.ui.ServerModelHost
+import com.a2heng.androc.ui.ServerModelWriter
 import com.a2heng.androc.contracts.PluginInfo
 import com.a2heng.androc.contracts.PluginManager
 import androidx.compose.runtime.getValue
@@ -283,15 +285,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var appearance by mutableStateOf(prefs.getString("appearance", "system") ?: "system")
         private set
 
-    /** 全局默认模型（新会话使用）；null 表示跟随服务端默认 */
-    var defaultModel by mutableStateOf<ModelRef?>(
-        run {
-            val id = prefs.getString("default_model_id", "") ?: ""
-            val provider = prefs.getString("default_model_provider", "") ?: ""
-            val variant = prefs.getString("default_model_variant", "")?.takeIf { it.isNotBlank() }
-            if (id.isBlank()) null else ModelRef(id, provider, variant)
-        },
-    )
+    /** 服务端默认模型（唯一 Default）；null 表示服务端没有配置 */
+    var serverDefaultModel by mutableStateOf<ModelRef?>(null)
         private set
 
     /** 从其它应用分享进来的内容，等聊天页消费 */
@@ -408,9 +403,6 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         private set
     /** modelID -> 来源分组：0 免费 / 1 opencode go / 2 opencode console / 3 其它 */
     var modelGroupById by mutableStateOf<Map<String, Int>>(emptyMap())
-        private set
-    /** 服务端当前默认模型（只读，用于展示） */
-    var serverDefaultModel by mutableStateOf<ModelRef?>(null)
         private set
 
     // ---- 缓存看板 -----------------------------------------------------------
@@ -799,13 +791,56 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("appearance", mode).apply()
     }
 
-    fun updateDefaultModel(model: ModelRef?) {
-        defaultModel = model
-        prefs.edit()
-            .putString("default_model_id", model?.id ?: "")
-            .putString("default_model_provider", model?.providerID ?: "")
-            .putString("default_model_variant", model?.variant ?: "")
-            .apply()
+    fun updateServerDefaultModel(model: ModelRef?) {
+        if (model == null) return
+        val c = client
+        if (c == null) {
+            Toast.makeText(getApplication(), "还没有连接服务器", Toast.LENGTH_LONG).show()
+            return
+        }
+        viewModelScope.launch {
+            val ok = try {
+                withContext(Dispatchers.IO) { c.setDefaultModel(model) }
+            } catch (e: Exception) {
+                lastError = e.message
+                false
+            }
+            if (ok) {
+                serverDefaultModel = model
+                Toast.makeText(getApplication(), "已更新服务器默认模型", Toast.LENGTH_SHORT).show()
+                loadMeta()
+                return@launch
+            }
+            // 服务端没开放 experimental fs.write 时，本机可以直接写配置文件。
+            val writer = ServerModelHost.writer
+            if (isLocalServer() && writer != null) {
+                writer.setDefaultModel(model.providerID, model.id, model.variant,
+                    object : ServerModelWriter.Callback {
+                        override fun onResult(ok: Boolean, message: String) {
+                            Toast.makeText(
+                                getApplication(),
+                                message,
+                                if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+                            ).show()
+                            if (ok) {
+                                serverDefaultModel = model
+                                viewModelScope.launch {
+                                    delay(2500)
+                                    if (!connected && serverUrl.isNotBlank()) {
+                                        connect(serverUrl, password)
+                                    }
+                                }
+                            }
+                        }
+                    })
+            } else {
+                Toast.makeText(
+                    getApplication(),
+                    "服务器没有开放配置写入 API；远程端请在服务器修改",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     fun applyShare(text: String?, image: Attachment?) {
@@ -1315,23 +1350,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 val dir = expandSessionDir(directory)
                     ?: expandSessionDir(current?.directory)
                     ?: expandSessionDir(sessions.firstOrNull()?.directory)
-                var s = withContext(Dispatchers.IO) { c.createSession(dir) }
-                // 默认模型必须落到服务端会话上：只改本地 copy 的话，
-                // 别的客户端或重连后会退回服务端默认模型。
-                val chosen = defaultModel
-                if (s != null && chosen != null && !sameModel(s.model, chosen)) {
-                    val applied = runCatching {
-                        withContext(Dispatchers.IO) { c.setModel(s.id, chosen) }
-                    }.isSuccess
-                    if (!applied) {
-                        lastError = "默认模型 ${chosen.label} 没能应用到新会话"
-                    }
-                    // 以服务端返回为准（含 variant 归一化），读不到才本地补。
-                    val fresh: SessionInfo? = withContext(Dispatchers.IO) {
-                        runCatching { c.session(s.id) }.getOrNull()
-                    }
-                    s = fresh ?: s.copy(model = chosen)
-                }
+                val s = withContext(Dispatchers.IO) { c.createSession(dir) }
+                // 新会话不传模型：服务端 default model 是唯一 Default。
                 refreshSessions()
                 if (s != null) openSession(s)
             } catch (e: Exception) {
@@ -1339,10 +1359,6 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
-
-    private fun sameModel(a: ModelRef?, b: ModelRef?): Boolean =
-        a != null && b != null && a.id == b.id && a.providerID == b.providerID &&
-            a.variant == b.variant
 
     /** 新建会话对话框里浏览目录用，不影响「文件」页签的状态。 */
     suspend fun browseDirs(path: String?): Pair<String, List<FsEntry>> {
