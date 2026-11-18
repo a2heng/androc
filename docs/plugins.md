@@ -48,7 +48,7 @@
 | 分类 | 插件 | 说明 |
 |---|---|---|
 | **核心** | 基础 UI、插件宿主 | 不可卸载；随 App |
-| **运行时** | OpenCode 内核、Termux | 内核不可卸载但可更新；Termux 可更新 |
+| **运行时** | OpenCode 内核、Linux rootfs（Alpine 默认，Android 用 Termux bionic） | 内核不可卸载但可更新；rootfs 可更新 |
 | **Android** | `android` 一个插件 | 所有 Android skills + JDK/SDK/Gradle/aapt2/adb/AI；内部组件可独立更新 |
 | **其他** | 社区/工具插件 | 独立作者，按签名信任 |
 
@@ -184,7 +184,7 @@ interface IRuntimePlugin {
 
 | 插件 APK | 内容 | 更新节奏 |
 |---|---|---|
-| `runtime` | proot、opencode、Termux userland | 上游 opencode/Termux 变时；opencode 二进制可在插件内部单独更新 |
+| `runtime` | proot、opencode、Linux rootfs（Alpine 默认；Android 用 Termux bionic） | 上游 opencode/rootfs 变时；opencode 二进制可单独更新 |
 | `android` | JDK、SDK、aapt2、Gradle、adb、AI runtimes + 所有 Android skills | 组件独立更新；插件本身随契约变时 |
 | 社区插件 | 作者自己的 skill + 工具链 | 作者决定 |
 

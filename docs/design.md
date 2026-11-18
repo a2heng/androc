@@ -28,7 +28,7 @@
                 │ HTTP + pairing / AIDL
 ┌───────────────▼─────────────────────────────┐
 │  OpenCode 运行时插件 APK（无界面，内置）      │
-│  - proot 引擎、opencode、Termux userland      │
+│  - proot 引擎、opencode、Linux rootfs（Alpine / Termux bionic）      │
 │  - 前台服务、server、密码、pairing            │
 │  - 不可卸载，可独立更新                       │
 └───────────────┬─────────────────────────────┘
@@ -69,6 +69,7 @@
 | [`plugins.md`](plugins.md) | 插件 APK 契约、分类、来源/网址管理、安装更新卸载 |
 | [`plugin-catalog.md`](plugin-catalog.md) | 远期插件目录；Writing 第一个样例与参考工作流 |
 | [`plugin-repos.md`](plugin-repos.md) | 插件仓库、CI、每日自动更新、签名 |
+| [`linux-runtime.md`](linux-runtime.md) | 轻量 Linux 运行时：Alpine / Termux bionic / RootfsManager、效率与体积 |
 | [`model.md`](model.md) | 服务器默认模型、API 事实、写入方式 |
 | [`connections.md`](connections.md) | 多服务器、新建/编辑 API、排序、记忆 |
 | [`series.md`](series.md) | 模块分层、阶段路线 |
@@ -96,7 +97,7 @@
 ```text
 :app                 基础 APK：只有 UI + 插件宿主（thin）
 :ui                  Compose 界面
-:runtime-plugin      运行时插件 APK：proot + opencode + Termux
+:runtime-plugin      运行时插件 APK：proot + opencode + Linux rootfs
 :kernel              运行时实现（被 :runtime-plugin 依赖）
 :plugin-sdk          插件契约/AIDL/PluginHost
 :tools               Android 插件：skills + JDK/SDK/Gradle
@@ -116,7 +117,7 @@
 | 1 | 多服务器切换、本机优先、记住上次、插件管理雏形 | `[已实现]` |
 | 2 | 默认模型收束到 Server Default（API + 本机回退） | `[进行中]` |
 | 3 | 插件 APK 契约 + 插件源/网址管理 + 本地 APK 安装 | `[计划]` |
-| 4 | 运行时插件 APK（proot/opencode/Termux） + 薄 UI 基础包 | `[进行中]` |
+| 4 | 运行时插件 APK（proot/opencode/Linux rootfs） + 薄 UI 基础包 | `[进行中]` |
 | 5 | Android 插件（一个：构建/调试/AI/测试 + 工具链） | `[计划]` |
 | 6 | 官方 Mobile 功能对齐（配对、语音、通知、结果摘要） | `[计划]` |
 | 7 | thin/full 分发、插件包签名 manifest、镜像 | `[计划]` |

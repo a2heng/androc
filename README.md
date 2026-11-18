@@ -69,6 +69,8 @@ Termux 的 ELF 把 `/data/data/com.termux/files/usr/lib` 编译进了
   Writing 第一个样例与参考工作流。
 - **[`docs/plugin-repos.md`](docs/plugin-repos.md)** — 插件仓库、CI、
   OpenCode 每日自动更新、签名。
+- **[`docs/linux-runtime.md`](docs/linux-runtime.md)** — 轻量 Linux 运行时：
+  Alpine / Termux bionic / RootfsManager、效率与体积。
 - **[`docs/model.md`](docs/model.md)** — 当前会话 / recent / 免费 / 服务器默认。
 - **[`docs/connections.md`](docs/connections.md)** — 多服务器、新建/编辑 API、
   排序与记忆。

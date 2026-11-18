@@ -10,7 +10,7 @@
 
 | 插件 | 状态 | Skills | 工具链 / payload | 说明 |
 |---|---|---|---|---|
-| **OpenCode 运行时** | `[进行中]` | — | opencode、proot、Termux | 不可卸载，可独立更新 |
+| **OpenCode 运行时** | `[进行中]` | — | opencode、proot、Alpine/Termux rootfs | 不可卸载，可独立更新 |
 | **Android** | `[进行中]` | 全部 android-* | JDK/SDK/aapt2/Gradle/adb/AI | 一个 Android 插件，内部组件独立更新 |
 | **写作 Writing** | `[第一个实现]` | outline/draft/edit/style/cite/export | typst、字体、模板；可选 pandoc | 文本为主、payload 小、无需 Android 权限 |
 | 研究 Research | `[远期]` | research/summarize/cite/compare | pdftotext、ripgrep、python、ONNX embeddings、SQLite | 与本地 AI 互补 |

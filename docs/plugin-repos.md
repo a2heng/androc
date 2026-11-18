@@ -17,7 +17,7 @@
 | 仓库 | 内容 | 发版方式 |
 |---|---|---|
 | `androc` | 薄 UI、`:contracts`、`:plugin-sdk`、docs、thin/full APK | 手动 tag |
-| `androc-plugin-runtime` | 运行时插件 APK：proot + opencode + Termux | **上游 opencode 发版后自动** |
+| `androc-plugin-runtime` | 运行时插件 APK：proot + opencode + Linux rootfs | **上游 opencode 发版后自动** |
 | `androc-plugin-android` | Android 插件 APK：skills + JDK/SDK/Gradle/adb/AI | 手动；CI 只检查/开 PR |
 | `androc-plugin-writing` | 写作插件：skills + pandoc/typst/模板 | 手动 tag |
 | `androc-packs` | `plugins.json` 聚合、payload、镜像 | 定时/被插件触发 |
@@ -27,7 +27,7 @@
 ```text
 androc-plugin-runtime/
 ├─ plugin/          # Service + AIDL 实现 + manifest
-├─ runtime-core/    # proot/opencode/Termux 代码
+├─ runtime-core/    # proot/opencode/rootfs 代码
 ├─ scripts/         # check/build/release
 └─ .github/workflows/release.yml
 ```

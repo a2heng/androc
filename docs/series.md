@@ -48,9 +48,8 @@
 
 | 插件 | Skill | 工具链 | 更新 |
 |---|---|---|---|
-| **OpenCode 内核** | shell 约定 | opencode、proot userland、bash/readline | **独立检查上游 opencode**，由 `RuntimeUpdateService` 下载 |
+| **Runtime / Kernel** | — | opencode、proot、Alpine rootfs、git、python、bash/coreutils | 独立检查 opencode；rootfs 可更新 |
 | **Android 开发** | android-build、android-project、android-ui、android-test、android-debug、android-ai…全部 Android skills | JDK 21、SDK 36、aapt2、Gradle 9.9、adb、AI runtimes | 一个插件；内部组件独立更新 |
-| **Termux 工具** | termux | git、python、pkg/apt | 随内核 |
 | **基础**（不是插件） | — | Compose UI + proot 引擎（proot + loader + musl） | 随 APK |
 
 规则：
@@ -61,9 +60,10 @@
 - OpenCode 内核可以独立检查上游版本并更新，不需要发新 APK；
 - 工具链大头（JDK/SDK/Gradle）不随 App 强制下载，按需安装。
 
-> **Termux 的边界**：不需要安装 Termux App。OpenCode/Termux 插件带的是 Termux
-> 的 `.deb`，解到应用私有 `$PREFIX`，由 proot 提供 Termux 路径。终端和 agent
-> shell 必须有这套 userland；没有它时，App 仍可连接远程服务器。
+> **Linux 的边界**：Kernel 默认用 **Alpine rootfs**（`apk`），不需要 Termux
+> App；Android 插件因为 JDK/aapt2 是 bionic/glibc，使用专用的 Termux bionic
+> rootfs。两者共享 HOME/workspace；没有 runtime 时仍可连远程服务器。
+> 详见 [`linux-runtime.md`](linux-runtime.md)。
 
 ---
 
