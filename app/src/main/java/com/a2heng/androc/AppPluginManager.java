@@ -89,56 +89,24 @@ public final class AppPluginManager implements PluginManager {
                 true,
                 false));
 
-        List<String> buildSkills = skillsFor(PluginInfo.ANDROID_BUILD);
-        boolean buildSkillsInstalled = anySkill(home, buildSkills);
-        boolean build = ToolchainInstaller.installed(ctx) && buildSkillsInstalled;
-        String buildInstalled = ToolchainInstaller.installedVersion(ctx);
-        String buildLatest = firstNonEmpty(latest.get(PluginInfo.ANDROID_BUILD),
-                ToolchainInstaller.VERSION);
+        List<String> androidSkills = skillsFor(PluginInfo.ANDROID);
+        boolean androidInstalled = ToolchainInstaller.installed(ctx)
+                && anySkill(home, androidSkills);
+        String androidVersion = ToolchainInstaller.installedVersion(ctx);
+        long androidBytes = dirSize(toolchain) + jdkBytes + skillBytes(home, androidSkills);
         out.add(plugin(
-                PluginInfo.ANDROID_BUILD,
-                "Android 构建",
-                "端侧 assembleDebug / assembleRelease",
-                buildSkills,
-                list("JDK 21", "SDK 36", "aapt2", "Gradle 9.9", "Maven 缓存"),
-                buildInstalled,
-                buildLatest,
-                build || ToolchainInstaller.root(ctx).isDirectory()
-                        ? human(dirSize(toolchain) + jdkBytes)
-                        : "",
-                build,
+                PluginInfo.ANDROID,
+                "Android 开发",
+                "构建、调试、AI、测试：一个 Android 插件",
+                androidSkills,
+                list("JDK 21", "SDK 36", "aapt2", "Gradle 9.9", "adb",
+                        "ONNX / TFLite / llama.cpp"),
+                androidVersion,
+                firstNonEmpty(latest.get(PluginInfo.ANDROID), ToolchainInstaller.VERSION),
+                androidInstalled || toolchain.isDirectory() ? human(androidBytes) : "",
+                androidInstalled,
                 BuildConfig.TOOLS_BUNDLED,
                 true));
-
-        List<String> aiSkills = skillsFor(PluginInfo.ANDROID_AI);
-        boolean ai = anySkill(home, aiSkills);
-        out.add(plugin(
-                PluginInfo.ANDROID_AI,
-                "本地 AI",
-                "ONNX / TFLite / llama.cpp / MNN",
-                aiSkills,
-                list("ONNX", "TFLite", "llama.cpp", "MNN"),
-                ai ? "1" : "",
-                firstNonEmpty(latest.get(PluginInfo.ANDROID_AI), "1"),
-                skillSize(home, aiSkills),
-                ai,
-                true,
-                true));
-
-        List<String> debugSkills = skillsFor(PluginInfo.ANDROID_DEBUG);
-        boolean debug = anySkill(home, debugSkills) && new File(prefix, "bin/adb").isFile();
-        out.add(plugin(
-                PluginInfo.ANDROID_DEBUG,
-                "Android 调试",
-                "adb、安装、日志、16 KB 检查",
-                debugSkills,
-                list("adb", "platform-tools"),
-                debug ? "1" : "",
-                firstNonEmpty(latest.get(PluginInfo.ANDROID_DEBUG), "1"),
-                skillSize(home, debugSkills),
-                debug,
-                true,
-                false));
 
         return out;
     }
@@ -186,7 +154,7 @@ public final class AppPluginManager implements PluginManager {
             return;
         }
         // Tools packs have no remote manifest yet; compare with the bundled version.
-        String available = PluginInfo.ANDROID_BUILD.equals(id)
+        String available = PluginInfo.ANDROID.equals(id)
                 ? ToolchainInstaller.VERSION : "1";
         latest.put(id, available);
         post(id, true, "当前随 App 更新：" + available, callback);
@@ -194,7 +162,7 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void install(String id, Callback callback) {
-        if (PluginInfo.ANDROID_BUILD.equals(id)) {
+        if (PluginInfo.ANDROID.equals(id)) {
             new Thread(() -> {
                 try {
                     PluginCatalog.setPluginEnabled(ctx, id, true);
@@ -202,25 +170,12 @@ public final class AppPluginManager implements PluginManager {
                     LocalRuntime.installBundledSkills(ctx);
                     boolean ok = ToolchainInstaller.installed(ctx)
                             && anySkill(LocalRuntime.homeDir(ctx), skillsFor(id));
-                    post(id, ok, ok ? "Android 构建插件已安装" : "安装不完整，请重试",
+                    post(id, ok, ok ? "Android 插件已安装" : "安装不完整，请重试",
                             callback);
                 } catch (Throwable t) {
                     post(id, false, "安装失败：" + t.getMessage(), callback);
                 }
-            }, "plugin-install-build").start();
-            return;
-        }
-        if (PluginInfo.ANDROID_AI.equals(id)) {
-            new Thread(() -> {
-                try {
-                    PluginCatalog.setPluginEnabled(ctx, id, true);
-                    LocalRuntime.installBundledSkills(ctx);
-                    boolean ok = anySkill(LocalRuntime.homeDir(ctx), skillsFor(id));
-                    post(id, ok, ok ? "本地 AI 插件已安装" : "安装不完整", callback);
-                } catch (Throwable t) {
-                    post(id, false, "安装失败：" + t.getMessage(), callback);
-                }
-            }, "plugin-install-ai").start();
+            }, "plugin-install-android").start();
             return;
         }
         if (PluginInfo.OPENCODE.equals(id)) {
@@ -249,21 +204,14 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void uninstall(String id, Callback callback) {
-        if (PluginInfo.ANDROID_BUILD.equals(id)) {
+        if (PluginInfo.ANDROID.equals(id)) {
             new Thread(() -> {
                 deleteTree(ToolchainInstaller.root(ctx));
+                deleteTree(new File(LocalToolbox.prefix(ctx), "lib/jvm"));
                 LocalRuntime.removePluginSkills(ctx, skillsFor(id));
                 PluginCatalog.setPluginEnabled(ctx, id, false);
-                post(id, true, "Android 构建插件已卸载；项目与会话保留", callback);
-            }, "plugin-uninstall-build").start();
-            return;
-        }
-        if (PluginInfo.ANDROID_AI.equals(id)) {
-            new Thread(() -> {
-                LocalRuntime.removePluginSkills(ctx, skillsFor(id));
-                PluginCatalog.setPluginEnabled(ctx, id, false);
-                post(id, true, "本地 AI 插件已卸载", callback);
-            }, "plugin-uninstall-ai").start();
+                post(id, true, "Android 插件已卸载；项目与会话保留", callback);
+            }, "plugin-uninstall-android").start();
             return;
         }
         post(id, false, "内核/Termux 正在使用时不能卸载；请先停止本机服务器", callback);
@@ -308,6 +256,14 @@ public final class AppPluginManager implements PluginManager {
             if (new File(home, ".config/opencode/skills/" + skill).isDirectory()) return true;
         }
         return false;
+    }
+
+    private static long skillBytes(File home, List<String> skills) {
+        long total = 0;
+        for (String skill : skills) {
+            total += dirSize(new File(home, ".config/opencode/skills/" + skill));
+        }
+        return total;
     }
 
     private static String skillSize(File home, List<String> skills) {

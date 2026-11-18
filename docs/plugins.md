@@ -49,21 +49,20 @@
 |---|---|---|
 | **核心** | 基础 UI、插件宿主 | 不可卸载；随 App |
 | **运行时** | OpenCode 内核、Termux | 内核不可卸载但可更新；Termux 可更新 |
-| **Android** | 每个 Skill 一个插件 | android-build、android-project、android-ui、android-test、android-debug、android-ai、android-ndk… |
+| **Android** | `android` 一个插件 | 所有 Android skills + JDK/SDK/Gradle/aapt2/adb/AI；内部组件可独立更新 |
 | **其他** | 社区/工具插件 | 独立作者，按签名信任 |
 
 粒度规则：
 
 - **一个插件 = 一个 Skill（或强相关的一组 Skill） + 它需要的工具链**；
-- 共享工具链放在“提供者”插件里，其他插件声明 `depends`；
-  - `android-build` 提供 JDK/SDK/Gradle/aapt2；
-  - `android-debug` 只带 adb；
-  - `android-ai` 只带 ONNX/TFLite/llama.cpp/MNN；
-  - 纯 Skill 插件（android-ui、android-test…）只声明依赖，不重复带工具链。
-- 卸载提供者前，必须先卸载/禁用依赖它的插件；UI 要提示。
+- **Android 是一个插件**，不是十几个：所有 Android skills + 工具链都在 `android`
+  里；内部再分成 build / adb / AI 等组件，组件可以独立下载/更新；
+- 组件共享关系：build 提供 JDK/SDK/Gradle/aapt2，debug 用 adb，AI 用
+  ONNX/TFLite/llama.cpp/MNN；用户只看到“Android 开发”一个插件；
+- 社区插件另算。
 
-当前代码里的 5 个插件（opencode、termux、android-build、android-ai、
-android-debug）是过渡形态；目标是把 Android 拆细。
+当前代码里的插件是：`opencode`、`termux`、`android`（过渡期名字可能还是
+“Android 构建/本地 AI/调试”，最终合并为一个 Android 插件）。
 
 ---
 
@@ -186,10 +185,7 @@ interface IRuntimePlugin {
 | 插件 APK | 内容 | 更新节奏 |
 |---|---|---|
 | `runtime` | proot、opencode、Termux userland | 上游 opencode/Termux 变时；opencode 二进制可在插件内部单独更新 |
-| `android-build` | JDK、SDK、aapt2、Gradle、构建 skills | SDK/Gradle 变时 |
-| `android-ai` | ONNX/TFLite/llama.cpp/MNN + android-ai skill | AI runtime 变时 |
-| `android-debug` | adb/platform-tools + debug/install skills | platform-tools 变时 |
-| `android-skills` | ui/test/architecture/networking… 纯 skill | 跟 App/文档变时 |
+| `android` | JDK、SDK、aapt2、Gradle、adb、AI runtimes + 所有 Android skills | 组件独立更新；插件本身随契约变时 |
 | 社区插件 | 作者自己的 skill + 工具链 | 作者决定 |
 
 不建议“一个 skill 一个 APK”：20+ 个安装包管理成本高；纯 skill 用

@@ -13,9 +13,8 @@ import java.util.Objects;
 public final class PluginInfo {
     public static final String OPENCODE = "opencode";
     public static final String TERMUX = "termux";
-    public static final String ANDROID_BUILD = "android-build";
-    public static final String ANDROID_AI = "android-ai";
-    public static final String ANDROID_DEBUG = "android-debug";
+    /** One Android plugin: every Android skill + the whole Android toolchain. */
+    public static final String ANDROID = "android";
 
     private final String id;
     private final String name;

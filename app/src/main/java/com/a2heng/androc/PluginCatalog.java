@@ -21,11 +21,9 @@ final class PluginCatalog {
 
     static {
         SKILL_PLUGIN.put("termux", PluginInfo.TERMUX);
-        SKILL_PLUGIN.put("android-ai", PluginInfo.ANDROID_AI);
-        SKILL_PLUGIN.put("android-debug", PluginInfo.ANDROID_DEBUG);
-        SKILL_PLUGIN.put("android-install", PluginInfo.ANDROID_DEBUG);
         SKILL_PLUGIN.put("skill-installer", "core");
-        // Everything else under skills/ belongs to the Android build plugin.
+        // Everything else under skills/ (build, AI, debug, install, UI, ...)
+        // belongs to the single Android plugin.
     }
 
     private PluginCatalog() {
@@ -33,7 +31,7 @@ final class PluginCatalog {
 
     static String pluginFor(String skill) {
         String id = SKILL_PLUGIN.get(skill);
-        return id == null ? PluginInfo.ANDROID_BUILD : id;
+        return id == null ? PluginInfo.ANDROID : id;
     }
 
     static boolean pluginEnabled(Context ctx, String id) {

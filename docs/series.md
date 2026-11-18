@@ -18,7 +18,7 @@
 |---|---|---|
 | **UI only** | 基础 APK | 连接电脑 / 远程 opencode、官方 App 配对 |
 | **UI + OpenCode 内核** | + OpenCode 插件 | 本机跑 opencode、会话、终端 |
-| **UI + 内核 + Android 构建** | + Android 构建插件 | 端侧构建 Android APK |
+| **UI + 内核 + Android** | + Android 插件 | 端侧构建、调试、AI、测试 |
 
 发布两种构建，代码同源：
 
@@ -49,9 +49,7 @@
 | 插件 | Skill | 工具链 | 更新 |
 |---|---|---|---|
 | **OpenCode 内核** | shell 约定 | opencode、proot userland、bash/readline | **独立检查上游 opencode**，由 `RuntimeUpdateService` 下载 |
-| **Android 构建** | android-build、android-project、android-gradle、android-deps、android-release、android-16kb、android-lib-cache | JDK 21、SDK 36、aapt2、Gradle 9.9、Maven 缓存 | pack 版本；随 App 或 `androc-packs` |
-| **本地 AI** | android-ai | ONNX / TFLite / llama.cpp / MNN | pack 版本 |
-| **Android 调试** | android-debug、android-install | adb / platform-tools | 随内核 |
+| **Android 开发** | android-build、android-project、android-ui、android-test、android-debug、android-ai…全部 Android skills | JDK 21、SDK 36、aapt2、Gradle 9.9、adb、AI runtimes | 一个插件；内部组件独立更新 |
 | **Termux 工具** | termux | git、python、pkg/apt | 随内核 |
 | **基础**（不是插件） | — | Compose UI + proot 引擎（proot + loader + musl） | 随 APK |
 
@@ -258,7 +256,7 @@ App 拒绝 `minAppVersion` 高于自身的 pack；pack 可以独立更新，不�
 | **0（本次）** | Androc 改名、`:contracts`、`:kernel`/`:tools` 骨架、合并 UI 仓库 | 五个模块可配置 |
 | **1** | Setup 页合并登录/设置；连接本机/远程 | 一个页面完成连接与状态 |
 | **2** | PluginManager + OpenCode 插件（opencode + toolbox）；thin 基础包 | 不装插件只能连远程；装完能本机会话 |
-| **3** | Android 构建 / 本地 AI / 调试 / Termux 插件 | 端侧构建成功 |
+| **3** | Android 插件（构建/调试/AI 组件） | 端侧构建成功 |
 | **4** | thin / full 两个 flavor + CI 产物（APK + 插件包） | 一次 tag 出 2 APK + 插件包 |
 | **5** | 按需拆 repo / 发布 AAR | 外部只依赖 Maven 坐标 |
 
@@ -270,7 +268,7 @@ App 拒绝 `minAppVersion` 高于自身的 pack；pack 可以独立更新，不�
 2. **下载的 ELF 只能在 proot 内执行**；proot 引擎必须在 APK 的 `nativeLibraryDir`。
 3. **pack 先校验后安装**；失败回滚，不留“半完成但标记完成”。
 4. **UI 不启动进程**；kernel 拥有 server 和插件安装。
-5. **Android 构建/本地 AI 插件可选**：不装它们，会话/终端仍然工作。
+5. **Android 插件可选**：不装它，会话/终端仍然工作。
 6. **官方 App 只走 HTTP + pairing**，不依赖我们的 ContentProvider。
 7. **thin / full 同源**：full 只是把同样的插件包放进 assets，不允许两份代码。
 8. 文档、skills、验收清单同步更新。
