@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Same signature as the base UI. Only plugins signed with this key can bind. -->
-    <permission
-        android:name="com.a2heng.androc.permission.PLUGIN"
-        android:protectionLevel="signature" />
+    <!-- The base app declares the signature permission; plugins only request it. -->
     <uses-permission android:name="com.a2heng.androc.permission.PLUGIN" />
 
     <uses-permission android:name="android.permission.INTERNET" />

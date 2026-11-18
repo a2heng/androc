@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Prueba los scripts previos a la SPA (app/src/main/assets/oc-corejs.js y
+ * Prueba los scripts previos a la SPA (app/src/full/assets/oc-corejs.js y
  * oc-early.js) sin WebView: borra del motor de Node las APIs modernas
  * (URL.canParse, Promise.try, toSorted...) y comprueba que se reponen.
  *
@@ -16,8 +16,8 @@ const fs = require("fs")
 const path = require("path")
 
 const root = path.dirname(__dirname)
-const early = path.join(root, "app/src/main/assets/oc-early.js")
-const corejs = path.join(root, "app/src/main/assets/oc-corejs.js")
+const early = path.join(root, "app/src/full/assets/oc-early.js")
+const corejs = path.join(root, "app/src/full/assets/oc-corejs.js")
 const src = fs.readFileSync(early, "utf8")
 const polyfills = fs.readFileSync(corejs, "utf8")
 

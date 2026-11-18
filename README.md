@@ -119,7 +119,7 @@ release 构建默认对**随包分发的 64 位 native 库**做严格检查；32
 检查命令：
 
 ```sh
-python3 app/src/main/assets/skills/android-build/scripts/check-16kb.py \
+python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py \
   app/src/main/jniLibs/arm64-v8a
 ```
 
@@ -289,8 +289,10 @@ Platform 37.0 / 36，Build-Tools 36.0.0。
 python scripts/fetch-opencode.py
 
 # 2) 构建
-./gradlew :app:assembleDebug
+./gradlew :app:assembleThinDebug
 ```
+
+产物：`app/build/outputs/apk/thin/debug/app-thin-debug.apk`（UI only）。
 
 `fetch-opencode.py` 读取 `opencode.version`；要升级到最新上游：
 `python scripts/fetch-opencode.py --latest`（会改写版本文件）。发版前必须跑
@@ -301,7 +303,7 @@ python scripts/fetch-opencode.py
 ## 生成离线 full 构建（phase 0 仍是当前方式）
 
 离线包由 `scripts/` 生成（脚本会下载 Termux 包、Android platform、aapt2、
-Gradle 和 Maven 缓存，然后放到 `app/src/main/assets/`）：
+Gradle 和 Maven 缓存，然后放到 `app/src/full/assets/`）：
 
 ```sh
 python scripts/fetch-opencode.py
@@ -309,7 +311,7 @@ python scripts/fetch-toolbox.py
 python scripts/verify-toolbox.py   # 必须通过：bash/readline/符号链接/DT_NEEDED
 python scripts/make-toolchain.py
 
-./gradlew :app:assembleDebug
+./gradlew :app:assembleFullDebug
 ```
 
 产物会包含：

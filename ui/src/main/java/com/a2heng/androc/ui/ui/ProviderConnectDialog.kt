@@ -8,11 +8,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,10 @@ import kotlinx.serialization.json.JsonObject
 fun ProviderConnectDialog(model: AppModel, onDismiss: () -> Unit) {
     var keyFor by remember { mutableStateOf<IntegrationInfo?>(null) }
     var oauth by remember { mutableStateOf<OAuthAttempt?>(null) }
+    // 已连接优先；其余按常用程度（市占/上游常用）排序，最后按名字。
+    val integrations = remember(model.integrations) {
+        orderedIntegrations(model.integrations)
+    }
 
     LaunchedEffect(Unit) { model.loadIntegrations() }
 
@@ -53,59 +58,51 @@ fun ProviderConnectDialog(model: AppModel, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("连接 Provider") },
         text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            val connected = remember(integrations) { integrations.filter { it.connected } }
+            val recommended = remember(integrations) {
+                integrations.filter { !it.connected && PROVIDER_RANK.containsKey(it.id) }
+            }
+            val rest = remember(integrations) {
+                integrations.filter { !it.connected && !PROVIDER_RANK.containsKey(it.id) }
+            }
+            LazyColumn(
+                Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (model.integrations.isEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.height(16.dp).width(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("正在读取 Provider…", style = MaterialTheme.typography.bodySmall)
+                if (integrations.isEmpty()) {
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                Modifier.height(16.dp).width(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("正在读取 Provider…", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 } else {
-                    model.integrations.forEach { info ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(info.name, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    methodSummary(info),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            when {
-                                info.connected -> Text(
-                                    "已连接",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                info.keyMethod != null -> TextButton(onClick = { keyFor = info }) {
-                                    Text("API Key")
-                                }
-                                info.oauthMethod != null -> TextButton(onClick = {
-                                    model.startOAuthConnect(info, info.oauthMethod!!) { attempt ->
-                                        val id = attempt?.str("attemptID") ?: return@startOAuthConnect
-                                        oauth = OAuthAttempt(info, attempt, id)
-                                        model.pollOAuth(info, id) { ok, _ ->
-                                            if (ok) model.loadIntegrations()
-                                        }
-                                    }
-                                }) { Text("OAuth") }
-                                info.envMethod != null -> Text(
-                                    "环境变量",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                else -> Text(
-                                    "服务器端",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                    if (connected.isNotEmpty()) {
+                        item(key = "header-connected") { ProviderSection("已连接") }
+                        items(connected, key = { it.id }) { info ->
+                            ProviderRow(info, onKey = { keyFor = info }, onOAuth = {
+                                startProviderOAuth(model, info) { oauth = it }
+                            })
+                        }
+                    }
+                    if (recommended.isNotEmpty()) {
+                        item(key = "header-popular") { ProviderSection("常用") }
+                        items(recommended, key = { it.id }) { info ->
+                            ProviderRow(info, onKey = { keyFor = info }, onOAuth = {
+                                startProviderOAuth(model, info) { oauth = it }
+                            })
+                        }
+                    }
+                    if (rest.isNotEmpty()) {
+                        item(key = "header-all") { ProviderSection("全部") }
+                        items(rest, key = { it.id }) { info ->
+                            ProviderRow(info, onKey = { keyFor = info }, onOAuth = {
+                                startProviderOAuth(model, info) { oauth = it }
+                            })
                         }
                     }
                 }
@@ -230,9 +227,75 @@ private data class OAuthAttempt(
     val attemptID: String,
 )
 
+@Composable
+private fun ProviderSection(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+    )
+}
+
+@Composable
+private fun ProviderRow(
+    info: IntegrationInfo,
+    onKey: () -> Unit,
+    onOAuth: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(providerLabel(info), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                methodSummary(info),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        when {
+            info.connected -> Text(
+                "已连接",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            info.keyMethod != null -> TextButton(onClick = onKey) { Text("API Key") }
+            info.oauthMethod != null -> TextButton(onClick = onOAuth) { Text("OAuth") }
+            info.envMethod != null -> Text(
+                "环境变量",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            else -> Text(
+                "服务器端",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun startProviderOAuth(
+    model: AppModel,
+    info: IntegrationInfo,
+    onReady: (OAuthAttempt) -> Unit,
+) {
+    val method = info.oauthMethod ?: return
+    model.startOAuthConnect(info, method) { attempt ->
+        val id = attempt?.str("attemptID") ?: return@startOAuthConnect
+        onReady(OAuthAttempt(info, attempt, id))
+        model.pollOAuth(info, id) { ok, _ ->
+            if (ok) model.loadIntegrations()
+        }
+    }
+}
+
 private fun methodSummary(info: IntegrationInfo): String {
     if (info.methods.isEmpty()) return "没有可用的连接方式"
-    return info.methods.joinToString(" · ") { method ->
+    return info.methods.map { method ->
         when (method.type) {
             "key" -> "API Key"
             "oauth" -> "OAuth"
@@ -240,5 +303,83 @@ private fun methodSummary(info: IntegrationInfo): String {
             "command" -> "服务器命令"
             else -> method.type
         }
-    }
+    }.distinct().joinToString(" · ")
 }
+
+/**
+ * 常用 Provider 顺序（粗略按市占/开发者使用量，Top 10 之后补 OpenCode 生态与国内常用）。
+ * 未列出的按名字排；已连接永远在最前。
+ */
+private val PROVIDER_PRIORITY = listOf(
+    "openai",
+    "anthropic",
+    "google",
+    "github-copilot",
+    "openrouter",
+    "xai",
+    "mistral",
+    "groq",
+    "deepseek",
+    "togetherai",
+    "cerebras",
+    "fireworks-ai",
+    "amazon-bedrock",
+    "azure",
+    "opencode",
+    "opencode-go",
+    "zhipuai",
+    "zai",
+    "moonshotai",
+    "moonshotai-cn",
+    "alibaba",
+    "alibaba-cn",
+    "minimax",
+    "minimax-cn",
+    "volcengine",
+    "siliconflow",
+    "siliconflow-cn",
+    "tencent-tokenhub",
+    "modelscope",
+    "stepfun",
+    "sensenova",
+    "ollama-cloud",
+    "lmstudio",
+    "nvidia",
+    "cohere",
+    "perplexity",
+    "huggingface",
+)
+
+private val PROVIDER_RANK: Map<String, Int> =
+    PROVIDER_PRIORITY.withIndex().associate { (index, id) -> id to index }
+
+/** 国内/常用 Provider 的中文名；完整 i18n 后续再抽资源。 */
+private val PROVIDER_ALIAS = mapOf(
+    "alibaba" to "阿里云",
+    "alibaba-cn" to "阿里云（国内）",
+    "zhipuai" to "智谱 AI",
+    "zai" to "智谱 Z.AI",
+    "moonshotai" to "月之暗面",
+    "moonshotai-cn" to "月之暗面（国内）",
+    "minimax" to "MiniMax",
+    "minimax-cn" to "MiniMax（国内）",
+    "volcengine" to "火山引擎",
+    "siliconflow" to "硅基流动",
+    "siliconflow-cn" to "硅基流动（国内）",
+    "modelscope" to "魔搭 ModelScope",
+    "tencent-tokenhub" to "腾讯云 TokenHub",
+    "stepfun" to "阶跃星辰",
+    "sensenova" to "商汤日日新",
+)
+
+private fun providerLabel(info: IntegrationInfo): String {
+    val alias = PROVIDER_ALIAS[info.id] ?: return info.name
+    return if (info.name.equals(alias, ignoreCase = true)) alias else "$alias · ${info.name}"
+}
+
+private fun orderedIntegrations(list: List<IntegrationInfo>): List<IntegrationInfo> =
+    list.sortedWith(
+        compareBy<IntegrationInfo> { if (it.connected) 0 else 1 }
+            .thenBy { PROVIDER_RANK[it.id] ?: Int.MAX_VALUE }
+            .thenBy { it.name.lowercase() }
+    )

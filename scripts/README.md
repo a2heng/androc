@@ -5,8 +5,8 @@ without network:
 
 ```text
 app/src/main/jniLibs/arm64-v8a/libopencode2_bin.so   # fetch-opencode.py
-app/src/main/assets/toolbox/*.deb                    # fetch-toolbox.py
-app/src/main/assets/toolchain/toolchain.zip          # make-toolchain.py
+app/src/full/assets/toolbox/*.deb                    # fetch-toolbox.py
+app/src/full/assets/toolchain/toolchain.zip          # make-toolchain.py
 ```
 
 Run from the repository root:
@@ -45,9 +45,9 @@ The v2 UI needs JavaScript APIs that a WebView without updates does not have
 (`URL.canParse`, `Promise.try`, `toSorted`...). Two classic scripts run before
 the SPA bundle, injected in `<head>` by `MainActivity.injectEarlyScript`:
 
-- `app/src/main/assets/oc-corejs.js`: generated core-js bundle with just the
+- `app/src/full/assets/oc-corejs.js`: generated core-js bundle with just the
   needed modules (see `scripts/make-webview-shims.js`);
-- `app/src/main/assets/oc-early.js`: `/provider` cache, picker paths and the
+- `app/src/full/assets/oc-early.js`: `/provider` cache, picker paths and the
   `AbortSignal` shims core-js does not cover (core-js is JS-only, not DOM).
 
 Regenerate the polyfills after changing `MODULES` (downloads `core-js-builder`

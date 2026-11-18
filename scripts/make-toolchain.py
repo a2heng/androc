@@ -14,7 +14,7 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, ".cache", "toolchain")
-DEFAULT_OUT = os.path.join(ROOT, "app", "src", "main", "assets", "toolchain", "toolchain.zip")
+DEFAULT_OUT = os.path.join(ROOT, "app", "src", "full", "assets", "toolchain", "toolchain.zip")
 PLATFORM_URLS = {
     "35": "https://dl.google.com/android/repository/platform-35_r02.zip",
     "36": "https://dl.google.com/android/repository/platform-36_r02.zip",
@@ -65,7 +65,7 @@ def extract(zip_path, dest):
 
 def verify_16kb(paths, strict=True):
     """Check bundled 64-bit tools. strict=True fails on a 4 KB regression."""
-    checker = os.path.join(ROOT, "app", "src", "main", "assets", "skills",
+    checker = os.path.join(ROOT, "app", "src", "full", "assets", "skills",
                            "android-build", "scripts", "check-16kb.py")
     if not os.path.isfile(checker):
         print("warning: check-16kb.py not found; skipping toolchain audit")
@@ -195,7 +195,7 @@ def main():
     # Termux's aidl is dynamically linked but 16 KB aligned. The static
     # lzhiyong aidl is still 4 KB; replace it so AIDL projects work on a
     # 16 KB device. The toolbox installs the same binary under $PREFIX/bin.
-    aidl_deb = os.path.join(ROOT, "app", "src", "main", "assets", "toolbox",
+    aidl_deb = os.path.join(ROOT, "app", "src", "full", "assets", "toolbox",
                             "aidl.deb")
     aidl_data = deb_member(aidl_deb, "/bin/aidl")
     if aidl_data:
@@ -210,7 +210,7 @@ def main():
     # The static adb stays in platform-tools for native shells. The toolbox
     # also installs Termux's 16 KB adb at $PREFIX/bin/adb; android-debug
     # prefers it when available.
-    adb_deb = os.path.join(ROOT, "app", "src", "main", "assets", "toolbox",
+    adb_deb = os.path.join(ROOT, "app", "src", "full", "assets", "toolbox",
                            "android-tools.deb")
     adb_data = deb_member(adb_deb, "/bin/adb")
     if adb_data:

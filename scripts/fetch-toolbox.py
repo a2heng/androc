@@ -10,7 +10,7 @@ import time
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_OUT = os.path.join(ROOT, "app", "src", "main", "assets", "toolbox")
+DEFAULT_OUT = os.path.join(ROOT, "app", "src", "full", "assets", "toolbox")
 MIRRORS = [
     "https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main",
     "https://mirrors.ustc.edu.cn/termux/apt/termux-main",

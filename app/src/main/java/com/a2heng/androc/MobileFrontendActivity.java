@@ -69,6 +69,12 @@ public class MobileFrontendActivity extends AppCompatActivity {
                 new androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
                 granted -> { });
         requestNotifPermission();
+        if (BuildConfig.THIN) {
+            // UI-only build: no local kernel, no server wait. The saved remote
+            // connection (or the login screen) is mounted immediately.
+            com.a2heng.androc.ui.OpenCodeMobileHost.showStandalone(this);
+            return;
+        }
         startServerAndShow();
     }
 
@@ -200,6 +206,7 @@ public class MobileFrontendActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         // Si el proceso se recreo o el servicio aun no estaba listo, reintenta solo.
-        if (!mounted) startServerAndShow();
+        // Thin builds never start the local server.
+        if (!BuildConfig.THIN && !mounted) startServerAndShow();
     }
 }

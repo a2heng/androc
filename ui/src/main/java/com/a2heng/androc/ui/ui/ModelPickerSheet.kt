@@ -61,25 +61,8 @@ fun ModelPickerPage(
         }?.group
     }
     var expanded by remember(selectedGroup) { mutableStateOf(selectedGroup ?: 0) }
-    var showConnect by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { model.loadIntegrations() }
 
     PickerPage(title = title, onBack = onDismiss) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { showConnect = true }
-                    .padding(vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("连接 Provider / API", style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "${model.integrations.count { it.connected }}/${model.integrations.size}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             if (allowNone) {
                 Row(
                     Modifier
@@ -196,9 +179,6 @@ fun ModelPickerPage(
                     }
                 }
             }
-    }
-    if (showConnect) {
-        ProviderConnectDialog(model) { showConnect = false }
     }
 }
 

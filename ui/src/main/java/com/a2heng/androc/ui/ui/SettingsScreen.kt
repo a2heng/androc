@@ -416,6 +416,9 @@ fun SettingsScreen(model: AppModel) {
         if (showServers) {
             ServerSwitchDialog(model) { showServers = false }
         }
+        if (showProviderConnect) {
+            ProviderConnectDialog(model) { showProviderConnect = false }
+        }
         removeId?.let { id ->
             val plugin = model.plugins.firstOrNull { it.id() == id }
             AlertDialog(

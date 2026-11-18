@@ -54,18 +54,18 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --console=plain --stacktrace --no-daemon
+          ./gradlew :app:assembleThinDebug :app:assembleFullDebug --console=plain --stacktrace --no-daemon
 
       - name: 16 KB check
         env:
           ANDROC_16KB_STRICT: "1"
         run: |
-          python3 app/src/main/assets/skills/android-build/scripts/check-16kb.py \
-            app/build/outputs/apk/debug/*.apk
+          python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py \
+            app/build/outputs/apk/*/debug/*.apk
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
           name: androc-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/*/debug/*.apk
           if-no-files-found: error

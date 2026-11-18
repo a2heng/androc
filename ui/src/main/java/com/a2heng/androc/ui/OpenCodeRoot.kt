@@ -105,6 +105,17 @@ object OpenCodeMobileHost {
         ServerModelHost.writer = writer
     }
 
+    /**
+     * Standalone/UI-only build: no local server URL. The client restores the
+     * last remote connection or shows the login screen.
+     */
+    @JvmStatic
+    fun showStandalone(activity: ComponentActivity) {
+        LocalShellHost.spawner = null
+        ServerModelHost.writer = null
+        activity.setContent { OpenCodeMobileRoot() }
+    }
+
     @JvmStatic
     fun show(activity: ComponentActivity, url: String, password: String) {
         show(activity, url, password, null, null, false, false)

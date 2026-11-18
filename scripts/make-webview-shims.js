@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Genera app/src/main/assets/oc-corejs.js: un bundle de core-js (MIT) con
+ * Genera app/src/full/assets/oc-corejs.js: un bundle de core-js (MIT) con
  * solo los modulos que necesita la UI v2 de opencode y que un WebView sin
  * actualizar no trae. Se sirve como /oc-corejs.js e se inyecta antes del
  * bundle de la SPA (ver oc-early.js y MainActivity.injectEarlyScript).
@@ -18,7 +18,7 @@ const path = require("path")
 const CORE_JS = "3.51.0"
 const ESBUILD = "0.25.0"
 const ROOT = path.dirname(__dirname)
-const DEST = path.join(ROOT, "app/src/main/assets/oc-corejs.js")
+const DEST = path.join(ROOT, "app/src/full/assets/oc-corejs.js")
 const WORK = path.join(os.tmpdir(), "androc-corejs-build")
 
 // Lo que usa la app (opencode 2.2.6) y no existe en Chromium 108. Los

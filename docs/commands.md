@@ -166,4 +166,4 @@ Androc 把真实前缀 `files/usr` bind 到这个路径；服务器、shell、�
 | 生成 `oc-doctor` / `oc-repair` / `oc-engine` | `CommandResolver.java` |
 | `/doctor`、`/repair` | `ToolboxServer.java` |
 | 前缀自愈、`.deb`、系统命令包装 | `LocalToolbox.java` |
-| agent 规则 | `app/src/main/assets/skills/termux/SKILL.md` |
+| agent 规则 | `app/src/full/assets/skills/termux/SKILL.md` |

@@ -18,7 +18,7 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, ".cache", "opencode")
 VERSION_FILE = os.path.join(ROOT, "opencode.version")
-DEST = os.path.join(ROOT, "app", "src", "main", "jniLibs", "arm64-v8a",
+DEST = os.path.join(ROOT, "app", "src", "full", "jniLibs", "arm64-v8a",
                     "libopencode2_bin.so")
 LATEST_API = "https://api.github.com/repos/anomalyco/opencode/releases?per_page=100"
 

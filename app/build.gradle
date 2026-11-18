@@ -85,9 +85,28 @@ android {
         buildConfig true
     }
 
+    // Distribution flavors: one code base, two products.
+    //   full = UI + local kernel/assets (offline, heavy)
+    //   thin = UI only + the tiny exec fuse (packs come from the market)
+    flavorDimensions "distribution"
+    productFlavors {
+        full {
+            dimension "distribution"
+            buildConfigField "boolean", "THIN", "false"
+        }
+        thin {
+            dimension "distribution"
+            buildConfigField "boolean", "THIN", "true"
+            buildConfigField "boolean", "TOOLS_BUNDLED", "false"
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                    'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
         // App 4.0.x (Next): runtime embebido, sin Termux, con paquete aparte.

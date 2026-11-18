@@ -67,6 +67,7 @@
 | 文档 | 内容 |
 |---|---|
 | [`handover.md`](handover.md) | **交接文档**：现状、坑、下一步、验收 |
+| [`tech-selection.md`](tech-selection.md) | **本次技术选型**：薄 UI、pack 市场、运行工具/语言/构建链/OpenCode 的体积与方案 |
 | [`plugins.md`](plugins.md) | 插件 APK 契约、分类、来源/网址管理、安装更新卸载 |
 | [`plugin-catalog.md`](plugin-catalog.md) | 远期插件目录；Writing 第一个样例与参考工作流 |
 | [`plugin-repos.md`](plugin-repos.md) | 插件仓库、CI、每日自动更新、签名 |
