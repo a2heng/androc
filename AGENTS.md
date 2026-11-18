@@ -1,4 +1,4 @@
-# Adia repository rules (read before changing paths or commands)
+# Androc repository rules (read before changing paths or commands)
 
 **Design ethos:** the mechanism owns the complexity; the user/agent stays
 transparent. One runtime (proot), one authoritative path per thing, no
@@ -16,7 +16,7 @@ If a change makes the user learn an internal detail, it is probably wrong.
    `ESSENTIAL_ROOTS` (fetch script), `bootstrap.txt`, and `docs/paths.md`.
 5. **`bootstrap.txt` must contain `bash` and `readline`** so a failed dpkg
    cannot leave a prefix that says `library "libreadline.so.8" not found`.
-6. **Never hardcode** `com.a2heng.adia`, `com.termux`, `nativeLibraryDir` or a
+6. **Never hardcode** `com.a2heng.androc`, `com.termux`, `nativeLibraryDir` or a
    JDK/SDK path in shell scripts. Use `$HOME`, `$PREFIX`, `$TMPDIR`; generate
    `nativeLibraryDir` paths at runtime.
 7. **`oc-proot` must stay idempotent** (`OC_ENGINE=proot` does not nest) and
@@ -28,25 +28,27 @@ If a change makes the user learn an internal detail, it is probably wrong.
 
    ```sh
    source /d/AndroidDevToolchain/env.sh
-   cd /d/android-dev-in-android
+   cd /d/005_dev/android-dev-in-android
    python scripts/verify-toolbox.py
    ./gradlew :app:assembleDebug
    ```
 
 10. **Before tagging a release:** `python scripts/verify-toolbox.py` must pass;
-    release CI runs it too. Do not tag if it fails.
+    `python scripts/check-opencode-latest.py --strict` must pass and
+    `opencode.version` must be the newest upstream release. Release CI runs both;
+    do not tag if either fails.
 11. **Update both docs and the skills** when changing behavior. Docs are for
     humans/repo review; skills + `$HOME/.config/*/AGENTS.md` are what the agent
     actually loads at startup. The 60-second acceptance test is in
     `docs/paths.md`; run it on a real device (`oc-engine status` must say
     `proot`, `oc-doctor`, `bash -lc 'git --version'`, `python3 --version`,
     `pkg install -y jq`).
-12. **`client/` is a copy of the LAN client** (`a2heng/opencode-android-ui`).
-    Shared behavior (default model, saved connections, keepalive, path
-    normalization/resolution) must stay in sync; only branding, the update
-    repo, Adia's HOME-only file presets and the host-injected Termux shell may
-    differ. The checklist lives in [`docs/mobile-integration.md`](docs/mobile-integration.md).
-    Do not reintroduce a git submodule.
+12. **`ui/` is the only UI source.** The old `a2heng/opencode-android-ui` repo
+    is no longer maintained; never reintroduce a submodule or a second copy. Keep
+    the behavior invariants in [`docs/mobile-integration.md`](docs/mobile-integration.md)
+    (default model, saved connections, keepalive, path normalization/resolution).
+    Only branding, the update repo, Androc's HOME-only file presets and the
+    host-injected Termux shell may differ from a standalone UI build.
 13. **Relative paths are not optional.** `normPath` only fixes separators;
     a path that does not start with `/` (or a drive) must be completed by
     `AppModel.resolvePath` / `Markdown.resolveFileRef` before it reaches

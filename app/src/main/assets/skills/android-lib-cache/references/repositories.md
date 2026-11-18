@@ -4,7 +4,7 @@
 
 `resolve_maven.py` tries repositories in this order:
 
-1. `ADIA_MAVEN_REPOS` (comma-separated, optional)
+1. `ANDROC_MAVEN_REPOS` (comma-separated, optional)
 2. Google Maven — `https://dl.google.com/dl/android/maven2`
    (AndroidX, Material, AGP, Google Play libraries)
 3. Maven Central — `https://repo1.maven.org/maven2`
@@ -16,13 +16,13 @@ Central usually has no AndroidX artifacts.
 A mirror can be added without code changes:
 
 ```sh
-export ADIA_MAVEN_REPOS="https://maven.aliyun.com/repository/public"
+export ANDROC_MAVEN_REPOS="https://maven.aliyun.com/repository/public"
 bash scripts/fetch-maven.sh com.squareup.okhttp3:okhttp:4.12.0
 ```
 
 ## Verification
 
-Every downloaded POM/JAR/AAR is recorded in `$ADIA_M2/.adia-index.tsv` with
+Every downloaded POM/JAR/AAR is recorded in `$ANDROC_M2/.androc-index.tsv` with
 its SHA-256. When the repository publishes `<file>.sha1`, the script compares
 it and warns on a mismatch. A file that already exists is not downloaded
 again; delete only the specific version directory if it is corrupt.

@@ -8,14 +8,14 @@ SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=env.sh
 . "$SKILL_DIR/env.sh"
 
-SRC="${1:-$ADIA_GRADLE_HOME/caches/modules-2/files-2.1}"
+SRC="${1:-$ANDROC_GRADLE_HOME/caches/modules-2/files-2.1}"
 if [ ! -d "$SRC" ]; then
   echo "[lib-cache] Gradle cache not found: $SRC" >&2
   echo "[lib-cache] build something online first (warm-gradle.sh)" >&2
   exit 2
 fi
 
-INDEX="$ADIA_M2/.adia-index.tsv"
+INDEX="$ANDROC_M2/.androc-index.tsv"
 [ -f "$INDEX" ] || printf 'coordinate\tfile\tsha256\n' > "$INDEX"
 
 copied=0
@@ -34,7 +34,7 @@ while IFS= read -r f; do
     *) continue ;;
   esac
   gpath="$(printf '%s' "$group" | tr '.' '/')"
-  dest="$ADIA_M2/$gpath/$artifact/$version"
+  dest="$ANDROC_M2/$gpath/$artifact/$version"
   mkdir -p "$dest"
   if [ -f "$dest/$base" ]; then
     skipped=$((skipped + 1))
@@ -58,5 +58,5 @@ $(find "$SRC" -mindepth 4 -maxdepth 4 -type f \( -name '*.jar' -o -name '*.aar' 
 EOF
 
 echo "[lib-cache] exported $copied file(s), $skipped already present"
-echo "[lib-cache] mirror: $ADIA_M2"
-du -sh "$ADIA_M2" 2>/dev/null || true
+echo "[lib-cache] mirror: $ANDROC_M2"
+du -sh "$ANDROC_M2" 2>/dev/null || true

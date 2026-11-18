@@ -1,7 +1,7 @@
 # Release: push a semantic tag `vX.Y.Z`.
 # `workflow_dispatch` builds a signed APK without creating a Release.
 # Signed release only. Required secrets:
-#   ADIA_KEYSTORE_BASE64, ADIA_KEY_ALIAS, ADIA_KEYSTORE_PASS, ADIA_KEY_PASS
+#   ANDROC_KEYSTORE_BASE64, ANDROC_KEY_ALIAS, ANDROC_KEYSTORE_PASS, ANDROC_KEY_PASS
 name: Release
 
 on:
@@ -59,16 +59,16 @@ jobs:
 
       - name: Restore release keystore
         env:
-          KEYSTORE_B64: ${{ secrets.ADIA_KEYSTORE_BASE64 }}
-          KEY_ALIAS: ${{ secrets.ADIA_KEY_ALIAS }}
-          KEYSTORE_PASS: ${{ secrets.ADIA_KEYSTORE_PASS }}
-          KEY_PASS: ${{ secrets.ADIA_KEY_PASS }}
+          KEYSTORE_B64: ${{ secrets.ANDROC_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROC_KEY_ALIAS }}
+          KEYSTORE_PASS: ${{ secrets.ANDROC_KEYSTORE_PASS }}
+          KEY_PASS: ${{ secrets.ANDROC_KEY_PASS }}
         run: |
           missing=""
-          [ -z "$KEYSTORE_B64" ] && missing="$missing ADIA_KEYSTORE_BASE64"
-          [ -z "$KEY_ALIAS" ] && missing="$missing ADIA_KEY_ALIAS"
-          [ -z "$KEYSTORE_PASS" ] && missing="$missing ADIA_KEYSTORE_PASS"
-          [ -z "$KEY_PASS" ] && missing="$missing ADIA_KEY_PASS"
+          [ -z "$KEYSTORE_B64" ] && missing="$missing ANDROC_KEYSTORE_BASE64"
+          [ -z "$KEY_ALIAS" ] && missing="$missing ANDROC_KEY_ALIAS"
+          [ -z "$KEYSTORE_PASS" ] && missing="$missing ANDROC_KEYSTORE_PASS"
+          [ -z "$KEY_PASS" ] && missing="$missing ANDROC_KEY_PASS"
           if [ -n "$missing" ]; then
             echo "Missing release signing secrets:$missing" >&2
             exit 1
@@ -76,8 +76,13 @@ jobs:
           mkdir -p "$RUNNER_TEMP/signing"
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/signing/release.jks"
 
+      - name: Check opencode is the latest release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-opencode-latest.py --strict
+
       - name: Fetch opencode runtime
-        run: python3 scripts/fetch-opencode.py --version 2.3.0
+        run: python3 scripts/fetch-opencode.py
 
       - name: Fetch offline Termux toolbox
         run: python3 scripts/fetch-toolbox.py
@@ -100,19 +105,19 @@ jobs:
 
       - name: Build signed release
         env:
-          ADIA_KEYSTORE: ${{ runner.temp }}/signing/release.jks
-          ADIA_KEY_ALIAS: ${{ secrets.ADIA_KEY_ALIAS }}
-          ADIA_KEYSTORE_PASS: ${{ secrets.ADIA_KEYSTORE_PASS }}
-          ADIA_KEY_PASS: ${{ secrets.ADIA_KEY_PASS }}
+          ANDROC_KEYSTORE: ${{ runner.temp }}/signing/release.jks
+          ANDROC_KEY_ALIAS: ${{ secrets.ANDROC_KEY_ALIAS }}
+          ANDROC_KEYSTORE_PASS: ${{ secrets.ANDROC_KEYSTORE_PASS }}
+          ANDROC_KEY_PASS: ${{ secrets.ANDROC_KEY_PASS }}
         run: |
           ./gradlew :app:assembleRelease --console=plain --stacktrace --no-daemon \
-            -PadiaVersionName="${{ steps.version.outputs.name }}" \
-            -PadiaVersionCode="${{ steps.version.outputs.code }}" \
-            -PadiaRequireSigning=1
+            -PandrocVersionName="${{ steps.version.outputs.name }}" \
+            -PandrocVersionCode="${{ steps.version.outputs.code }}" \
+            -PandrocRequireSigning=1
 
       - name: 16 KB check
         env:
-          ADIA_16KB_STRICT: "1"
+          ANDROC_16KB_STRICT: "1"
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
           python3 app/src/main/assets/skills/android-build/scripts/check-16kb.py "$APK"
@@ -127,14 +132,14 @@ jobs:
         run: |
           mkdir -p out
           SRC=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          NAME="adia-${{ steps.version.outputs.name }}.apk"
+          NAME="androc-${{ steps.version.outputs.name }}.apk"
           cp "$SRC" "out/$NAME"
           (cd out && sha256sum "$NAME" > "$NAME.sha256")
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: adia-${{ steps.version.outputs.name }}
+          name: androc-${{ steps.version.outputs.name }}
           path: out/*
           if-no-files-found: error
 
@@ -144,6 +149,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" out/* \
-            --title "Adia $GITHUB_REF_NAME" \
+            --title "Androc $GITHUB_REF_NAME" \
             --notes-file RELEASE_NOTES.md \
             --verify-tag

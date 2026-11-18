@@ -19,7 +19,7 @@ const CORE_JS = "3.51.0"
 const ESBUILD = "0.25.0"
 const ROOT = path.dirname(__dirname)
 const DEST = path.join(ROOT, "app/src/main/assets/oc-corejs.js")
-const WORK = path.join(os.tmpdir(), "adia-corejs-build")
+const WORK = path.join(os.tmpdir(), "androc-corejs-build")
 
 // Lo que usa la app (opencode 2.2.6) y no existe en Chromium 108. Los
 // AbortSignal.* son DOM y core-js no los cubre: siguen en oc-early.js.
@@ -69,7 +69,7 @@ function ensureDependencies() {
   fs.mkdirSync(WORK, { recursive: true })
   fs.writeFileSync(
     path.join(WORK, "package.json"),
-    JSON.stringify({ name: "adia-corejs-build", private: true }, null, 2),
+    JSON.stringify({ name: "androc-corejs-build", private: true }, null, 2),
   )
   console.log("instalando core-js-builder y esbuild en", WORK)
   // Una sola cadena: en Windows npm es un .cmd y Node 20+ exige shell.

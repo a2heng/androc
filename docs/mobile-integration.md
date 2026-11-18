@@ -1,36 +1,40 @@
-# 前端集成：内置 `client/`（无子模块）
+# 前端集成：内置 `:ui` 模块
 
-Adia 的 Compose 前端现在**直接内置在仓库里**：
+Androc 的 Compose 前端现在**直接内置在仓库里**：
 
 ```groovy
 // settings.gradle
-include(":client")
-project(":client").projectDir = file("client")
+include(":ui")
 ```
 
-`client/` 是从原来的 `opencode-mobile` 客户端复制出来的一份独立副本，包含
-数据层、全部 Compose 界面、终端、文件和设置页。Adia 的 `app` 通过
-`implementation project(':client')` 使用它。
+`ui/` 是原来的 `client/` 模块改名而来，包含数据层、全部 Compose 界面、终端、
+文件和设置页。`app` 通过 `implementation project(':ui')` 使用它。
 
-## 两个项目的关系
+完整的产品形态（一个 App、三层能力、pack 下载）见
+[`series.md`](series.md)。这里只说明前端结构与行为约定。
 
-- **Adia**：本机 opencode 后端 + 内置前端，打包成 `com.a2heng.adia` 单 APK。
-- **OpenCode 安卓 UI**：独立的局域网客户端，
-  [`a2heng/opencode-android-ui`](https://github.com/a2heng/opencode-android-ui)，
-  直连电脑上的 `http://<电脑>:42000`。
-- 两者不再通过 git submodule 关联，也不要求对方在同一台机器/同一个 APK 里。
-  代码曾经同源，之后各自演进；公共修复需要手动 cherry-pick/复制。
+## 一个 App，一个 UI 源码
 
-## 共用代码的同步约定（2026-11-14）
+- **Androc（本仓库 `:app`）** 是唯一应用；`thin` / `full` 只是构建 flavor。
+- 原来的 `a2heng/opencode-android-ui` 不再维护，代码并入 `:ui`，不再维护第二份
+  源码，也不再用 git submodule。
+- `:ui` 只依赖 `:contracts`，不依赖 `:kernel`；它通过 `RuntimeConnection`
+  接收服务器地址和凭据，不启动任何进程。
+- 需要独立 UI APK 时，从同一个 `:ui` 模块组装，不复制代码。
 
-两边的 `client/` 只有**品牌/宿主差异**允许不同：
+## 登录和设置合并
 
-- 登录页标题、设置页「关于」、更新仓库地址（`UpdateClient.API`）和下载文件名。
-- Adia 文件页不提供 `/`、`/tmp/opencode` 胶囊（应用沙箱读不到真实根目录）；
-  路径标签用 `~` 表示 HOME。独立客户端可以浏览真实 `/`。
-- 新建会话对话框 Adia 用「HOME / 项目区」，独立客户端用「~ / /」。
+下一阶段 `ConnectScreen` 会合并进 `SettingsScreen`，统一为 **Setup**：
 
-其余行为必须保持一致，改了一边要同步另一边：
+- 连接：本机内核 / 局域网 / 远程 / 官方 App 配对；
+- 能力包：kernel pack、tools pack 的安装、更新、修复、卸载；
+- 存储与诊断。
+
+首次启动和“设置”打开的是同一个 Composable，不再有两套入口。
+
+## UI 行为约定
+
+这些是踩过坑的行为，改 `ui/` 时必须保持（不变量，不是“曾经和另一个仓库同步”）：
 
 | 能力 | 位置 | 说明 |
 | --- | --- | --- |
@@ -45,8 +49,7 @@ project(":client").projectDir = file("client")
 | 会话列表去重 | `SessionsScreen.kt` | 时间视图必须用 `groupedRest`（`recent` 已从 `rest` 取走前 3 条），否则同一会话出现两次 |
 | 键盘跟随滚动 | `ChatScreen.kt` | 只在**底部附近起手**的滑动才控制键盘（index 0 且未超过一屏，或 index 1；中部手势完全不碰）。把「内容 + 键盘」当成一个整体：手指往上（离开底部）→ `show()`；手指往下 → `hide()`。只看用户手势，流式内容/程序滚动不管；回答结束也不会动键盘。系统 IME 不能逐像素跟手 |
 | 流式内容不顶行 | `ChatScreen.kt` | 不在底部时冻结 live 气泡（文本/思考），避免生成中的文字不断改变底部 item 高度、把用户正在看的行顶下去；回到底部自动解冻 |
-| PTY | `AppModel.createPty` | 远端终端先让服务端用自己的默认 shell（Windows 上是 Git Bash/cmd），旧服务端再退回 `bash`；**Adia 本机终端不走这里**，由宿主注入 Termux/proot shell |
-
+| PTY | `AppModel.createPty` | 远端终端先让服务端用自己的默认 shell（Windows 上是 Git Bash/cmd），旧服务端再退回 `bash`；**Androc 本机终端不走这里**，由宿主注入 Termux/proot shell |
 
 ## 构建
 
@@ -55,12 +58,13 @@ project(":client").projectDir = file("client")
 # 不再需要 git submodule update
 ```
 
-前端在 `client/`，后端/宿主在 `app/`；`client` 的 namespace 仍是
-`com.a2heng.opencode.mobile`（代码包名），Adia 的 applicationId 仍是
-`com.a2heng.adia(.debug)`。
+前端在 `ui/`，宿主在 `app/`；`:ui` 的 namespace 是
+`com.a2heng.androc.ui`，Androc 的 applicationId 是
+`com.a2heng.androc(.debug/.beta)`。
 
 ## 已废弃的旧方案
 
 以前用过 `mobile/opencode-mobile` 子模块、`LocalServerInfoProvider`
-ContentProvider 自动握手和 mobile 仓库里的 `:client` 模块。现在这些都不再是
-Adia 的构建依赖；本文件只保留当前结构说明。
+ContentProvider 自动握手和 mobile 仓库里的 `:client` 模块。ContentProvider
+仍保留为同机客户端的可选便利，但不再是跨产品集成契约；官方 OpenCode
+Android 走标准 pairing（见 `series.md` §8）。

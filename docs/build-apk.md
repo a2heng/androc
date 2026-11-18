@@ -11,7 +11,7 @@
 仓库不提交 208 MB 的 opencode 二进制：
 
 ```sh
-python scripts/fetch-opencode.py --version 2.3.0
+python scripts/fetch-opencode.py
 ./gradlew :app:assembleDebug
 ```
 
@@ -22,8 +22,8 @@ python scripts/fetch-opencode.py --version 2.3.0
 生成三个被 `.gitignore` 排除的大资源：
 
 ```sh
-# opencode musl 运行时
-python scripts/fetch-opencode.py --version 2.3.0
+# opencode musl 运行时（版本读 opencode.version）
+python scripts/fetch-opencode.py
 
 # Termux 包（含 openjdk-21 及其依赖）
 python scripts/fetch-toolbox.py

@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Audit and clean Adia caches.
+# Audit and clean Androc caches.
 #   clean-caches.sh            safe transient files only
 #   clean-caches.sh --builds   also remove workspace/*/build and .gradle
 #   clean-caches.sh --all      also remove the shared Gradle/Maven caches

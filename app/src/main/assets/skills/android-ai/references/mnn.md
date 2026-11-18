@@ -21,7 +21,7 @@ blocker**; the blocker is native integration and device testing.
 - Termux packages are built for Android bionic and installed with `pkg`; MNN
   ships prebuilt native libraries and headers, not a Termux package.
 - Using it requires either:
-  1. **JNI/AAR in Adia** — copy the arm64 `libMNN*.so` into
+  1. **JNI/AAR in Androc** — copy the arm64 `libMNN*.so` into
      `app/src/main/jniLibs/arm64-v8a/`, compile a small JNI wrapper with the
      NDK, and expose it to the UI/agent (e.g. a localhost-only HTTP endpoint);
      or

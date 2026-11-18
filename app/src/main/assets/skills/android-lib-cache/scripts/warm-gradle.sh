@@ -15,12 +15,12 @@ if [ ! -d "$PROJECT" ]; then
   exit 2
 fi
 
-BUILD_SH="${ADIA_BUILD_SH:-$HOME/.config/opencode/skills/android-build/scripts/build.sh}"
+BUILD_SH="${ANDROC_BUILD_SH:-$HOME/.config/opencode/skills/android-build/scripts/build.sh}"
 if [ ! -f "$BUILD_SH" ]; then
   BUILD_SH="$HOME/.config/opencode-android/skills/android-build/scripts/build.sh"
 fi
 if [ ! -f "$BUILD_SH" ]; then
-  echo "[lib-cache] android-build/scripts/build.sh not found; set ADIA_BUILD_SH" >&2
+  echo "[lib-cache] android-build/scripts/build.sh not found; set ANDROC_BUILD_SH" >&2
   exit 3
 fi
 
@@ -32,15 +32,15 @@ esac
 echo "[lib-cache] warming shared Gradle cache (online, once)"
 echo "[lib-cache] project: $PROJECT"
 echo "[lib-cache] task:    $TASK"
-OC_BUILD_ONLINE=1 ADIA_GRADLE_HOME="$ADIA_GRADLE_HOME" \
+OC_BUILD_ONLINE=1 ANDROC_GRADLE_HOME="$ANDROC_GRADLE_HOME" \
   bash "$BUILD_SH" "$PROJECT" "$VARIANT" "$TASK"
 
 echo
 echo "[lib-cache] verifying the same task offline"
-OC_BUILD_ONLINE=0 ADIA_GRADLE_HOME="$ADIA_GRADLE_HOME" \
+OC_BUILD_ONLINE=0 ANDROC_GRADLE_HOME="$ANDROC_GRADLE_HOME" \
   bash "$BUILD_SH" "$PROJECT" "$VARIANT" "$TASK"
 
 echo
 echo "[lib-cache] shared cache size:"
-du -sh "$ADIA_GRADLE_HOME" 2>/dev/null || true
+du -sh "$ANDROC_GRADLE_HOME" 2>/dev/null || true
 echo "[lib-cache] next: export it for non-Gradle tools with export-gradle.sh"

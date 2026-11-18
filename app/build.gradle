@@ -2,29 +2,42 @@ plugins {
     id 'com.android.application'
 }
 
-// CI passes -PadiaVersionName / -PadiaVersionCode / -PadiaRequireSigning.
-def adiaVersionCode = (findProperty("adiaVersionCode") ?: "7").toInteger()
-def adiaVersionName = findProperty("adiaVersionName") ?: "0.4.0-adia"
-def adiaRequireSigning = findProperty("adiaRequireSigning") == "1"
+// The bundled opencode version has one source of truth: opencode.version.
+// Release CI refuses to build when this is older than the latest upstream tag.
+def opencodeVersion = rootProject.file("opencode.version").text.trim()
+if (!opencodeVersion) {
+    throw new GradleException("opencode.version is empty")
+}
+
+// CI passes -PandrocVersionName / -PandrocVersionCode / -PandrocRequireSigning.
+// The old -Padia* names are still accepted so an existing release job keeps working.
+def androcVersionCode = (findProperty("androcVersionCode")
+        ?: findProperty("adiaVersionCode") ?: "8").toInteger()
+def androcVersionName = findProperty("androcVersionName")
+        ?: findProperty("adiaVersionName") ?: "0.5.0-androc"
+def androcRequireSigning = (findProperty("androcRequireSigning")
+        ?: findProperty("adiaRequireSigning")) == "1"
 
 android {
-    namespace 'com.opencode.launcher'
+    namespace 'com.a2heng.androc'
     compileSdk 37
 
     defaultConfig {
-        applicationId "com.a2heng.adia"
+        applicationId "com.a2heng.androc"
         minSdk 26
         targetSdk 34
-        versionCode adiaVersionCode
-        versionName adiaVersionName
+        versionCode androcVersionCode
+        versionName androcVersionName
         buildConfigField "int", "SERVER_PORT", "4096"
-        // Version del binario empaquetado en jniLibs. Actualizarla al cambiarlo.
-        buildConfigField "String", "OPENCODE_VERSION", "\"2.3.0\""
+        // Version del binario empaquetado en jniLibs. Fuente unica:
+        // opencode.version (lo verifica scripts/check-opencode-latest.py).
+        buildConfigField "String", "OPENCODE_VERSION", "\"${opencodeVersion}\""
         // Un solo runtime: proot. No hay buildConfigField de modo.
-        // UI por defecto: mobile = frontend Compose embebido (:client);
+        // UI por defecto: mobile = frontend Compose embebido (:ui);
         // web = WebView clasico (solo como respaldo).
-        def adiaUi = (findProperty("adiaUi") ?: "mobile").toString()
-        buildConfigField "String", "UI_MODE", "\"${adiaUi}\""
+        def androcUi = (findProperty("androcUi")
+                ?: findProperty("adiaUi") ?: "mobile").toString()
+        buildConfigField "String", "UI_MODE", "\"${androcUi}\""
         // v1: canal 4.x del launcher y runtime opencode 1.x.
         buildConfigField "boolean", "V2", "false"
         ndk {
@@ -38,16 +51,16 @@ android {
     def keystoreFile = rootProject.file("keystore.properties")
     if (keystoreFile.exists()) keystoreProps.load(new FileInputStream(keystoreFile))
 
-    def envKeystore = System.getenv("ADIA_KEYSTORE")
-    def envStorePass = System.getenv("ADIA_KEYSTORE_PASS")
-    def envAlias = System.getenv("ADIA_KEY_ALIAS")
-    def envKeyPass = System.getenv("ADIA_KEY_PASS")
+    def envKeystore = System.getenv("ANDROC_KEYSTORE") ?: System.getenv("ADIA_KEYSTORE")
+    def envStorePass = System.getenv("ANDROC_KEYSTORE_PASS") ?: System.getenv("ADIA_KEYSTORE_PASS")
+    def envAlias = System.getenv("ANDROC_KEY_ALIAS") ?: System.getenv("ADIA_KEY_ALIAS")
+    def envKeyPass = System.getenv("ANDROC_KEY_PASS") ?: System.getenv("ADIA_KEY_PASS")
     def hasEnvSigning = envKeystore != null && envAlias != null
-    def requireSigning = adiaRequireSigning
+    def requireSigning = androcRequireSigning
     if (requireSigning && !hasEnvSigning && !keystoreFile.exists()) {
         throw new GradleException(
-            "Release signing is required: set ADIA_KEYSTORE/ADIA_KEY_ALIAS/" +
-            "ADIA_KEYSTORE_PASS/ADIA_KEY_PASS or provide keystore.properties")
+            "Release signing is required: set ANDROC_KEYSTORE/ANDROC_KEY_ALIAS/" +
+            "ANDROC_KEYSTORE_PASS/ANDROC_KEY_PASS or provide keystore.properties")
     }
 
     signingConfigs {
@@ -107,7 +120,7 @@ android {
 }
 
 dependencies {
-    implementation project(':client')
+    implementation project(':ui')
     // El tema del cliente usa Theme.SplashScreen; sus attrs deben entrar en el APK.
     implementation 'androidx.core:core-splashscreen:1.0.1'
     implementation 'androidx.appcompat:appcompat:1.8.0'

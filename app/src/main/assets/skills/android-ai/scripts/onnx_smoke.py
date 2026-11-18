@@ -2,7 +2,7 @@
 """Self-test for the bundled ONNX Runtime.
 
 Uses `mul_1.onnx` that ships inside the `onnxruntime` Python package, so it
-needs no download. Run inside Adia's proot shell:
+needs no download. Run inside Androc's proot shell:
 
     python ~/.config/opencode/skills/android-ai/scripts/onnx_smoke.py
 

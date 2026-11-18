@@ -1,6 +1,6 @@
-# Adia 路径设计（Termux 前缀 / proot / 真实路径）
+# Androc 路径设计（Termux 前缀 / proot / 真实路径）
 
-本文是 Adia 里**所有路径的唯一说明**。改代码、加脚本、加工具、排查
+本文是 Androc 里**所有路径的唯一说明**。改代码、加脚本、加工具、排查
 `libreadline.so.8`、`Permission denied`、`No such file or directory` 之前，先读这一页。
 
 配套文档：[`commands.md`](commands.md) 说明命令怎么执行、所有路径和 `oc-*` 命令。
@@ -69,7 +69,7 @@ PY
 
 `bash` 的 `DT_RUNPATH` 是写死的 Termux 路径，不是相对路径。所以：
 
-- 在 `/data/data/com.a2heng.adia/files/usr` 里放一份 `libreadline.so.8` **没用**；
+- 在 `/data/data/com.a2heng.androc/files/usr` 里放一份 `libreadline.so.8` **没用**；
 - 把 `LD_LIBRARY_PATH` 指到真实前缀，只有**显式用 `linker64` 启动**时才有效；
 - Android 10+ 还禁止 `untrusted_app` 对应用私有目录做 `execve`，所以“直接运行
   前缀里的 ELF”本身也不可靠；
@@ -80,11 +80,11 @@ PY
 
 ## 2. 路径总表（真实空间）
 
-包名：`com.a2heng.adia`（debug 为 `com.a2heng.adia.debug`，beta 为
-`com.a2heng.adia.beta`）。**不要在任何脚本里写死包名**，用 `$HOME` / `$PREFIX`。
+包名：`com.a2heng.androc`（debug 为 `com.a2heng.androc.debug`，beta 为
+`com.a2heng.androc.beta`）。**不要在任何脚本里写死包名**，用 `$HOME` / `$PREFIX`。
 
 `HOME` 由 `LocalRuntime.homeDir()` 取 `getFilesDir()/home` 的 **canonical path**，
-所以日志里通常是 `/data/data/com.a2heng.adia/files/home`，而不是
+所以日志里通常是 `/data/data/com.a2heng.androc/files/home`，而不是
 `/data/user/0/...`。两者是同一目录，但字符串比较必须用 canonical。
 
 | 逻辑名 | 真实路径 | 谁创建 / 谁用 |
@@ -98,7 +98,7 @@ PY
 | `XDG_STATE_HOME` | `$HOME/.local/state` | 状态 |
 | `XDG_RUNTIME_DIR` | `$HOME/.run` | 运行时 |
 | opencode 配置 | `$HOME/.config/opencode` | 用户配置、`AGENTS.md` |
-| Adia 注入配置 | `$HOME/.config/opencode-android` | `opencode.json`、`engine-mode`、skills |
+| Androc 注入配置 | `$HOME/.config/opencode-android` | `opencode.json`、`engine-mode`、skills |
 | engine 旧文件 | `$HOME/.config/opencode-android/engine-mode` | 已废弃；存在也不影响，永远 proot |
 | 工作区 | `$HOME/workspace` | 服务器默认项目根 |
 | 本地模型 | `$HOME/models/{onnx,tflite,gguf}` | 端侧推理权重；不要放 `cache/` 或 `/tmp` |
@@ -108,7 +108,7 @@ PY
 | Android SDK | `$HOME/toolchain/android-sdk` | build-tools / platforms |
 | JDK 21 | `$PREFIX/lib/jvm/java-21-openjdk`（toolbox 内置；`build.sh` 自动解析） | 构建 |
 | 工具链解压临时 | `$HOME/toolchain.tmp` | 启动清理 |
-| 应用日志 | `/data/data/<pkg>/files/logs/adia.log` | 512 KB 轮转 |
+| 应用日志 | `/data/data/<pkg>/files/logs/androc.log` | 512 KB 轮转 |
 | toolbox 工作区 | `$HOME/../toolbox` = `/data/data/<pkg>/files/toolbox` | 索引、下载的 `.deb` |
 | toolbox 完成标记 | `$PREFIX/.opencode-toolbox` | 首次安装完成 |
 | 包清单 | `$HOME/../toolbox/packages.txt` | 已安装版本 |
@@ -261,7 +261,7 @@ proot 由 `LocalRuntime` 启动，bind 表如下（`CommandResolver.prootScript`
 
 ## 8. 排查手册
 
-在 Adia 终端或 agent 里按顺序执行：
+在 Androc 终端或 agent 里按顺序执行：
 
 ```sh
 oc-engine status          # proot（唯一模式）
@@ -271,20 +271,20 @@ oc-repair                 # 缺文件时从 APK 离线补齐
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| `library "libreadline.so.8" not found` | 前缀缺 `readline`，或绕过 Adia 直接 exec | `oc-repair`；从 Adia 的终端/agent 运行 |
-| `Permission denied` / `inaccessible or not found` | 绕过 App 直接 exec 应用私有文件 | 从 Adia 的终端/agent 运行；不要从 Java/`ProcessBuilder` 直接 exec |
+| `library "libreadline.so.8" not found` | 前缀缺 `readline`，或绕过 Androc 直接 exec | `oc-repair`；从 Androc 的终端/agent 运行 |
+| `Permission denied` / `inaccessible or not found` | 绕过 App 直接 exec 应用私有文件 | 从 Androc 的终端/agent 运行；不要从 Java/`ProcessBuilder` 直接 exec |
 | `pkg: command not found` | `termux-tools` 缺失 | `oc-repair` |
-| `bash: ...: No such file or directory` | 前缀损坏 / 绕过 App | `oc-repair`；从 Adia 内运行 |
-| `proot: la caja de herramientas aun se esta instalando` | 首次安装未完成 | 等通知，或看 `files/logs/adia.log` |
+| `bash: ...: No such file or directory` | 前缀损坏 / 绕过 App | `oc-repair`；从 Androc 内运行 |
+| `proot: la caja de herramientas aun se esta instalando` | 首次安装未完成 | 等通知，或看 `files/logs/androc.log` |
 | `java.io.tmpdir doesn't exist` | `$PREFIX/tmp` 不存在 | 构建脚本已改用 `$HOME/.cache/tmp`，不要手建 `$PREFIX/tmp` |
 | Gradle 找不到 SDK | `local.properties` 指错 | 用 `android-build` skill 的 `build.sh`，它会写真实路径 |
 
-日志：`/data/data/<pkg>/files/logs/adia.log`，过滤 `OpenCodeLocal`、
+日志：`/data/data/<pkg>/files/logs/androc.log`，过滤 `OpenCodeLocal`、
 `OpenCodeToolbox`、`runtime`。
 
 ### 安装后 60 秒验收（每次发版都做）
 
-在 Adia 的本机终端里依次执行：
+在 Androc 的本机终端里依次执行：
 
 ```sh
 oc-engine status        # 期望：proot
@@ -298,7 +298,7 @@ pkg install -y jq
 
 1. `oc-repair`；
 2. 再看 `oc-doctor` 的 `missing`；
-3. 仍然失败就抓 `files/logs/adia.log` 里 `OpenCodeToolbox` / `OpenCodeLocal` 的行。
+3. 仍然失败就抓 `files/logs/androc.log` 里 `OpenCodeToolbox` / `OpenCodeLocal` 的行。
 
 ---
 

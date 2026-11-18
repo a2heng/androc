@@ -44,7 +44,7 @@ def fetch(url):
     for attempt in range(5):
         try:
             req = urllib.request.Request(
-                url, headers={"User-Agent": "android-dev-in-android"})
+                url, headers={"User-Agent": "androc"})
             with urllib.request.urlopen(req, timeout=180) as r:
                 return r.read()
         except Exception as e:

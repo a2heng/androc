@@ -3,9 +3,9 @@ name: Termux Toolbox
 description: Use the bundled Termux userland on this phone (bash, git, python, node, clang, cmake, ninja, ssh, pkg/apt, adb) and avoid the Android-vs-Termux path traps. Use when a task needs a Linux tool on-device, when a command says "not found" or "CANNOT LINK EXECUTABLE", or when installing packages.
 ---
 
-# Termux toolbox on Adia
+# Termux toolbox on Androc
 
-Adia ships a Termux-style userland inside the APK. It is not the Termux app:
+Androc ships a Termux-style userland inside the APK. It is not the Termux app:
 there is no separate Termux install, and you do not need one. The toolbox is on
 `PATH`, but **its binaries only work inside proot** (the release engine enforces
 this; see below).
@@ -78,13 +78,13 @@ linker by hand.
 | Temp | `/tmp` inside proot, mapped to `$TMPDIR` (`cache/tmp`) |
 | Shared storage | `$HOME/sdcard` only when the phone is rooted and the bind mount exists |
 
-`/` and `/tmp/opencode` are **not** available in the Adia file browser: the app
+`/` and `/tmp/opencode` are **not** available in the Androc file browser: the app
 cannot read the Android root, and `/tmp/opencode` is not a real directory.
 
 Rules:
 
 - Always use `$HOME`, `$PREFIX`, `$TMPDIR`; never hardcode
-  `/data/data/com.a2heng.adia/...` or `/data/data/com.termux/...` in scripts.
+  `/data/data/com.a2heng.androc/...` or `/data/data/com.termux/...` in scripts.
 - A script with `#!/data/data/com.termux/files/usr/bin/bash` works because that
   path exists inside the sandbox. `#!/usr/bin/env bash` also works when `bash`
   is on `PATH`.
@@ -105,7 +105,7 @@ apt-get update && apt-get install -y <name>
 
 Notes:
 
-- `pkg` is a shim provided by Adia; it forwards to `apt` with the right
+- `pkg` is a shim provided by Androc; it forwards to `apt` with the right
   `PREFIX` and non-interactive flags.
 - The first online install needs network. Mirrors are already configured; do
   not rewrite `sources.list` unless a mirror is actually down.
@@ -189,7 +189,7 @@ termux-am start ...
 
 - For UI automation, prefer `adb shell input`, `uiautomator dump`,
   `screencap` (system binaries) rather than Termux GUI packages.
-- `am`/`pm`/`dumpsys` are Android binaries; Adia wraps them in `$PREFIX/bin`
+- `am`/`pm`/`dumpsys` are Android binaries; Androc wraps them in `$PREFIX/bin`
   so they work inside proot without inheriting Termux libraries.
 - If the phone is rooted, `su -c '<cmd>'` works and `$HOME/sdcard` may be the
   shared storage bind mount.
@@ -198,10 +198,10 @@ termux-am start ...
 
 - **`CANNOT LINK EXECUTABLE … library "libX.so" not found`** — the prefix is
   missing a library (classically `libreadline.so.8`). Run `oc-doctor`, then
-  `oc-repair`. Everything in Adia is already inside proot; do not bypass it.
+  `oc-repair`. Everything in Androc is already inside proot; do not bypass it.
 - **`Permission denied` / `inaccessible or not found` / `exec format error`** —
   an ELF or script was executed directly from app-private storage by an
-  Android process, bypassing Adia. Use the Adia terminal/agent; do not
+  Android process, bypassing Androc. Use the Androc terminal/agent; do not
   `chmod +x` and exec it from a Java `ProcessBuilder`.
 - **`command not found` for a bundled tool** — check `echo $PATH`; the prefix
   must be first. Everything runs in proot, so no extra wrapper is needed.
@@ -210,7 +210,7 @@ termux-am start ...
 - **Long-running jobs** — background them with `setsid`/`nohup` and write a log
   under `$HOME` (not `/tmp` if you need to keep it). The app may kill the
   sandbox when the server restarts.
-- **Storage permissions** — Adia does not request `MANAGE_EXTERNAL_STORAGE`.
+- **Storage permissions** — Androc does not request `MANAGE_EXTERNAL_STORAGE`.
   To read the shared storage, use the app's file picker/share flow or a rooted
   bind mount; do not assume `/sdcard` is writable.
 - **Package scripts that assume the Termux app** — `termux-setup-storage`,

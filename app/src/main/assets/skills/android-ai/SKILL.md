@@ -5,7 +5,7 @@ description: Run AI models locally on the phone with the bundled Termux toolchai
 
 # Android AI (on-device inference)
 
-Adia ships a small, CPU-first AI stack inside the proot toolbox. It is meant for
+Androc ships a small, CPU-first AI stack inside the proot toolbox. It is meant for
 real on-device work (VAD/ASR, OCR, embeddings, small chat models), not for
 pretending a phone can host a 7B model.
 
@@ -31,7 +31,7 @@ The toolbox (`$PREFIX`, real path `/data/data/<pkg>/files/usr`) includes:
 | `python-tflite-runtime` | 2.21.0 | `.../site-packages/tflite_runtime` |
 | `llama-cpp` | 1.0.0 | `$PREFIX/bin/llama-cli`, `llama-server`, `llama-quantize`, … |
 
-Verify (inside Adia's local terminal or any proot shell):
+Verify (inside Androc's local terminal or any proot shell):
 
 ```sh
 bash ~/.config/opencode/skills/android-ai/scripts/check-ai.sh

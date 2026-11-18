@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Resolve Maven coordinates into the shared Adia Maven mirror.
+"""Resolve Maven coordinates into the shared Androc Maven mirror.
 
 Examples:
   resolve_maven.py com.squareup.okhttp3:okhttp:4.12.0
   resolve_maven.py androidx.room:room-runtime:2.6.1 --no-deps
   resolve_maven.py com.google.code.gson:gson:2.11.0 --repositories https://maven.aliyun.com/repository/public
 
-The mirror is $ADIA_M2 (default $HOME/toolchain/m2), in standard Maven
+The mirror is $ANDROC_M2 (default $HOME/toolchain/m2), in standard Maven
 layout, so Maven, sbt, javac, kotlinc, scripts and Gradle can all reuse it.
 """
 import argparse
@@ -19,11 +19,11 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 HOME = os.environ.get("HOME", "")
-M2 = os.environ.get("ADIA_M2") or os.path.join(HOME, "toolchain", "m2")
+M2 = os.environ.get("ANDROC_M2") or os.path.join(HOME, "toolchain", "m2")
 GOOGLE = "https://dl.google.com/dl/android/maven2"
 CENTRAL = "https://repo1.maven.org/maven2"
 DEFAULT_REPOS = [GOOGLE, CENTRAL]
-UA = "Adia-android-lib-cache/1.0"
+UA = "Androc-android-lib-cache/1.0"
 SKIP_SCOPES = {"test", "provided", "system", "import"}
 VISITED = set()
 
@@ -62,7 +62,7 @@ def file_sha256(path):
 
 
 def index_line(coordinate, path):
-    index = os.path.join(M2, ".adia-index.tsv")
+    index = os.path.join(M2, ".androc-index.tsv")
     if not os.path.exists(index):
         os.makedirs(M2, exist_ok=True)
         with open(index, "w", encoding="utf-8") as out:
@@ -294,7 +294,7 @@ def main():
         extra = extra.strip().rstrip("/")
         if extra and extra not in repos:
             repos.append(extra)
-    for extra in os.environ.get("ADIA_MAVEN_REPOS", "").split(","):
+    for extra in os.environ.get("ANDROC_MAVEN_REPOS", "").split(","):
         extra = extra.strip().rstrip("/")
         if extra and extra not in repos:
             repos.append(extra)

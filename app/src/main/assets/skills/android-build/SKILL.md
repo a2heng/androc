@@ -8,7 +8,7 @@ description: Build, sign and locate Android APKs locally on this phone with Grad
 This phone is the build machine. Everything below runs locally; no PC, no cloud.
 
 **16 KB first:** the build script audits the produced APK and prints a 16 KB
-alignment report. Set `ADIA_16KB_STRICT=1` to fail the build when a native
+alignment report. Set `ANDROC_16KB_STRICT=1` to fail the build when a native
 library is only 4 KB aligned. **A Gradle switch or `zipalign -P 16` does not
 fix this**: the alignment lives inside each prebuilt 64-bit `.so`. When the
 check flags `libonnxruntime`, `libopencv_java4`, `libc++_shared`, etc., upgrade
@@ -36,7 +36,7 @@ bash <skill-dir>/scripts/clean-caches.sh --builds   # also workspace/*/build + .
 bash <skill-dir>/scripts/clean-caches.sh --all      # also shared dependency caches
 ```
 
-Adia also prunes old temp files, Gradle daemon logs and downloaded `.deb`
+Androc also prunes old temp files, Gradle daemon logs and downloaded `.deb`
 files at startup. It never deletes project `build/` directories automatically.
 
 ## Prerequisites

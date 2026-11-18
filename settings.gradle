@@ -1,4 +1,4 @@
-// Adia — un APK: runtime local (opencode + Termux/proot) + frontend Compose.
+// Androc — one app, three capability tiers (UI / kernel pack / tools pack).
 pluginManagement {
     repositories {
         google()
@@ -13,10 +13,16 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Adia"
-include(":app")
+rootProject.name = "Androc"
 
-// Frontend: copia interna en client/. Sin submodulos: el cliente de LAN
-// (a2heng/opencode-android-ui) y Adia evolucionan por separado.
-include(":client")
-project(":client").projectDir = file("client")
+// Layering (see docs/series.md):
+//   :contracts  stable API shared by every layer
+//   :kernel     proot engine, server lifecycle, packs, pairing
+//   :tools      Android build chain and device API for the agent
+//   :ui         Compose client; never starts a process
+//   :app        the one application (thin/full flavors in phase 4)
+include(":app")
+include(":contracts")
+include(":kernel")
+include(":tools")
+include(":ui")

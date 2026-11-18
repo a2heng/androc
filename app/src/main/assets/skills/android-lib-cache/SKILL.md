@@ -16,10 +16,10 @@ location so every later project and tool on the phone works offline.
 |---|---|---|
 | `~/toolchain/gradle-home` | `GRADLE_USER_HOME` with `caches/modules-2` | every Gradle project |
 | `~/toolchain/m2` | Maven repository layout (`group/artifact/version`) | Maven, sbt, javac, kotlinc, scripts, Gradle |
-| `~/toolchain/m2/.adia-index.tsv` | coordinate, file, sha256 | audit / dedupe |
+| `~/toolchain/m2/.androc-index.tsv` | coordinate, file, sha256 | audit / dedupe |
 | `~/.m2/repository` | symlink to `~/toolchain/m2` | tools that hardcode `~/.m2` |
 
-`HOME` is the app-private root (`/data/user/0/com.a2heng.adia/files/home`),
+`HOME` is the app-private root (`/data/user/0/com.a2heng.androc/files/home`),
 so these caches survive app updates and are shared by all projects.
 
 What is automatic vs opt-in:
@@ -80,7 +80,7 @@ bash <skill-dir>/scripts/fetch-maven.sh androidx.room:room-runtime:2.6.1 --no-de
 
 The script tries Google Maven and Maven Central, stores the POM/JAR/AAR in
 Maven layout, verifies SHA-1 when the repository publishes one, and appends
-to `.adia-index.tsv`. Use `--no-deps` for a single file; transitive
+to `.androc-index.tsv`. Use `--no-deps` for a single file; transitive
 resolution is best done with Gradle (step 2).
 
 ### 5. Use the mirror
@@ -116,14 +116,14 @@ javac -cp "$HOME/toolchain/m2/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.j
 
 ```sh
 . <skill-dir>/scripts/env.sh
-echo "$ADIA_M2 $GRADLE_USER_HOME"
+echo "$ANDROC_M2 $GRADLE_USER_HOME"
 ```
 
 Variables:
 
-- `ADIA_M2` — Maven mirror (default `$HOME/toolchain/m2`)
-- `ADIA_GRADLE_HOME` — shared Gradle home (default `$HOME/toolchain/gradle-home`)
-- `ADIA_MAVEN_REPOS` — comma-separated extra repository base URLs
+- `ANDROC_M2` — Maven mirror (default `$HOME/toolchain/m2`)
+- `ANDROC_GRADLE_HOME` — shared Gradle home (default `$HOME/toolchain/gradle-home`)
+- `ANDROC_MAVEN_REPOS` — comma-separated extra repository base URLs
 
 ## Rules
 

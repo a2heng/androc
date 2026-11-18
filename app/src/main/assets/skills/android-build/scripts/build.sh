@@ -138,7 +138,7 @@ run_gradle() {
     "$TASK"
 }
 
-BUILD_LOG="$HOME/.cache/adia-build.log"
+BUILD_LOG="$HOME/.cache/androc-build.log"
 mkdir -p "$HOME/.cache" 2>/dev/null || true
 set +e
 run_gradle "$OFFLINE" 2>&1 | tee "$BUILD_LOG"
@@ -171,9 +171,9 @@ if [ -n "$APK" ]; then
   echo "APK=$(cd "$(dirname "$APK")" && pwd)/$(basename "$APK")"
   echo
   echo "[android-build] 16 KB page-size check:"
-  STRICT="${ADIA_16KB_STRICT:-0}"
-  case "$VARIANT" in release|Release) [ -z "${ADIA_16KB_STRICT:-}" ] && STRICT=1 ;; esac
-  case "$TASK" in assembleRelease|bundleRelease) [ -z "${ADIA_16KB_STRICT:-}" ] && STRICT=1 ;; esac
+  STRICT="${ANDROC_16KB_STRICT:-0}"
+  case "$VARIANT" in release|Release) [ -z "${ANDROC_16KB_STRICT:-}" ] && STRICT=1 ;; esac
+  case "$TASK" in assembleRelease|bundleRelease) [ -z "${ANDROC_16KB_STRICT:-}" ] && STRICT=1 ;; esac
   if [ "$STRICT" = "1" ]; then
     python3 "$SCRIPT_DIR/check-16kb.py" "$APK"
   else

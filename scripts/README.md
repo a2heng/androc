@@ -12,11 +12,16 @@ app/src/main/assets/toolchain/toolchain.zip          # make-toolchain.py
 Run from the repository root:
 
 ```sh
-python scripts/fetch-opencode.py --version 1.19.5
+python scripts/check-opencode-latest.py   # 发版前必须 --strict
+python scripts/fetch-opencode.py          # 读取 opencode.version
+python scripts/fetch-opencode.py --latest # 升到最新并改写 opencode.version
 python scripts/fetch-toolbox.py
 python scripts/make-toolchain.py
 ./gradlew :app:assembleDebug
 ```
+
+`opencode.version` 是内置版本的唯一来源；Gradle、下载脚本和 release CI 都读它。
+发版前 `check-opencode-latest.py --strict` 必须通过，否则不要打 tag。
 
 ## Mirrors
 

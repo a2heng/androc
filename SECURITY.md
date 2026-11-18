@@ -10,7 +10,7 @@ reproduction. Never include real API keys or tokens.
 
 ## Scope
 
-- the Adia launcher and bundled skills
+- the Androc launcher and bundled skills
 - the offline toolbox/toolchain provisioning
 - the local opencode server pairing/auth flow
 

@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/sh
-# Verify the on-device AI stack. Run inside Adia's proot shell:
+# Verify the on-device AI stack. Run inside Androc's proot shell:
 #   bash ~/.config/opencode/skills/android-ai/scripts/check-ai.sh
 set -u
 

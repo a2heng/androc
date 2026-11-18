@@ -3,7 +3,7 @@
 
 Usage:
   check-16kb.py <file|dir|apk>...
-Exit code 1 if ADIA_16KB_STRICT=1 and any ELF is not 16 KB aligned.
+Exit code 1 if ANDROC_16KB_STRICT=1 and any ELF is not 16 KB aligned.
 """
 import os
 import struct
@@ -96,7 +96,7 @@ def main():
         print(("16KB OK      " if ok else "4KB/UNALIGNED") + f"  {detail}  {name}")
     if bad:
         print(f"\n{bad} native file(s) are not 16 KB aligned.", file=sys.stderr)
-        if os.environ.get("ADIA_16KB_STRICT") == "1":
+        if os.environ.get("ANDROC_16KB_STRICT") == "1":
             return 1
     elif skipped:
         print(f"\n{checked} 64-bit native file(s) are 16 KB aligned; "

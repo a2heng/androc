@@ -1,27 +1,38 @@
-# Adia v0.4.3
+# Androc v0.5.0
 
-本文件只写当前版本相对上一版的改动；CI 直接把本文件作为 GitHub Release 正文，历史版本看 git tag 对应的提交。
+一个 App、三层能力：UI → kernel pack → tools pack。本版是改名和结构版本。
 
-## 本版：聊天键盘与滚动跟随修复（仅客户端）
+## 改名
 
-### 键盘只在底部附近响应
+- **Adia 改名为 Androc**，applicationId 为 `com.a2heng.androc`
+  （debug `.debug`，beta `.beta`）。
+- 这是一次全新安装，旧 Adia 的数据不会自动迁移；需要保留项目的用户先导出
+  `workspace/`。
+- 内置 opencode 升到 **2.3.2**，新增 `android-ai` skill（ONNX/TFLite/llama.cpp/MNN）。
 
-- 只有**底部附近起手**的滑动才控制键盘：最新一条（`firstVisibleItemIndex == 0`）且未超过一屏，或倒数第二条（`index == 1`）。
-- **中部起手的滑动完全不碰键盘**，看历史时不会再滑一下就把键盘切出来/收回去。
-- 把「内容 + 键盘」当成一个整体：**手指往上**（内容往上滚、已离开底部）→ 键盘出来；**手指往下** → 键盘收起。
-- 流式文字、思考、工具输出、回答突然结束都**不会**再自动收起键盘；`show()`/`hide()` 只在真实用户手势里调用。
-- Android 系统 IME 的高度和动画由系统控制，只能 `show()`/`hide()`，不能逐像素跟手（要跟手只能自绘输入法）。
+## 结构
 
-### 连接：`https://` 自动纠正
+- 仓库拆成 `:contracts` / `:kernel` / `:tools` / `:ui` / `:app`。
+- 原来的独立 UI 仓库 `a2heng/opencode-android-ui` 不再维护，代码并入 `:ui`，
+  不再维护第二份源码。
+- `:contracts` 定义 `RuntimeConnection`、`RuntimeState`、`RuntimeController`、
+  `ToolsController`、`Pairing`、`DiscoveryContract`。
+- `:kernel` / `:tools` 仍是骨架，运行时和工具链按 `docs/series.md` 的
+  phase 2/3 迁入。
 
-- `opencode serve` 默认是纯 HTTP；地址填成 `https://192.168.x.x:42000` 会报
-  `Unable to parse TLS packet header`。
-- 现在只在**私有/局域网地址**、且错误明确是「对方不是 TLS」时，自动改用
-  `http://` 重试一次并提示；公网地址或证书错误不会降级。
-- 纠正后的地址会写进已保存连接；登录页提示也明确写了默认 `http://`。
+## 打包
 
-### 不在底部时内容不顶行
+- 本版仍是 **full** 构建：toolbox/toolchain 内置于 APK，离线可用。
+- 下一阶段出 `thin`（基础 APK + 可下载 kernel/tools pack）和 `full`
+  （同样的 pack 放进 assets）。`proot` 引擎始终随 APK，其余都能下载。
 
-- 不在底部时**冻结 live 气泡**（文本 / 思考），生成中的内容不再改变底部 item 高度，不会把正在看的那一行一直往下顶。
-- 回到 / 滑到底部自动解冻，继续显示实时内容。
-- 队列自动滚到底只在**本来就在底部**时执行；离开底部后显示「回到底部」按钮，不再被新的 pending 拽回去。
+## 接入
+
+- 官方 OpenCode Android、其他 App、API、Console 的接入方式统一走标准
+  opencode HTTP + pairing，详见 `docs/integration.md`。
+- 设置页将合并登录与设置，统一管理连接、能力包、存储和诊断。
+
+## 存储
+
+- 运行时/toolbox/toolchain 继续留在应用私有目录。
+- 项目/导入导出/大文件缓存的 SAF、MediaStore、OBB 方案见 `docs/storage.md`。

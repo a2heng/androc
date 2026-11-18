@@ -37,7 +37,7 @@ def download(url, dest):
     for attempt in range(5):
         try:
             req = urllib.request.Request(
-                url, headers={"User-Agent": "android-dev-in-android"})
+                url, headers={"User-Agent": "androc"})
             with urllib.request.urlopen(req, timeout=300) as src, open(part, "wb") as out:
                 shutil.copyfileobj(src, out, 1 << 20)
             os.replace(part, dest)
@@ -51,7 +51,7 @@ def download(url, dest):
         if os.path.exists(part):
             os.remove(part)
         subprocess.run(["curl", "-fL", "--retry", "10", "--retry-all-errors",
-                        "--retry-delay", "2", "-A", "android-dev-in-android",
+                        "--retry-delay", "2", "-A", "androc",
                         "-o", dest, url], check=True)
         return
     raise SystemExit(f"download failed: {last}")
@@ -71,7 +71,7 @@ def verify_16kb(paths, strict=True):
         print("warning: check-16kb.py not found; skipping toolchain audit")
         return
     env = dict(os.environ)
-    env["ADIA_16KB_STRICT"] = "1" if strict else "0"
+    env["ANDROC_16KB_STRICT"] = "1" if strict else "0"
     for path in paths:
         if not os.path.isfile(path):
             continue

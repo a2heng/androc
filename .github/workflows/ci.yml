@@ -43,8 +43,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Check opencode pin (advisory)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-opencode-latest.py
+
       - name: Fetch opencode runtime
-        run: python3 scripts/fetch-opencode.py --version 2.3.0
+        run: python3 scripts/fetch-opencode.py
 
       - name: Build debug APK
         run: |
@@ -53,7 +58,7 @@ jobs:
 
       - name: 16 KB check
         env:
-          ADIA_16KB_STRICT: "1"
+          ANDROC_16KB_STRICT: "1"
         run: |
           python3 app/src/main/assets/skills/android-build/scripts/check-16kb.py \
             app/build/outputs/apk/debug/*.apk
@@ -61,6 +66,6 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
-          name: adia-debug
+          name: androc-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error

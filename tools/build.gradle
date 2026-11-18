@@ -1,0 +1,23 @@
+plugins {
+    id 'com.android.library'
+}
+
+// Optional on-device Android toolchain for the opencode agent: skills, device
+// API, JDK/SDK/Gradle bootstrap. The server must run without this module.
+android {
+    namespace 'com.a2heng.androc.tools'
+    compileSdk 37
+
+    defaultConfig {
+        minSdk 26
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    api project(':contracts')
+}

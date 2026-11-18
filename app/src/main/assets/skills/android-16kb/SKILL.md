@@ -37,7 +37,7 @@ The report shows `min_align=0x1000` (4 KB, bad) or `0x4000` (16 KB, good) per
 - **`zipalign -P 16` / `useLegacyPackaging`**: these align the `.so` *inside
   the APK zip*. They do not touch the ELF `PT_LOAD` segments. The runtime
   loader still sees 4 KB ELF alignment.
-- **`ADIA_16KB_STRICT=0`**: only skips the check. The app will still fail to
+- **`ANDROC_16KB_STRICT=0`**: only skips the check. The app will still fail to
   load that library on a 16 KB device.
 - **A Gradle “16 KB switch”**: AGP has no switch that recompiles third-party
   prebuilt `.so` files.
@@ -89,7 +89,7 @@ version that officially uses the newer natives, or rebuild it.
 - Prefer NDK r28+ and `-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON` +
   `-Wl,-z,max-page-size=16384` when you control the source.
 - For a 4 KB-only dependency you cannot replace, document it and set
-  `ADIA_16KB_STRICT=0` for that build. This is a known limitation, not a fix.
+  `ANDROC_16KB_STRICT=0` for that build. This is a known limitation, not a fix.
 - Never substitute the 4 KB `aapt2` back: `aapt2` is executed on the device and
   is the one critical tool.
 
@@ -97,7 +97,7 @@ version that officially uses the newer natives, or rebuild it.
 
 | Component | Status |
 |---|---|
-| opencode 2.3.0 musl | 16 KB |
+| opencode 2.3.2 musl | 16 KB |
 | musl loader, proot, libc++/libstdc++/libgcc, librg, libandroid-shmem | 16 KB |
 | Termux JDK (`libjvm.so`, `libjava.so`) | 16 KB |
 | Termux `bash`/`git`/`node`/`python3` | 16 KB |

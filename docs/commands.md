@@ -1,6 +1,6 @@
-# Adia 命令与路径（全部在 proot 内）
+# Androc 命令与路径（全部在 proot 内）
 
-本文是 Adia 里**命令怎么执行**的唯一说明。路径细节见 [`paths.md`](paths.md)。
+本文是 Androc 里**命令怎么执行**的唯一说明。路径细节见 [`paths.md`](paths.md)。
 
 ## 设计原则
 
@@ -19,7 +19,7 @@
 
 ## 1. 唯一原则：一切都在 proot
 
-Adia 里不再有“原生命令 / proot 命令”的分类，也没有 `auto`、`fast`、`native`
+Androc 里不再有“原生命令 / proot 命令”的分类，也没有 `auto`、`fast`、`native`
 这些模式。启动 opencode 服务器、打开本机终端、执行 agent 命令、跑 Gradle、
 装包，全部在**同一个 proot 沙箱**里。
 
@@ -118,7 +118,7 @@ oc-engine help
 ## 4. 为什么不会再有 libreadline 错误
 
 `bash` 的 ELF 把 `DT_RUNPATH=/data/data/com.termux/files/usr/lib` 编译进去。
-Adia 把真实前缀 `files/usr` bind 到这个路径；服务器、shell、所有子进程都在
+Androc 把真实前缀 `files/usr` bind 到这个路径；服务器、shell、所有子进程都在
 同一个 proot 命名空间里。所以：
 
 - `libreadline.so.8` 永远在 `/data/data/com.termux/files/usr/lib`；
@@ -133,8 +133,8 @@ Adia 把真实前缀 `files/usr` bind 到这个路径；服务器、shell、所�
 
 | 报错 | 原因 | 处理 |
 |---|---|---|
-| `library "libreadline.so.8" not found` | 前缀缺 `readline`，或有人绕过 Adia 直接 exec | `oc-repair`；确认不是从外部 shell 直接跑 |
-| `Permission denied` / `inaccessible or not found` | 绕过 App 直接 exec 应用私有文件 | 从 Adia 的终端/agent 运行 |
+| `library "libreadline.so.8" not found` | 前缀缺 `readline`，或有人绕过 Androc 直接 exec | `oc-repair`；确认不是从外部 shell 直接跑 |
+| `Permission denied` / `inaccessible or not found` | 绕过 App 直接 exec 应用私有文件 | 从 Androc 的终端/agent 运行 |
 | `pkg: command not found` | `termux-tools` 缺失 | `oc-repair` |
 | `proot: ...` | 首次安装未完成 / 前缀损坏 | 等安装完成，`oc-repair` |
 | `java.io.tmpdir doesn't exist` | `$PREFIX/tmp` 缺失 | `build.sh` 已改用 `$HOME/.cache/tmp`，不要手建 |

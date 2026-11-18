@@ -1,8 +1,8 @@
 # NOTICE
 
-Adia — Android Dev In Android
+Androc — Android Dev In Android
 Copyright (c) 2026 Dajeovv (base launcher)
-Copyright (c) 2026 Adia contributors
+Copyright (c) 2026 Androc contributors
 
 This product includes software from the projects below. The full license texts
 are in `LICENSES/`; the summary and source locations are in
@@ -48,6 +48,6 @@ without source access, contact the maintainers to obtain the source.
 ## Trademarks
 
 Android is a trademark of Google LLC. Termux is a project of the Termux
-community. opencode is a project of Anomaly. Adia is not affiliated with or
-endorsed by any of them. The Adia icon is an original phone/code glyph, not the
+community. opencode is a project of Anomaly. Androc is not affiliated with or
+endorsed by any of them. The Androc icon is an original phone/code glyph, not the
 opencode logo.

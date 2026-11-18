@@ -32,7 +32,7 @@ globalThis.localStorage = {
 }
 globalThis.ocConfig = {
   debug: (m) => logs.push(m),
-  homeDir: () => "/data/data/com.a2heng.adia/files/home",
+  homeDir: () => "/data/data/com.a2heng.androc/files/home",
 }
 globalThis.fetch = async () =>
   new Response("[]", { headers: { "content-type": "application/json" } })
