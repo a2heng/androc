@@ -1396,6 +1396,14 @@ private fun StatusChip(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        if (onClick != null) {
+            Icon(
+                Icons.Rounded.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

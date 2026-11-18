@@ -285,8 +285,19 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var appearance by mutableStateOf(prefs.getString("appearance", "system") ?: "system")
         private set
 
-    /** 服务端默认模型（唯一 Default）；null 表示服务端没有配置 */
+    /** 服务端默认模型（只读；新会话的最终兜底） */
     var serverDefaultModel by mutableStateOf<ModelRef?>(null)
+        private set
+
+    /** 前端最近使用的模型；新会话优先用它，而不是改服务器默认 */
+    var recentModel by mutableStateOf<ModelRef?>(
+        run {
+            val id = prefs.getString("recent_model_id", "") ?: ""
+            val provider = prefs.getString("recent_model_provider", "") ?: ""
+            val variant = prefs.getString("recent_model_variant", "")?.takeIf { it.isNotBlank() }
+            if (id.isBlank() || provider.isBlank()) null else ModelRef(id, provider, variant)
+        },
+    )
         private set
 
     /** 从其它应用分享进来的内容，等聊天页消费 */
@@ -795,6 +806,40 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun updateAppearance(mode: String) {
         appearance = mode
         prefs.edit().putString("appearance", mode).apply()
+    }
+
+    fun useRecentModel(ref: ModelRef) = rememberRecentModel(ref)
+
+    fun rememberRecentModel(ref: ModelRef) {        recentModel = ref
+        prefs.edit()
+            .putString("recent_model_id", ref.id)
+            .putString("recent_model_provider", ref.providerID)
+            .putString("recent_model_variant", ref.variant ?: "")
+            .apply()
+    }
+
+    /**
+     * 新会话的兜底：最近使用 > 免费的第一个 > 服务器默认。
+     * 只有“最近使用”是前端记忆，其余都来自服务器当前状态。
+     */
+    fun fallbackModel(): ModelRef? {
+        val recent = recentModel?.takeIf { ref ->
+            models.any {
+                it.str("id") == ref.id && it.str("providerID") == ref.providerID
+            }
+        }
+        return recent ?: firstFreeModel() ?: serverDefaultModel
+    }
+
+    fun firstFreeModel(): ModelRef? {
+        val free = models.firstOrNull { o ->
+            val id = o.str("id") ?: return@firstOrNull false
+            val provider = o.str("providerID") ?: return@firstOrNull false
+            modelGroupById["$provider/$id"] == 0
+        } ?: models.firstOrNull() ?: return null
+        val id = free.str("id") ?: return null
+        val provider = free.str("providerID") ?: return null
+        return ModelRef(id, provider)
     }
 
     fun updateServerDefaultModel(model: ModelRef?) {
@@ -1476,8 +1521,20 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 val dir = expandSessionDir(directory)
                     ?: expandSessionDir(current?.directory)
                     ?: expandSessionDir(sessions.firstOrNull()?.directory)
-                val s = withContext(Dispatchers.IO) { c.createSession(dir) }
-                // 新会话不传模型：服务端 default model 是唯一 Default。
+                var s = withContext(Dispatchers.IO) { c.createSession(dir) }
+                // 新会话优先用前端“最近使用”，再退到免费的第一个，最后才是服务器默认。
+                if (s != null && s.model == null) {
+                    val chosen = fallbackModel()
+                    if (chosen != null) {
+                        runCatching {
+                            withContext(Dispatchers.IO) { c.setModel(s.id, chosen) }
+                        }
+                        val fresh = withContext(Dispatchers.IO) {
+                            runCatching { c.session(s.id) }.getOrNull()
+                        }
+                        s = fresh ?: s.copy(model = chosen)
+                    }
+                }
                 refreshSessions()
                 if (s != null) openSession(s)
             } catch (e: Exception) {
@@ -1546,6 +1603,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             try {
                 withContext(Dispatchers.IO) { c.setModel(s.id, model) }
                 current = s.copy(model = model)
+                rememberRecentModel(model)
                 refreshSessions()
             } catch (e: Exception) {
                 lastError = e.message

@@ -63,6 +63,7 @@ import com.a2heng.androc.ui.data.AppModel
 fun SettingsScreen(model: AppModel) {
     var showModelPicker by remember { mutableStateOf(false) }
     var showServers by remember { mutableStateOf(false) }
+    var showProviderConnect by remember { mutableStateOf(false) }
     var removeId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         model.loadMeta()
@@ -162,7 +163,7 @@ fun SettingsScreen(model: AppModel) {
         }
 
         Spacer(Modifier.height(8.dp))
-        Text("默认模型", style = MaterialTheme.typography.titleSmall)
+        Text(if (model.current != null) "当前模型" else "最近使用", style = MaterialTheme.typography.titleSmall)
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = RoundedCornerShape(12.dp),
@@ -194,15 +195,65 @@ fun SettingsScreen(model: AppModel) {
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("选择模型", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Text(
-                        model.serverDefaultModel?.let {
-                            "服务器默认 · " + modelDisplay(it, model.modelGroupById) +
-                                " · " + variantLabel(it.variant)
-                        } ?: "服务器默认（未配置）",
+                        if (model.current != null) "当前会话模型" else "最近使用的模型",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    val shown = model.current?.model
+                        ?: model.recentModel
+                        ?: model.firstFreeModel()
+                        ?: model.serverDefaultModel
+                    Text(
+                        shown?.let {
+                            modelDisplay(it, model.modelGroupById) + " · " + variantLabel(it.variant)
+                        } ?: "未配置",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
+                    )
+                    Text(
+                        if (model.current != null) {
+                            "点击切换当前会话模型"
+                        } else {
+                            "新会话优先用它；没有记忆时用免费的第一个"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+                Icon(
+                    Icons.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickableNoRipple { showProviderConnect = true }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "连接 Provider / API",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        "API Key、OAuth、环境变量；连接后模型才会出现",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Icon(
@@ -347,10 +398,18 @@ fun SettingsScreen(model: AppModel) {
         PickerPageHost(visible = showModelPicker, onBack = { showModelPicker = false }) {
             ModelPickerPage(
                 model = model,
-                title = "服务器默认模型",
-                selected = model.serverDefaultModel,
+                title = if (model.current != null) "当前会话模型" else "最近使用 / 新会话模型",
+                selected = model.current?.model
+                    ?: model.recentModel
+                    ?: model.firstFreeModel()
+                    ?: model.serverDefaultModel,
                 allowNone = false,
-                onPick = { ref -> model.updateServerDefaultModel(ref) },
+                onPick = { ref ->
+                    if (ref != null) {
+                        if (model.current != null) model.setModel(ref)
+                        else model.useRecentModel(ref)
+                    }
+                },
                 onDismiss = { showModelPicker = false },
             )
         }

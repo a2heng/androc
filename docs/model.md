@@ -6,10 +6,22 @@
 
 ## 1. 原则
 
-- **Default 只有一种：服务器默认模型（Server Default）。**
-- App 不保存本地“默认模型”，不再有“本地默认 / 服务器默认”两个概念。
-- 新建会话不传 model，服务端自然使用它的 default。
-- 显示的是它，修改的也是它。
+模型解析顺序（新会话）：
+
+```text
+当前会话已选模型
+  > 前端最近使用的模型
+  > 免费的第一个模型
+  > 服务器默认模型
+```
+
+- **前端只记住“最近使用的模型”**，不保存“默认模型”；
+- “选择模型”页面：
+  - 有会话 → 改当前会话模型（`POST /api/session/:id/model`）；
+  - 没有会话 → 改“最近使用”，供新会话使用；
+- 服务器默认模型是**只读兜底**，不再由模型选择页随意改写；
+- 官方 Web 也是把 recent 存在前端（`models.recent`），会话选择优先；我们按
+  上面的顺序做产品取舍。
 
 ---
 
@@ -88,9 +100,16 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 
 ## 3. 实现方式
 
-### 3.1 通用（所有内核）
+### 3.1 模型选择（主路径）
 
-`OcClient.setDefaultModel(ref)`：
+- 会话内：`setModel(ref)` → `POST /api/session/{id}/model` → 写入 recent；
+- 无会话：`setRecentModel(ref)` → 只写前端 recent；
+- 新会话：服务端没有指定 model 时，按 §1 的顺序选一个并 `POST .../model`；
+- 选择器不再调用 `fs.write` 改服务器默认。
+
+### 3.2 服务器默认（可选工具，不是主路径）
+
+仍然保留“显式设置为服务器默认”的能力，但不在模型选择页自动触发：
 
 1. `GET /api/config` → 取最高优先级、带 `path` 的 `document`；
 2. `GET /api/fs/read/<path>` 读原始 JSON；
@@ -102,16 +121,7 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 5. 轮询 `GET /api/model/default`，等待 `config.updated` 生效；
 6. 返回成功/失败。
 
-适用：本机、局域网、远程——只要服务器开放实验性 fs.write 且配置文档可写。
-
-### 3.2 本机回退
-
-如果服务器没开放 `experimental/fs.write`：
-
-- 写 `$HOME/.config/opencode-android/opencode.json` 和
-  `$HOME/.config/opencode/opencode.json` 的 `model`；
-- `LocalRuntime.stop()` + `LocalServerService.start()` 重启；
-- 这是“本机内核”的兜底，不是主路径。
+本机兜底：直接写 `$HOME/.config/opencode*/opencode.json` + 重启。
 
 ### 3.3 失败时的 UI
 
@@ -183,11 +193,41 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 
 ## 5. UI 行为
 
-- 设置 → 默认模型：显示 `服务器默认 · provider/model`；
-- 选择模型 = 写服务器配置，不是写本地偏好；
-- 新建会话不再应用 App 本地默认；
-- 连接远程时，仍显示服务器 default；可编辑与否由 API 能力决定；
-- 模型选择器不再有“跟随服务器默认”的本地选项（因为只有一个 default）。
+### 5.1 多会话
+
+模型有两层，互不混淆：
+
+| 数据 | 存在哪里 | 作用范围 |
+|---|---|---|
+| `session.model` | 服务器，每个会话独立 | 只影响这个会话 |
+| `recent` | 前端，最近一次明确选过的模型 | 新会话的默认来源 |
+
+规则：
+
+- 在会话 A 里换模型：只改 A 的服务端 `session.model`，同时更新前端 `recent`；
+- 会话 B 的模型不受影响；
+- 新建会话：`recent` → 免费第一个 → 服务器默认；
+- 切回 A 显示 A 的模型，切回 B 显示 B 的模型。
+
+例子：
+
+```text
+A = A 模型，B = B 模型
+新建 C          → C = B（recent=B）
+在 A 里改成 A   → A = A，B 仍然 B，recent=A
+新建 D          → D = A（recent=A）
+切回 B          → B 仍然 B
+```
+
+所以两个会话不会互相覆盖；`recent` 只决定“下一个新会话从哪个模型开始”。
+
+- 设置 → 模型：
+  - 有会话：显示“当前会话模型”，点击切换 = `POST /api/session/:id/model`；
+  - 无会话：显示“最近使用的模型”，点击只更新前端 recent；
+  - 没有 recent 时显示免费的第一个模型；再没有才显示服务器默认；
+- 聊天左下角“模型”是同一个入口，点击打开同一个选择页；
+- 新会话：recent > 免费第一个 > 服务器默认；
+- 服务器默认只读展示，不在模型选择页偷偷改写。
 
 ---
 
@@ -195,7 +235,7 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 
 写服务器配置文件是强能力：
 
-- 必须由用户显式点击“设为服务器默认”；
+- 只有显式的“设为服务器默认”工具才写配置；
 - 显示将写入的路径；
 - 不把远程配置写入做成静默行为；
 - 失败不要留下半个 JSON（先构造完整字符串，再一次性写）。
@@ -206,12 +246,12 @@ curl -u opencode:$PASS http://127.0.0.1:4096/api/model/default
 
 | 项 | 状态 |
 |---|---|
-| 移除 App 本地 default | `[已实现]` |
-| `GET /api/model/default` 展示 | `[已实现]` |
-| `fs.write` 通用写入 | `[已实现]` |
-| 本机配置文件回退 | `[已实现]` |
+| 前端记住最近使用模型 | `[已实现]` |
+| 当前会话模型可切换 | `[已实现]` |
+| 新会话 recent > 免费 > 服务器默认 | `[已实现]` |
+| 服务器默认只读展示 | `[已实现]` |
 | Provider API Key / OAuth 连接 | `[已实现]`（首版） |
 | `/model` 与设置页共用模型选择 | `[已实现]` |
 | `env` / `command` 连接方式 | `[进行中]`（env 只展示变量名） |
-| 远程能力探测/只读提示 | `[已实现]` |
+| 显式“设为服务器默认”工具 | `[计划]`（API 已备） |
 | 官方 Mobile 对齐 | `[计划]` |
