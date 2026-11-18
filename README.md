@@ -269,7 +269,7 @@ bash ~/.config/opencode/skills/android-build/scripts/build.sh /path/to/project d
 Platform 37.0 / 36，Build-Tools 36.0.0。
 
 ```sh
-# 1) 补 opencode 运行时（仓库不提交 208 MB 的二进制）
+# 1) 补 opencode 运行时（仓库不提交 约 240 MB 的二进制）
 python scripts/fetch-opencode.py
 
 # 2) 构建

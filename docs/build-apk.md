@@ -8,7 +8,7 @@
 
 ## 瘦 APK（只含 opencode，不含工具链）
 
-仓库不提交 208 MB 的 opencode 二进制：
+仓库不提交 约 240 MB 的 opencode 二进制：
 
 ```sh
 python scripts/fetch-opencode.py
