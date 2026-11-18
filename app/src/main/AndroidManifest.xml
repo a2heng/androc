@@ -20,12 +20,21 @@
         android:name="${applicationId}.permission.LOCAL_SERVER_INFO"
         android:protectionLevel="normal" />
 
+    <!-- Headless plugin APKs (runtime/tools) are signed by the same key. -->
+    <permission
+        android:name="com.a2heng.androc.permission.PLUGIN"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.a2heng.androc.permission.PLUGIN" />
+
     <!-- Android 11+ no deja ver otros paquetes sin declararlos: hacen falta
          para detectar y abrir el gestor de root (Magisk/KernelSU/APatch). -->
     <queries>
         <package android:name="com.topjohnwu.magisk" />
         <package android:name="me.weishu.kernelsu" />
         <package android:name="me.bmax.apatch" />
+        <intent>
+            <action android:name="com.a2heng.androc.plugin.BIND" />
+        </intent>
     </queries>
 
     <application

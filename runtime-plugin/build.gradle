@@ -1,0 +1,37 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Headless runtime plugin: no Activity, no launcher. Owns proot/opencode/Termux
+// once the migration is complete; today it is the binding skeleton.
+android {
+    namespace 'com.a2heng.androc.runtime'
+    compileSdk 37
+
+    defaultConfig {
+        applicationId "com.a2heng.androc.runtime"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += ['**/*.so']
+        }
+    }
+}
+
+dependencies {
+    implementation project(':plugin-sdk')
+}

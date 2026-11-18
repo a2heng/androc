@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "opencode",
+  "name": "OpenCode 运行时",
+  "category": "runtime",
+  "version": "0.1.0",
+  "versionCode": 1,
+  "minAppVersion": 8,
+  "skills": [],
+  "toolchain": ["opencode", "proot", "Termux userland"],
+  "homepage": "https://github.com/a2heng/androc",
+  "updateSource": "https://github.com/a2heng/androc-packs/releases/latest/download/plugins.json",
+  "removable": false
+}

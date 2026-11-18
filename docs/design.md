@@ -50,12 +50,12 @@
 | # | 决策 | 状态 |
 |---|---|---|
 | 1 | 一个应用、一个 UI；不再拆三个 APK | `[已实现]` |
-| 2 | 插件是**独立的无界面 APK**，不是网址脚本 | `[计划]` |
+| 2 | 插件是**独立的无界面 APK**，不是网址脚本 | `[进行中]` |
 | 3 | 插件 = Skill + 工具链；分类：核心 / 运行时 / Android / 其他 | `[进行中]` |
 | 4 | OpenCode 运行时插件不可卸载，但可独立检查上游并更新 | `[进行中]` |
 | 5 | 插件管理只在连接**本机**时出现；远程只显示连接 | `[已实现]` |
 | 6 | 多服务器：本机第一，远程按最近使用；记住上次连接的服务器 | `[已实现]` |
-| 7 | 只有一个 Default：**服务器默认模型**，没有 App 本地 Default | `[进行中]` |
+| 7 | 模型：当前会话 > 前端 recent > 免费第一个 > 服务器默认（只读兜底） | `[已实现]` |
 | 8 | 前端功能对齐官方 OpenCode Mobile；后端跟随 OpenCode 能力/版本 | `[计划]` |
 | 9 | 发版前必须确认内置 opencode 是最新稳定版 | `[已实现]` |
 | 10 | 大工具链不强制随 App 下载；可下载或从本地包导入 | `[进行中]` |
@@ -92,11 +92,12 @@
 目标：
 
 ```text
-:app-ui              基础 APK：只有 UI + 插件宿主
-:plugin-runtime      运行时插件 APK：proot + opencode + Termux
-:plugin-android      Android 插件 APK：skills + JDK/SDK/Gradle
-:plugin-ai           本地 AI 插件 APK
-:plugin-sdk          插件契约/AIDL/模板
+:app                 基础 APK：只有 UI + 插件宿主（thin）
+:ui                  Compose 界面
+:runtime-plugin      运行时插件 APK：proot + opencode + Termux
+:kernel              运行时实现（被 :runtime-plugin 依赖）
+:plugin-sdk          插件契约/AIDL/PluginHost
+:tools               Android 插件：skills + JDK/SDK/Gradle
 :contracts           共享 API
 ```
 
@@ -113,7 +114,7 @@
 | 1 | 多服务器切换、本机优先、记住上次、插件管理雏形 | `[已实现]` |
 | 2 | 默认模型收束到 Server Default（API + 本机回退） | `[进行中]` |
 | 3 | 插件 APK 契约 + 插件源/网址管理 + 本地 APK 安装 | `[计划]` |
-| 4 | 运行时插件 APK（proot/opencode/Termux） + 薄 UI 基础包 | `[计划]` |
+| 4 | 运行时插件 APK（proot/opencode/Termux） + 薄 UI 基础包 | `[进行中]` |
 | 5 | Android / AI / Debug 插件 APK；细到每个 Skill | `[计划]` |
 | 6 | 官方 Mobile 功能对齐（配对、语音、通知、结果摘要） | `[计划]` |
 | 7 | thin/full 分发、插件包签名 manifest、镜像 | `[计划]` |

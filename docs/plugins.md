@@ -178,14 +178,41 @@ interface IRuntimePlugin {
 
 ---
 
-## 9. 当前状态与下一步
+## 9. 当前实现（MVP）
+
+已经落地的骨架：
+
+| 模块/文件 | 内容 |
+|---|---|
+| `:plugin-sdk` | AIDL `IRuntimePlugin` / `IRuntimePluginListener`、`PluginHost`、`PluginContract`、`PluginConnection` |
+| `:runtime-plugin` | 无 Activity、无 launcher 的运行时插件 APK；`RuntimePluginService` 已可绑定，带 `assets/plugin.json` |
+| 权限 | `com.a2heng.androc.permission.PLUGIN`（signature），只有同一签名的插件能绑定 |
+| 服务 | action `com.a2heng.androc.plugin.BIND`，已安装后可用 `dumpsys package` 看到 |
+
+当前 `RuntimePluginService.start()` 还是占位，返回 `runtime not migrated yet`；
+运行时代码/资产还在旧 `:app`。下一步把它们迁到 `:runtime-plugin`，再把基础
+UI 改成 `PluginHost.bind(...).start()`。
+
+## 10. 迁移顺序（薄 UI）
+
+1. `:plugin-sdk` 骨架（已完成）；
+2. 把 `LocalRuntime`/`LocalToolbox`/`LocalServerService`/`ToolboxService`/
+   `CommandResolver`/`ToolboxServer`/`ServerWatch`/`RuntimeUpdateService` 等
+   迁到 `:kernel`，`:runtime-plugin` 依赖 `:kernel`；
+3. `assets/toolbox`、`assets/skills`、`jniLibs` 运行时库迁到 `:runtime-plugin`；
+4. `RuntimePluginService.start()` 调用真实 runtime，返回 URL/密码；
+5. 基础 `:app` 删除运行时依赖，改为 `PluginHost` 绑定；
+6. 运行时插件不可卸载，但可单独更新；UI 只保留 provider/服务器/插件管理；
+7. 旧单 APK 的 HOME/sessions 迁移另做（导出/导入或一次性迁移）。
+
+## 11. 当前状态与下一步
 
 | 项 | 状态 |
 |---|---|
 | 进程内 PluginManager + 插件卡片 | `[已实现]`（过渡） |
 | 本机优先、独立 OpenCode 更新 | `[已实现]` |
-| 插件 APK 契约 + SDK | `[计划]` |
+| 插件 APK 契约 + SDK | `[已实现]`（MVP） |
 | 插件源/网址管理 UI | `[计划]` |
-| 运行时插件 APK | `[计划]` |
+| 运行时插件 APK | `[进行中]`（可绑定骨架） |
 | Android 细粒度插件 | `[计划]` |
 | 官方/社区签名策略 | `[待定]` |

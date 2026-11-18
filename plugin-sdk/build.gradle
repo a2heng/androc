@@ -1,0 +1,26 @@
+plugins {
+    id 'com.android.library'
+}
+
+// Stable contract between the thin UI and headless plugin APKs.
+android {
+    namespace 'com.a2heng.androc.plugin'
+    compileSdk 37
+
+    defaultConfig {
+        minSdk 26
+    }
+
+    buildFeatures {
+        aidl true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    api project(':contracts')
+}
