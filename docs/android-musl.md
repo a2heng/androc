@@ -92,6 +92,19 @@ packs/android/
 `scripts/build-android-rootfs.py`（market 仓库）负责组装；`build-pack.py` 把
 `skills + rootfs` 打成 `android` 包。
 
+**Rootfs 实测（CI，Alpine 3.20.9 + openjdk21 + static build-tools 35.0.2 +
+platform-35 + Gradle 9.9）：**
+
+| 项 | 值 |
+|---|---|
+| rootfs 未压缩 | 893 MB |
+| tar | 607 MB |
+| tar.xz | **299 MB** |
+| 组装 + 打包 | 2m16s |
+
+对比旧的 termux-bionic：`toolbox 266 MB + toolchain 479 MB = 745 MB`（还没算
+JDK），而且需要两套用户态。musl 单 rootfs 压缩后 299 MB，体积和复杂度都降下来。
+
 ## 回滚
 
 - rootfs 与 toolchain 都按 pack 版本安装，失败保留 previous。
