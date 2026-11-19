@@ -264,7 +264,7 @@ private fun RailNav(model: AppModel, tab: Int, onTab: (Int) -> Unit) {
                             .size(40.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(
-                                if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                if (selected) AndrocColor.MediumStrong else Color.Transparent,
                             ),
                         contentAlignment = Alignment.Center,
                     ) {

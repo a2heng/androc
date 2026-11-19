@@ -72,8 +72,8 @@ fun PickerPage(
                     onClick = onBack,
                     modifier = Modifier.size(38.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        containerColor = AndrocColor.MediumStrong,
+                        contentColor = AndrocColor.OnMedium,
                     ),
                 ) {
                     Icon(

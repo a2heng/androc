@@ -29,6 +29,39 @@ val Sky = Color(0xFF7DCFFF)
 val Warn = Color(0xFFE0AF68)
 val Danger = Color(0xFFF07178)
 
+/**
+ * 全局只有两档强调色，所有页面（顶栏、底栏、设置、卡片）都用它们，不再各写 alpha：
+ *  - [Deep]  深主题色：实心圆按钮、发送键、选中指示
+ *  - [Medium] 中强调色：卡片 / 胶囊 / 代码块的浅底（主色与背景按 85% 混合）
+ *  - [MediumStrong] 中强调色的深一档：选中项、表头
+ */
+object AndrocColor {
+    val Deep: Color
+        @Composable get() = MaterialTheme.colorScheme.primary
+
+    val Medium: Color
+        @Composable get() = lerp(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.background,
+            0.85f,
+        )
+
+    val MediumStrong: Color
+        @Composable get() = lerp(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.background,
+            0.74f,
+        )
+
+    /** Medium 底上的正文色，保证对比度。 */
+    val OnMedium: Color
+        @Composable get() = lerp(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.onSurface,
+            0.12f,
+        )
+}
+
 private val MonoDark = darkColorScheme(
     primary = Color(0xFFE8EBEF),
     onPrimary = Color(0xFF0B0D10),

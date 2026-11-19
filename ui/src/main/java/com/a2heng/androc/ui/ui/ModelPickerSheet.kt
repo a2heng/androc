@@ -1,14 +1,17 @@
 package com.a2heng.androc.ui.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,7 +30,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,18 +37,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.a2heng.androc.ui.data.AppModel
 import com.a2heng.androc.ui.data.ModelRef
 
 /**
- * 分组折叠的模型选择器：free → go → console。
- * 选中带档位的模型时会就地展开「思考强度」（Default / none / low / ...），
- * 聊天页和设置页共用同一个界面。
+ * 模型选择：弹出的底部卡片（不是全屏页）。
+ * 分组折叠：free → go → console；选中带档位的模型后就地展开「思考强度」。
+ * 聊天页和设置页共用同一个卡片。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModelPickerPage(
+fun ModelPickerSheet(
     model: AppModel,
     title: String,
     selected: ModelRef?,
@@ -61,36 +65,64 @@ fun ModelPickerPage(
         }?.group
     }
     var expanded by remember(selectedGroup) { mutableStateOf(selectedGroup ?: 0) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    PickerPage(title = title, onBack = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding(),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
             if (allowNone) {
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                        .background(AndrocColor.Medium, RoundedCornerShape(12.dp))
                         .clickable {
                             onPick(null)
                             onDismiss()
                         }
-                        .padding(vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(noneLabel, style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
-            LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+            LazyColumn(
+                Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
                 entries.groupBy { it.group }.forEach { (group, groupEntries) ->
                     item(key = "group-$group") {
                         Row(
                             Modifier
                                 .fillMaxWidth()
+                                .padding(top = 10.dp, bottom = 6.dp)
+                                .background(AndrocColor.MediumStrong, RoundedCornerShape(10.dp))
                                 .clickable { expanded = if (expanded == group) -1 else group }
-                                .padding(vertical = 11.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 modelGroupTitle(group),
                                 style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AndrocColor.Deep,
                             )
                             Spacer(Modifier.weight(1f))
                             Text(
@@ -102,6 +134,7 @@ fun ModelPickerPage(
                                 if (expanded == group) Icons.Rounded.KeyboardArrowUp
                                 else Icons.Rounded.KeyboardArrowDown,
                                 contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -111,7 +144,15 @@ fun ModelPickerPage(
                             val isCurrent = selected != null &&
                                 entry.ref.id == selected.id &&
                                 entry.ref.providerID == selected.providerID
-                            Column {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .background(
+                                        if (isCurrent) AndrocColor.MediumStrong else AndrocColor.Medium,
+                                        RoundedCornerShape(12.dp),
+                                    ),
+                            ) {
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
@@ -122,11 +163,18 @@ fun ModelPickerPage(
                                                 if (entry.variants.isEmpty()) onDismiss()
                                             }
                                         }
-                                        .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
+                                        .padding(horizontal = 12.dp, vertical = 9.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(entry.name, style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            entry.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isCurrent) FontWeight.SemiBold
+                                            else FontWeight.Normal,
+                                            color = if (isCurrent) AndrocColor.Deep
+                                            else MaterialTheme.colorScheme.onSurface,
+                                        )
                                         Text(
                                             buildString {
                                                 append(entry.providerID).append(" · ").append(entry.ref.id)
@@ -134,19 +182,22 @@ fun ModelPickerPage(
                                             },
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     }
                                     if (isCurrent) {
-                                        Text(
-                                            "当前",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary,
+                                        Icon(
+                                            Icons.Rounded.Check,
+                                            contentDescription = "当前",
+                                            tint = AndrocColor.Deep,
+                                            modifier = Modifier.size(18.dp),
                                         )
                                     }
                                 }
                                 // 只有被选中的模型才常驻展示它的思考强度档位
                                 if (isCurrent && entry.variants.isNotEmpty()) {
-                                    Column(Modifier.padding(start = 12.dp, bottom = 10.dp)) {
+                                    Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
                                         Text(
                                             "思考强度 · ${variantLabel(selected?.variant)}",
                                             style = MaterialTheme.typography.labelSmall,
@@ -158,7 +209,7 @@ fun ModelPickerPage(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         ) {
                                             VariantChip(
-                                                "Default",
+                                                "默认",
                                                 selected = selected?.variant == null,
                                             ) {
                                                 onPick(entry.ref.copy(variant = null))
@@ -179,14 +230,14 @@ fun ModelPickerPage(
                     }
                 }
             }
+        }
     }
 }
 
 @Composable
 private fun VariantChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
-        color = if (selected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.surfaceVariant,
+        color = if (selected) AndrocColor.Deep else AndrocColor.Medium,
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.clickable(onClick = onClick),
     ) {

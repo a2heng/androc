@@ -77,7 +77,7 @@ fun ConnectScreen(model: AppModel) {
                 Modifier
                     .size(64.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(AndrocColor.MediumStrong),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -99,7 +99,7 @@ fun ConnectScreen(model: AppModel) {
 
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    containerColor = AndrocColor.Medium,
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth(),

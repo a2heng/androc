@@ -39,7 +39,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,6 +65,7 @@ import com.a2heng.androc.ui.data.AppModel
 @Composable
 fun SettingsScreen(model: AppModel) {
     var showModelPicker by remember { mutableStateOf(false) }
+    var showAgentPicker by remember { mutableStateOf(false) }
     var showServers by remember { mutableStateOf(false) }
     var showProviderConnect by remember { mutableStateOf(false) }
     var showLocalRuntime by remember { mutableStateOf(false) }
@@ -87,7 +87,7 @@ fun SettingsScreen(model: AppModel) {
     ) {
         Text("连接", style = MaterialTheme.typography.titleSmall)
         Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = AndrocColor.Medium),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -106,6 +106,26 @@ fun SettingsScreen(model: AppModel) {
         }
 
         Spacer(Modifier.height(8.dp))
+        Text("模型与模式", style = MaterialTheme.typography.titleSmall)
+        // 与聊天顶栏同一套卡片、同一份数据；来源就在卡片第一行「模型」后面。
+        ModelControlCard(
+            model = model,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                model.loadMeta()
+                showModelPicker = true
+            },
+        )
+        AgentControlCard(
+            model = model,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                model.loadMeta()
+                showAgentPicker = true
+            },
+        )
+
+        Spacer(Modifier.height(8.dp))
         Text("本机 OpenCode", style = MaterialTheme.typography.titleSmall)
         SettingsRow(
             title = "本机运行",
@@ -121,54 +141,8 @@ fun SettingsScreen(model: AppModel) {
         ) { showPlugins = true }
 
         Spacer(Modifier.height(8.dp))
-        Text(if (model.current != null) "当前模型" else "最近使用", style = MaterialTheme.typography.titleSmall)
         Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickableNoRipple {
-                        model.loadMeta()
-                        showModelPicker = true
-                    }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    val shown = model.current?.model ?: model.fallbackModel()
-                    Text(
-                        shown?.let {
-                            modelDisplay(it, model.modelGroupById) + " · " + variantLabel(it.variant)
-                        } ?: "未配置",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                    )
-                    Text(
-                        if (model.current != null) {
-                            "点击切换当前会话模型"
-                        } else {
-                            "新会话优先用它；没有记忆时用免费的第一个"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    )
-                }
-                Icon(
-                    Icons.Rounded.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = AndrocColor.Medium),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -336,19 +310,25 @@ fun SettingsScreen(model: AppModel) {
         Spacer(Modifier.height(24.dp))
     }
 
-        PickerPageHost(visible = showModelPicker, onBack = { showModelPicker = false }) {
-            ModelPickerPage(
+        if (showModelPicker) {
+            ModelPickerSheet(
                 model = model,
                 title = if (model.current != null) "当前会话模型" else "最近使用 / 新会话模型",
-                selected = model.current?.model ?: model.fallbackModel(),
+                selected = resolvedModel(model, model.current),
                 allowNone = false,
-                onPick = { ref ->
-                    if (ref != null) {
-                        if (model.current != null) model.setModel(ref)
-                        else model.useRecentModel(ref)
-                    }
-                },
+                onPick = { ref -> if (ref != null) model.chooseModel(ref) },
                 onDismiss = { showModelPicker = false },
+            )
+        }
+        if (showAgentPicker) {
+            AgentPickerSheet(
+                agents = agentOptions(model.agents),
+                selectedId = resolvedAgentId(model, model.current),
+                onPick = { id ->
+                    model.chooseAgent(id)
+                    showAgentPicker = false
+                },
+                onDismiss = { showAgentPicker = false },
             )
         }
         if (showServers) {
@@ -394,7 +374,7 @@ private fun SettingsRow(
     onClick: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = AndrocColor.Medium),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -629,7 +609,7 @@ private fun PillAction(
 ) {
     Surface(
         color = if (danger) MaterialTheme.colorScheme.errorContainer
-        else MaterialTheme.colorScheme.surfaceVariant,
+        else AndrocColor.Medium,
         contentColor = if (danger) MaterialTheme.colorScheme.onErrorContainer
         else MaterialTheme.colorScheme.onSurfaceVariant,
         shape = RoundedCornerShape(50),
@@ -662,7 +642,7 @@ private fun TripleOptionRow(
             val active = index == selected
             val bg by animateColorAsState(
                 if (active) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                else AndrocColor.Medium,
                 label = "option-bg",
             )
             val fg by animateColorAsState(

@@ -121,7 +121,7 @@ private fun PtyList(model: AppModel, onOpenLocal: (() -> Unit)? = null) {
 
         if (onOpenLocal != null) {
             Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                color = AndrocColor.Medium,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -440,7 +440,7 @@ private fun KeyChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = AndrocColor.Medium,
         shape = RoundedCornerShape(7.dp),
         modifier = Modifier
             .size(w, h)
@@ -468,9 +468,8 @@ private fun ToggleChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        color = if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (on) MaterialTheme.colorScheme.primary
+        color = if (on) AndrocColor.MediumStrong else AndrocColor.Medium,
+        contentColor = if (on) AndrocColor.Deep
         else MaterialTheme.colorScheme.onSurfaceVariant,
         border = BorderStroke(
             1.dp,

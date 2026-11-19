@@ -105,7 +105,7 @@ fun SessionsScreen(
             ) {
                 if (searchOpen) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        color = AndrocColor.Medium,
                         shape = RoundedCornerShape(10.dp),
                         border = BorderStroke(
                             1.dp,
@@ -265,9 +265,9 @@ fun SessionsScreen(
 @Composable
 private fun SortLabel(text: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        color = if (selected) AndrocColor.MediumStrong
+        else AndrocColor.Medium,
+        contentColor = if (selected) AndrocColor.Deep
         else MaterialTheme.colorScheme.onSurfaceVariant,
         shape = RoundedCornerShape(50),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),

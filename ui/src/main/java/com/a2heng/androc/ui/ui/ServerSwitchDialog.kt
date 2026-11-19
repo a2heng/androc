@@ -48,9 +48,9 @@ fun ServerSwitchDialog(model: AppModel, onDismiss: () -> Unit) {
                         val active = saved.url == model.serverUrl
                         Surface(
                             color = if (active) {
-                                MaterialTheme.colorScheme.primaryContainer
+                                AndrocColor.MediumStrong
                             } else {
-                                MaterialTheme.colorScheme.surfaceVariant
+                                AndrocColor.Medium
                             },
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier

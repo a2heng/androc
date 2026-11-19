@@ -101,7 +101,7 @@ fun DiffView(diff: String) {
         Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .background(AndrocColor.Medium, RoundedCornerShape(8.dp))
             .padding(vertical = 4.dp),
     ) {
         lines.take(400).forEach { line ->

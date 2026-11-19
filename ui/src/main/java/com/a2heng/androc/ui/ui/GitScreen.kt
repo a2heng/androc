@@ -325,7 +325,7 @@ private fun GitFileRow(item: GitRowItem, selected: Boolean, onClick: () -> Unit)
     Column(
         Modifier
             .fillMaxWidth()
-            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else Color.Transparent)
+            .background(if (selected) AndrocColor.MediumStrong else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
@@ -387,7 +387,7 @@ private fun GitDiffPanel(diff: VcsDiffFile) {
         Modifier
             .fillMaxWidth()
             .padding(start = 14.dp, end = 14.dp, bottom = 8.dp)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .background(AndrocColor.Medium, RoundedCornerShape(8.dp))
             .padding(vertical = 4.dp),
     ) {
         if (diff.more) {

@@ -403,8 +403,8 @@ private fun MarkdownTable(
     // 网格线统一 1dp：以前每个格子自己画 0.5dp 边框，相邻两边叠成 1dp、
     // 靠外一侧只有 0.5dp，接缝粗细不齐才是表头错位的根源。
     val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-    val headerBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f)
-    val stripeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+    val headerBg = AndrocColor.MediumStrong
+    val stripeBg = AndrocColor.Medium
     val padH = if (compact) 6.dp else 8.dp
     val padV = if (compact) 4.dp else 6.dp
     val fontSize = if (compact) 10.5.sp else 12.sp
@@ -648,7 +648,7 @@ private fun MarkdownImageCard(
         Modifier
             .fillMaxWidth()
             .padding(vertical = if (compact) 3.dp else 5.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), shape)
+            .background(AndrocColor.Medium, shape)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.20f), shape)
             .clip(shape),
     ) {
@@ -748,7 +748,7 @@ fun MarkdownText(
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
                             .background(
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                AndrocColor.Medium,
                                 RoundedCornerShape(8.dp),
                             ),
                     ) {

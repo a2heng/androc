@@ -116,7 +116,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -124,7 +123,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -309,12 +307,6 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     val contextColor = contextPct?.let {
         contextUsageColor(it, MaterialTheme.colorScheme.background.luminanceIsDark())
     } ?: MaterialTheme.colorScheme.onSurfaceVariant
-    val agentDisplay = session.agent.ifBlank {
-        model.agents.firstOrNull { it.str("mode") == "primary" }?.str("name")
-            ?: model.agents.firstOrNull()?.str("name")
-            ?: "build"
-    }.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-
     val backOwner = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
     if (backOwner != null) {
         PredictiveBackHandler { events ->
@@ -375,38 +367,37 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    // 两个圆按钮之间只有两行：标题 + 右侧上下两行的 tokens；下面是模型/模式胶囊。
+                    // 两个圆按钮之间只有两行：上面标题，下面是「模型」「模式」两张卡片。
                     Column(
                         Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                session.shortTitle,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            TokenStack(aggregateTokens)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            StatusChip(
-                                "模型",
-                                effectiveModel?.let { modelDisplay(it, model.modelGroupById) }
-                                    ?.takeIf { it.isNotBlank() } ?: "服务端默认",
+                        Text(
+                            session.shortTitle,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // 和设置页完全同一套卡片、同一份数据
+                            ModelControlCard(
+                                model = model,
+                                session = session,
                                 onClick = {
                                     model.loadMeta(session.directory)
                                     pickModel = true
                                 },
                                 modifier = Modifier.weight(1f),
                             )
-                            Spacer(Modifier.width(5.dp))
-                            StatusChip(
-                                "模式",
-                                agentDisplay,
+                            // 模式名短，别再和模型平分宽度，只占文本自身
+                            AgentControlCard(
+                                model = model,
+                                session = session,
+                                fill = false,
                                 onClick = {
                                     model.loadMeta(session.directory)
                                     pickAgent = true
@@ -420,7 +411,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                         Modifier
                             .size(40.dp)
                             .background(MaterialTheme.colorScheme.primary, CircleShape)
-                            .clickableNoRipple { openMenu = true },
+                            .clickableNoRipple { openMenu = !openMenu },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
@@ -479,9 +470,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
             ) {
                 ChatStatusBar(
                     model = model,
-                    modelLabel = effectiveModel?.let { modelDisplay(it, model.modelGroupById) }
-                        ?.takeIf { it.isNotBlank() } ?: "服务端默认",
-                    agentLabel = agentDisplay,
+                    tokens = aggregateTokens,
                     hitLabel = aggregateTokens?.let { rateLabel(it.hitRate) } ?: "—",
                     hitColor = aggregateTokens?.let {
                         rateColor(it.hitRate, MaterialTheme.colorScheme.background.luminanceIsDark())
@@ -493,14 +482,6 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                         model.updateDetailLevel(nextDetailLevel(model.detailLevel))
                     },
                     onGit = { model.openGit(session.directory) },
-                    onPickModel = {
-                        model.loadMeta(session.directory)
-                        pickModel = true
-                    },
-                    onPickAgent = {
-                        model.loadMeta(session.directory)
-                        pickAgent = true
-                    },
                     onCache = { model.openCache(session) },
                 )
             }
@@ -805,54 +786,26 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
         FloatingShells(model = model, sessionID = session.id)
     }
 
-    PickerPageHost(visible = pickModel, onBack = { pickModel = false }) {
-        ModelPickerPage(
+    if (pickModel) {
+        ModelPickerSheet(
             model = model,
             title = "选择模型",
-            selected = effectiveModel,
-            onPick = { ref -> if (ref != null) model.setModel(ref) },
+            selected = resolvedModel(model, session),
+            onPick = { ref -> if (ref != null) model.chooseModel(ref) },
             onDismiss = { pickModel = false },
         )
     }
 
-    PickerPageHost(visible = pickAgent, onBack = { pickAgent = false }) {
-        PickerPage(title = "选择 Agent", onBack = { pickAgent = false }) {
-            val agents = model.agents.mapNotNull { a ->
-                val id = a.str("id") ?: return@mapNotNull null
-                (a.str("name") ?: id) to (a.str("description") ?: id) to id
-            }
-            if (agents.isEmpty()) {
-                EmptyState("没有可用的 Agent")
-            } else {
-                LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                    items(agents, key = { it.second }) { (labels, id) ->
-                        val (name, desc) = labels
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickableNoRipple {
-                                    model.setAgent(id)
-                                    pickAgent = false
-                                }
-                                .padding(vertical = 11.dp),
-                        ) {
-                            Column {
-                                Text(name, style = MaterialTheme.typography.bodyLarge)
-                                if (desc.isNotBlank() && desc != id) {
-                                    Text(
-                                        desc,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    if (pickAgent) {
+        AgentPickerSheet(
+            agents = agentOptions(model.agents),
+            selectedId = resolvedAgentId(model, session),
+            onPick = { id ->
+                model.chooseAgent(id)
+                pickAgent = false
+            },
+            onDismiss = { pickAgent = false },
+        )
     }
 
     pendingForms.firstOrNull()?.let { form ->
@@ -1057,7 +1010,7 @@ private fun ChatComposer(
         ) {
             if (suggestions.isNotEmpty()) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = AndrocColor.Medium,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1192,7 +1145,7 @@ private fun ChatComposer(
                 }
                 // 自绘输入框：比 OutlinedTextField 的默认内边距紧凑，清空按钮能贴右上角
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    color = AndrocColor.Medium,
                     shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(
                         1.dp,
@@ -1265,7 +1218,7 @@ private fun ChatComposer(
                     containerColor = when {
                         hasContent -> MaterialTheme.colorScheme.primary
                         stopMode -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.surfaceVariant
+                        else -> AndrocColor.Medium
                     },
                     contentColor = when {
                         hasContent -> MaterialTheme.colorScheme.onPrimary
@@ -1314,8 +1267,8 @@ private fun DialogBackButton(onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.size(32.dp),
         colors = IconButtonDefaults.filledTonalIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            containerColor = AndrocColor.MediumStrong,
+            contentColor = AndrocColor.OnMedium,
         ),
     ) {
         Icon(
@@ -1337,7 +1290,7 @@ private fun InfoChip(
     Row(
         modifier = Modifier
             .height(34.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), shape)
+            .background(AndrocColor.Medium, shape)
             .then(if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1362,8 +1315,7 @@ private fun InfoChip(
 @Composable
 private fun ChatStatusBar(
     model: AppModel,
-    modelLabel: String,
-    agentLabel: String,
+    tokens: Tokens?,
     hitLabel: String,
     hitColor: Color,
     costLabel: String?,
@@ -1371,19 +1323,18 @@ private fun ChatStatusBar(
     contextColor: Color,
     onToggleDetail: () -> Unit,
     onGit: () -> Unit,
-    onPickModel: () -> Unit,
-    onPickAgent: () -> Unit,
     onCache: () -> Unit,
 ) {
+    // 左右各留 12dp：圆角屏幕不会切到胶囊的圆角。
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
+            .padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             StatusChip(
@@ -1411,6 +1362,9 @@ private fun ChatStatusBar(
                 "",
                 costLabel ?: "—",
             )
+            Spacer(Modifier.weight(1f))
+            // ↑/↓ 放最末尾：这里位置最宽裕，顶栏就不用再挤一行
+            TokenStack(tokens)
         }
     }
 }
@@ -1422,28 +1376,20 @@ private fun StatusChip(
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    emphasized: Boolean = false,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(10.dp)
+    // 全部胶囊共用同一个中强调底；强调项只把文字换成深主题色。
+    val bg = AndrocColor.Medium
+    val fg = if (emphasized) AndrocColor.Deep else valueColor
     Row(
         modifier
-            .height(20.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f), shape)
-            .then(
-                if (onClick != null) {
-                    Modifier
-                        .clickable(onClick = onClick)
-                        .border(
-                            1.dp,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
-                            shape,
-                        )
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = 6.dp),
+            .height(24.dp)
+            .background(bg, shape)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (label.isNotBlank()) {
             Text(
@@ -1459,7 +1405,7 @@ private fun StatusChip(
             fontSize = 10.sp,
             lineHeight = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = valueColor,
+            color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1469,21 +1415,26 @@ private fun StatusChip(
 /** 顶栏右侧：tokens 上下两行（上是输入、下是输出），单位自动 k / M。 */
 @Composable
 private fun TokenStack(tokens: Tokens?) {
+    // 和左边胶囊同一套中强调底，左对齐，上下两行
     Column(
-        horizontalAlignment = Alignment.End,
+        Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(AndrocColor.Medium)
+            .padding(horizontal = 9.dp, vertical = 3.dp),
+        horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Text(
-            tokens?.let { "↑${formatTokens(it.input)}" } ?: "↑—",
-            fontSize = 9.5.sp,
-            lineHeight = 11.sp,
+            tokens?.let { "↑ ${formatTokens(it.input)}" } ?: "↑ —",
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
         Text(
-            tokens?.let { "↓${formatTokens(it.output)}" } ?: "↓—",
-            fontSize = 9.5.sp,
-            lineHeight = 11.sp,
+            tokens?.let { "↓ ${formatTokens(it.output)}" } ?: "↓ —",
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
@@ -1562,7 +1513,7 @@ private fun MessageItem(
     if (msg.isUser) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = AndrocColor.MediumStrong,
                 shape = RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp),
                 modifier = Modifier
                     .widthIn(max = 330.dp)
@@ -1579,7 +1530,7 @@ private fun MessageItem(
                     Text(
                         msg.text,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = AndrocColor.OnMedium,
                     )
                 }
             }
@@ -1736,7 +1687,7 @@ private fun ReasoningBlock(
         }
     } else {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        color = AndrocColor.Medium,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -1786,7 +1737,7 @@ private fun ReasoningBlock(
                         text,
                         maxLines = 16,
                         onExpand = { onOpenReasoning(text) },
-                        maskColor = MaterialTheme.colorScheme.surfaceVariant,
+                        maskColor = AndrocColor.Medium,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -1840,7 +1791,7 @@ private fun ReasoningDetailCard(text: String, live: Boolean, onClose: () -> Unit
 @Composable
 private fun ShellBlock(text: String, command: Boolean, maxLines: Int) {
     val accent = if (command) Sky else MaterialTheme.colorScheme.outline
-    val bg = if (command) Sky.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+    val bg = if (command) Sky.copy(alpha = 0.10f) else AndrocColor.Medium
     Row(
         Modifier
             .fillMaxWidth()
@@ -2000,7 +1951,7 @@ private fun ToolBlock(
     }
     val readBody = if (isReadTool) part.output.substringAfter('\n', part.output) else ""
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+        color = AndrocColor.Medium,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -2082,7 +2033,7 @@ private fun ToolBlock(
                                 part.output.takeLast(12000),
                                 maxLines = TOOL_PREVIEW_LINES,
                                 onExpand = { onOpen(part) },
-                                maskColor = MaterialTheme.colorScheme.surfaceVariant,
+                                maskColor = AndrocColor.Medium,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -2107,7 +2058,7 @@ private fun ToolBlock(
                             .fillMaxWidth()
                             .padding(top = 4.dp)
                             .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.35f),
+                                AndrocColor.Medium,
                                 RoundedCornerShape(6.dp),
                             )
                             .padding(6.dp),
@@ -2126,7 +2077,7 @@ private fun ToolBlock(
                                 readBody.take(20000),
                                 maxLines = TOOL_PREVIEW_LINES,
                                 onExpand = { onOpen(part) },
-                                maskColor = MaterialTheme.colorScheme.surfaceVariant,
+                                maskColor = AndrocColor.Medium,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -2151,7 +2102,7 @@ private fun ToolBlock(
                             }
                             if (longDiff) {
                                 Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    color = AndrocColor.Medium,
                                     shape = RoundedCornerShape(topStart = 12.dp, bottomEnd = 6.dp),
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
@@ -2181,7 +2132,7 @@ private fun ToolBlock(
                                 .fillMaxWidth()
                                 .padding(top = 5.dp)
                                 .background(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
+                                    AndrocColor.Medium,
                                     RoundedCornerShape(6.dp),
                                 )
                                 .padding(6.dp),
@@ -2191,13 +2142,13 @@ private fun ToolBlock(
                             part.payload.take(12000),
                             maxLines = TOOL_PREVIEW_LINES,
                             onExpand = { onOpen(part) },
-                            maskColor = MaterialTheme.colorScheme.surface,
+                            maskColor = AndrocColor.Medium,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 5.dp)
                                 .background(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
+                                    AndrocColor.Medium,
                                     RoundedCornerShape(6.dp),
                                 )
                                 .padding(8.dp),
@@ -2219,7 +2170,7 @@ private fun ToolBlock(
                             part.output.takeLast(12000),
                             maxLines = TOOL_PREVIEW_LINES,
                             onExpand = { onOpen(part) },
-                            maskColor = MaterialTheme.colorScheme.surfaceVariant,
+                            maskColor = AndrocColor.Medium,
                             modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                         )
                     }
@@ -2589,7 +2540,7 @@ private fun PendingRows(model: AppModel, onWithdraw: (String) -> Unit) {
     ) {
         model.queue.forEach { item ->
             Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f),
+                color = AndrocColor.Medium,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -2638,7 +2589,7 @@ private fun SmallScrollToBottom(modifier: Modifier = Modifier, onClick: () -> Un
     FloatingActionButton(
         onClick = onClick,
         modifier = modifier.size(40.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = AndrocColor.Medium,
         contentColor = MaterialTheme.colorScheme.primary,
         shape = CircleShape,
     ) {
@@ -2854,8 +2805,8 @@ private fun OptionChips(
         field.options.forEach { option ->
             val isSelected = option.value in selected
             Surface(
-                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                color = if (isSelected) AndrocColor.MediumStrong
+                else AndrocColor.Medium,
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(
                     1.dp,
@@ -2902,7 +2853,7 @@ private fun OptionChips(
                             option.label,
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                            color = if (isSelected) AndrocColor.OnMedium
                             else MaterialTheme.colorScheme.onSurface,
                         )
                         if (option.description.isNotBlank()) {

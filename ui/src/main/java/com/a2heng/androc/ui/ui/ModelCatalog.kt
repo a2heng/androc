@@ -38,16 +38,29 @@ fun sourcePrefix(group: Int?, providerID: String): String = when (group) {
     else -> providerID.ifBlank { "model" }
 }
 
+/** 模型来源的短名，用在卡片「模型」后面：opencode 免费 / opencode go / opencode console。 */
+fun sourceLabel(group: Int?, providerID: String): String = when (group) {
+    0 -> "opencode 免费"
+    1 -> "opencode go"
+    2 -> "opencode console"
+    else -> providerID.ifBlank { "其它" }
+}
+
 fun modelDisplay(model: ModelRef?, groups: Map<String, Int>): String =
     model?.let {
         val group = groups["${it.providerID}/${it.id}"]
         "${sourcePrefix(group, it.providerID)} · ${it.label}"
     } ?: ""
 
-/** 思考强度的展示名；没有选档位（variant == null）就是 Default。 */
-fun variantLabel(variant: String?): String =
-    if (variant.isNullOrBlank() || variant == "default") "Default"
-    else variant.replaceFirstChar { it.uppercaseChar() }
+/** 思考强度的展示名；没有选档位（variant == null）就是 默认。 */
+fun variantLabel(variant: String?): String = when (variant?.lowercase()) {
+    null, "", "default" -> "默认"
+    "none" -> "无"
+    "low" -> "低"
+    "medium" -> "中"
+    "high" -> "高"
+    else -> variant
+}
 
 fun modelEntries(models: List<JsonObject>): List<ModelEntry> =
     models.mapNotNull { item ->

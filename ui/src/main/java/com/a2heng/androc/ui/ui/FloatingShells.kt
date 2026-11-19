@@ -289,7 +289,7 @@ private fun ShellBlock(
             }
             Spacer(Modifier.height(3.dp))
             Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                color = AndrocColor.Medium,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth().padding(start = 50.dp, end = 2.dp),
             ) {

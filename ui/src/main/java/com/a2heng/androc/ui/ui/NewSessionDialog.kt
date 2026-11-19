@@ -271,9 +271,9 @@ fun NewSessionDialog(
 private fun sessionChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
+            AndrocColor.MediumStrong
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
+            AndrocColor.Medium
         },
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.clickableNoRipple(onClick),

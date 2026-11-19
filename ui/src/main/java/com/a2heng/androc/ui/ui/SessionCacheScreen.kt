@@ -218,7 +218,7 @@ private fun CacheDetailBody(
                         progress = { (detail.rate / 100.0).toFloat().coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(6.dp),
                         color = color,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        trackColor = AndrocColor.Medium,
                         strokeCap = StrokeCap.Round,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -267,7 +267,7 @@ private fun CacheDetailBody(
 private fun CacheTrend(steps: List<CacheStep>, dark: Boolean) {
     if (steps.isEmpty()) return
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = AndrocColor.Medium,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -323,6 +323,6 @@ private fun StepRow(step: CacheStep, dark: Boolean) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        HorizontalDivider(Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+        HorizontalDivider(Modifier.padding(top = 6.dp), color = AndrocColor.Medium)
     }
 }

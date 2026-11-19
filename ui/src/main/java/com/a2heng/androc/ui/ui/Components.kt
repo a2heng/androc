@@ -154,7 +154,7 @@ fun StatCard(
 ) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = AndrocColor.Medium),
         shape = RoundedCornerShape(12.dp),
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -293,7 +293,7 @@ fun MediaPreview(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .background(AndrocColor.Medium, RoundedCornerShape(12.dp))
                     .padding(14.dp),
             ) {
                 Icon(
