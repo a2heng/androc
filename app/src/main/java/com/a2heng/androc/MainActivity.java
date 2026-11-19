@@ -375,12 +375,6 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
-        // La caja de herramientas viaja dentro del APK: se instala sola, sin
-        // que el usuario tenga que hacer nada (no depende de los permisos ni
-        // de que arranque el servidor).
-        if (LocalRuntime.available(this) && !LocalToolbox.complete(this)) {
-            ToolboxService.installBundled(this);
-        }
         pendingShare = parseShareIntent(getIntent());
         if (pendingShare == null) {
             autoOpenIfRunning();
@@ -2604,7 +2598,7 @@ public class MainActivity extends AppCompatActivity {
     private void checkForUpdate(boolean verbose) {
         final boolean local = LocalRuntime.available(this);
         final String activeVer = LocalRuntime.activeVersion(this);
-        final String runtimeKey = local ? "local:" + activeVer : "termux";
+        final String runtimeKey = local ? "local:" + activeVer : "remote";
         android.content.SharedPreferences p = getSharedPreferences("app", MODE_PRIVATE);
         long ts = p.getLong("upd_ts", 0);
         boolean fresh = p.getInt("upd_v", 0) == 5

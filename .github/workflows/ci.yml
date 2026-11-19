@@ -60,7 +60,7 @@ jobs:
         env:
           ANDROC_16KB_STRICT: "1"
         run: |
-          python3 app/src/bundle/assets/skills/android-build/scripts/check-16kb.py \
+          python3 scripts/check-16kb.py \
             app/build/outputs/apk/*/debug/*.apk
 
       - name: Upload debug APK

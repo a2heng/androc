@@ -84,24 +84,14 @@ jobs:
       - name: Fetch opencode runtime
         run: python3 scripts/fetch-opencode.py
 
-      - name: Fetch offline Termux toolbox
-        run: python3 scripts/fetch-toolbox.py
 
-      - name: Verify offline toolbox (bash/readline/symlinks/DT_NEEDED)
-        run: python3 scripts/verify-toolbox.py
 
-      - name: Warm Gradle cache for the bundled toolchain
-        run: |
-          chmod +x gradlew
-          ./gradlew :app:assembleDebug --console=plain --no-daemon
 
       - name: Warm common Android dependencies (small, high-frequency set)
         run: |
           ./gradlew -p scripts/fixtures/common-deps resolveCommon \
             --console=plain --no-daemon
 
-      - name: Build offline toolchain bundle
-        run: python3 scripts/make-toolchain.py
 
       - name: Build signed release
         env:
@@ -120,7 +110,7 @@ jobs:
           ANDROC_16KB_STRICT: "1"
         run: |
           for APK in app/build/outputs/apk/*/release/*.apk; do
-            python3 app/src/bundle/assets/skills/android-build/scripts/check-16kb.py "$APK"
+            python3 scripts/check-16kb.py "$APK"
           done
 
       - name: Verify signatures

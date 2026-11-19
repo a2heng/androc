@@ -40,35 +40,11 @@ public class LocalServerService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             LocalRuntime.stop();
-            ToolboxServer.stop();
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
-        // La caja de herramientas viaja dentro del APK: se instala sola la
-        // primera vez, sin que el usuario tenga que hacer nada.
-        if (!LocalToolbox.complete(this)) {
-            ToolboxService.installBundled(this);
-        } else {
-            // Autodiagnostico una vez, para dejar constancia en el registro
-            // de que las herramientas responden dentro del sandbox.
-            SharedPreferences sp = getSharedPreferences("app", MODE_PRIVATE);
-            if (!sp.getBoolean("toolbox_selftest", false)) {
-                sp.edit().putBoolean("toolbox_selftest", true).apply();
-                new Thread(() -> ToolboxService.selfTest(this), "toolbox-selftest").start();
-            }
-        }
-        ToolboxServer.start(this);
-        LocalToolbox.refreshShim(this);
         startForeground(NID, notification());
-        // El toolchain offline (SDK/Gradle/cache) se extrae en paralelo para
-        // no retrasar el arranque de opencode. Los scripts esperan al marcador.
-        // CapabilityManager puede desactivarlo (tools.payload eliminado).
-        if (!getSharedPreferences("app", MODE_PRIVATE)
-                .getBoolean("capability_disabled_tools_payload", false)) {
-            new Thread(() -> ToolchainInstaller.ensure(getApplicationContext()),
-                    "toolchain-install").start();
-        }
         // El arranque nativo hace health checks HTTP: nunca en el hilo
         // principal (NetworkOnMainThreadException). El servicio ya es
         // foreground, asi que puede esperar en segundo plano.
@@ -103,7 +79,6 @@ public class LocalServerService extends Service {
     @Override
     public void onDestroy() {
         LocalRuntime.stop();
-        ToolboxServer.stop();
         super.onDestroy();
     }
 

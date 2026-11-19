@@ -12,7 +12,6 @@ import java.util.Objects;
  */
 public final class PluginInfo {
     public static final String OPENCODE = "opencode";
-    public static final String TERMUX = "termux";
     /** One Android plugin: every Android skill + the whole Android toolchain. */
     public static final String ANDROID = "android";
 

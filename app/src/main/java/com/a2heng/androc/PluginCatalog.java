@@ -20,7 +20,6 @@ final class PluginCatalog {
     private static final Map<String, String> SKILL_PLUGIN = new HashMap<>();
 
     static {
-        SKILL_PLUGIN.put("termux", PluginInfo.TERMUX);
         SKILL_PLUGIN.put("skill-installer", "core");
         // Everything else under skills/ (build, AI, debug, install, UI, ...)
         // belongs to the single Android plugin.

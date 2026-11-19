@@ -19,7 +19,6 @@
         <activity android:name=".MainActivity" tools:node="remove" />
         <service android:name=".LocalServerService" tools:node="remove" />
         <service android:name=".RuntimeUpdateService" tools:node="remove" />
-        <service android:name=".ToolboxService" tools:node="remove" />
         <provider android:name=".LocalServerInfoProvider" tools:node="remove" />
         <receiver android:name=".BootReceiver" tools:node="remove" />
         <service android:name=".ThinRuntimeService"

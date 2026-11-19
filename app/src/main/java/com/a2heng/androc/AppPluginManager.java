@@ -18,21 +18,18 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Plugin layers: a skill (or skill group) plus the toolchain it needs.
+ * 插件层（只保留两层）：
  *
  * <ul>
- *   <li><b>opencode</b> — opencode binary + proot userland; independent update
- *       against the upstream release.</li>
- *   <li><b>android-build</b> — Android skills + JDK/SDK/Gradle/aapt2.</li>
- *   <li><b>android-ai</b> — android-ai skill + AI runtimes.</li>
- *   <li><b>android-debug</b> — debug/install skills + adb.</li>
- *   <li><b>termux</b> — git/python/pkg in the prefix.</li>
+ *   <li><b>opencode</b> — server 二进制；bundle 内置，thin 从市场下载。</li>
+ *   <li><b>android</b> — android-* skills + musl rootfs（JDK/SDK/Gradle/aapt2）。</li>
  * </ul>
+ *
+ * 没有 Termux、没有 bionic、没有第二套 rootfs。
  */
 public final class AppPluginManager implements PluginManager {
     private static final String PREF = "app";
     private static final String K_OPENCODE_LATEST = "upd_latest";
-    private static final String K_PAYLOAD_VERSION = "plugin_tools_payload_version";
 
     private final Context ctx;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -47,65 +44,42 @@ public final class AppPluginManager implements PluginManager {
         List<PluginInfo> out = new ArrayList<>();
         SharedPreferences sp = prefs();
         File home = LocalRuntime.homeDir(ctx);
-        File prefix = LocalToolbox.prefix(ctx);
-        File toolchain = ToolchainInstaller.root(ctx);
-        long jdkBytes = dirSize(new File(prefix, "lib/jvm"));
 
-        boolean opencode = LocalRuntime.prootAvailable(ctx) && LocalToolbox.complete(ctx);
-        String opencodeInstalled = opencode
-                ? firstNonEmpty(sp.getString("opencode_runtime_version", ""),
-                BuildConfig.OPENCODE_VERSION)
-                : "";
+        // opencode 内核
+        boolean opencode = LocalRuntime.prootAvailable(ctx);
+        String opencodeVersion = BuildConfig.OPENCODE_VERSION;
         String opencodeLatest = firstNonEmpty(latest.get(PluginInfo.OPENCODE),
-                sp.getString(K_OPENCODE_LATEST, ""), BuildConfig.OPENCODE_VERSION);
+                sp.getString(K_OPENCODE_LATEST, ""), opencodeVersion);
         out.add(plugin(
                 PluginInfo.OPENCODE,
                 "OpenCode 内核",
                 "本机 server、会话、agent",
-                skillsFor(PluginInfo.OPENCODE),
-                list("opencode " + BuildConfig.OPENCODE_VERSION, "proot"),
-                opencodeInstalled,
+                new ArrayList<>(),
+                list("opencode " + opencodeVersion, "proot"),
+                opencodeVersion,
                 opencodeLatest,
                 opencodeBinarySize(),
                 opencode,
-                true,
+                !BuildConfig.THIN,
                 false));
 
-        List<String> termuxSkills = skillsFor(PluginInfo.TERMUX);
-        boolean termux = new File(prefix, "bin/git").isFile()
-                || new File(prefix, "bin/python3").isFile()
-                || new File(prefix, "bin/pkg").isFile();
-        long termuxBytes = Math.max(0, dirSize(prefix) - jdkBytes);
-        out.add(plugin(
-                PluginInfo.TERMUX,
-                "Termux 工具",
-                "shell、git、python、pkg",
-                termuxSkills,
-                list("bash / readline", "git", "python", "pkg / apt"),
-                termux ? "1" : "",
-                firstNonEmpty(latest.get(PluginInfo.TERMUX), "1"),
-                termux ? human(termuxBytes) : "",
-                termux,
-                true,
-                false));
-
+        // android：skills + musl rootfs
+        File rootfs = MuslRootfs.dir(ctx);
         List<String> androidSkills = skillsFor(PluginInfo.ANDROID);
-        boolean androidInstalled = ToolchainInstaller.installed(ctx)
-                && anySkill(home, androidSkills);
-        String androidVersion = ToolchainInstaller.installedVersion(ctx);
-        long androidBytes = dirSize(toolchain) + jdkBytes + skillBytes(home, androidSkills);
+        boolean androidInstalled = rootfs != null && anySkill(home, androidSkills);
+        String androidVersion = rootfs != null ? rootfs.getParentFile().getName() : "";
+        long androidBytes = dirSize(rootfs) + skillBytes(home, androidSkills);
         out.add(plugin(
                 PluginInfo.ANDROID,
                 "Android 开发",
-                "构建、调试、AI、测试：一个 Android 插件",
+                "构建、调试、AI、测试：skills + musl rootfs",
                 androidSkills,
-                list("JDK 21", "SDK 36", "aapt2", "Gradle 9.9", "adb",
-                        "ONNX / TFLite / llama.cpp"),
+                list("musl/Alpine", "JDK 21", "SDK 35", "Gradle 9.9", "aapt2", "adb"),
                 androidVersion,
-                firstNonEmpty(latest.get(PluginInfo.ANDROID), ToolchainInstaller.VERSION),
-                androidInstalled || toolchain.isDirectory() ? human(androidBytes) : "",
+                firstNonEmpty(latest.get(PluginInfo.ANDROID), androidVersion),
+                androidBytes > 0 ? human(androidBytes) : "",
                 androidInstalled,
-                BuildConfig.TOOLS_BUNDLED,
+                false,
                 true));
 
         return out;
@@ -123,7 +97,7 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void refresh() {
-        // list() reads from disk each time.
+        // list() 每次都从磁盘读。
     }
 
     @Override
@@ -153,11 +127,7 @@ public final class AppPluginManager implements PluginManager {
             }, "plugin-check-opencode").start();
             return;
         }
-        // Tools packs have no remote manifest yet; compare with the bundled version.
-        String available = PluginInfo.ANDROID.equals(id)
-                ? ToolchainInstaller.VERSION : "1";
-        latest.put(id, available);
-        post(id, true, "当前随 App 更新：" + available, callback);
+        post(id, true, "Android 插件由市场更新；重新安装即可", callback);
     }
 
     @Override
@@ -165,22 +135,12 @@ public final class AppPluginManager implements PluginManager {
         if (PluginInfo.ANDROID.equals(id)) {
             new Thread(() -> {
                 try {
-                    PluginCatalog.setPluginEnabled(ctx, id, true);
-                    // Skills now come from the market pack; the APK no longer
-                    // bundles android-* skills.
                     File pack = PackInstaller.install(ctx, "android");
                     for (File config : PackInstaller.configDirs(ctx)) {
                         PackInstaller.copySkills(pack, config);
                     }
-                    // The toolchain is still bundled in the offline flavor for
-                    // now; thin builds get it from the pack in a later slice.
-                    try {
-                        ToolchainInstaller.ensure(ctx);
-                    } catch (Throwable ignored) {
-                    }
                     boolean ok = anySkill(LocalRuntime.homeDir(ctx), skillsFor(id));
-                    post(id, ok, ok ? "Android 插件已安装" : "安装不完整，请重试",
-                            callback);
+                    post(id, ok, ok ? "Android 插件已安装" : "安装不完整，请重试", callback);
                 } catch (Throwable t) {
                     post(id, false, "安装失败：" + t.getMessage(), callback);
                 }
@@ -188,11 +148,10 @@ public final class AppPluginManager implements PluginManager {
             return;
         }
         if (PluginInfo.OPENCODE.equals(id)) {
-            // The runtime is updated through its own service, not re-extracted.
             post(id, false, "OpenCode 请用“更新”检查上游版本", callback);
             return;
         }
-        post(id, false, "这一层随内核提供，暂不支持单独安装", callback);
+        post(id, false, "未知插件：" + id, callback);
     }
 
     @Override
@@ -215,15 +174,13 @@ public final class AppPluginManager implements PluginManager {
     public void uninstall(String id, Callback callback) {
         if (PluginInfo.ANDROID.equals(id)) {
             new Thread(() -> {
-                deleteTree(ToolchainInstaller.root(ctx));
-                deleteTree(new File(LocalToolbox.prefix(ctx), "lib/jvm"));
+                deleteTree(new File(ctx.getFilesDir(), "packs/android"));
                 LocalRuntime.removePluginSkills(ctx, skillsFor(id));
-                PluginCatalog.setPluginEnabled(ctx, id, false);
                 post(id, true, "Android 插件已卸载；项目与会话保留", callback);
             }, "plugin-uninstall-android").start();
             return;
         }
-        post(id, false, "内核/Termux 正在使用时不能卸载；请先停止本机服务器", callback);
+        post(id, false, "内核正在使用时不能卸载；请先停止本机服务器", callback);
     }
 
     @Override
@@ -275,14 +232,6 @@ public final class AppPluginManager implements PluginManager {
         return total;
     }
 
-    private static String skillSize(File home, List<String> skills) {
-        long total = 0;
-        for (String skill : skills) {
-            total += dirSize(new File(home, ".config/opencode/skills/" + skill));
-        }
-        return total > 0 ? human(total) : "";
-    }
-
     private SharedPreferences prefs() {
         return ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE);
     }
@@ -291,10 +240,6 @@ public final class AppPluginManager implements PluginManager {
         main.post(() -> {
             if (callback != null) callback.onPluginResult(id, ok, message);
         });
-    }
-
-    private static String installedSize(File dir) {
-        return dir.isDirectory() ? human(dirSize(dir)) : "";
     }
 
     private static long dirSize(File file) {

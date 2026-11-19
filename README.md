@@ -119,7 +119,7 @@ release 构建默认对**随包分发的 64 位 native 库**做严格检查；32
 检查命令：
 
 ```sh
-python3 app/src/bundle/assets/skills/android-build/scripts/check-16kb.py \
+python3 scripts/check-16kb.py \
   app/src/main/jniLibs/arm64-v8a
 ```
 

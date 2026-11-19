@@ -38,8 +38,6 @@ android {
         def androcUi = (findProperty("androcUi")
                 ?: findProperty("adiaUi") ?: "mobile").toString()
         buildConfigField "String", "UI_MODE", "\"${androcUi}\""
-        // Bundle flavor bundles the tools payload; thin sets this to false.
-        buildConfigField "boolean", "TOOLS_BUNDLED", "true"
         // v1: canal 4.x del launcher y runtime opencode 1.x.
         buildConfigField "boolean", "V2", "false"
         ndk {
@@ -100,7 +98,6 @@ android {
         thin {
             dimension "distribution"
             buildConfigField "boolean", "THIN", "true"
-            buildConfigField "boolean", "TOOLS_BUNDLED", "false"
         }
     }
 

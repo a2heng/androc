@@ -351,62 +351,17 @@ public final class LocalRuntime {
             // La raiz de proyectos debe existir siempre, tambien en modo proot:
             // el selector de sesiones la ofrece como "/" canonico.
             workspaceDir(app);
-            // Un solo camino: TODO corre dentro de proot. No hay motor
-            // nativo, ni fallback, ni modos que el usuario pueda romper.
-            prepareToolbox(app);
+            // Un solo camino: TODO corre dentro del rootfs musl del plugin
+            // android. No hay Termux/bionic ni fallback.
             if (!prootAvailable(app)) {
                 throw new IOException("faltan binarios del runtime proot");
+            }
+            if (MuslRootfs.dir(app) == null) {
+                throw new IOException("Android 插件（musl rootfs）未安装");
             }
             boolean ok = startProot(app, port);
             if (ok) Log.i(TAG, "runtime proot iniciado en 127.0.0.1:" + port);
             return ok;
-        }
-    }
-
-    /**
-     * Deja el prefijo y los comandos de diagnostico listos antes de arrancar.
-     * Si falta libreadline (instalacion a medias), se extrae del APK.
-     */
-    private static void prepareToolbox(Context app) {
-        File home = homeDir(app);
-        try {
-            // Si la primera instalacion sigue en curso (sin marcador), no se
-            // toca el prefijo: dpkg esta escribiendo y reparar en paralelo
-            // dejaria ficheros mezclados.
-            if (LocalToolbox.complete(app)) {
-                LocalToolbox.repairEssentials(app);
-            }
-        } catch (Throwable t) {
-            Log.w(TAG, "no se pudo reparar el prefijo: " + t);
-        }
-        try {
-            File binDir = LocalToolbox.installed(app)
-                    ? new File(LocalToolbox.prefix(app), "bin")
-                    : new File(home, "bin");
-            CommandResolver.install(home, binDir);
-            // Primer arranque: los envoltorios se generaron en $HOME/bin
-            // porque el prefijo aun no existia. Al instalarse el toolbox se
-            // generan en $PREFIX/bin; los viejos de $HOME/bin quedan muertos
-            // y hacen pensar que hay dos juegos de comandos.
-            if (LocalToolbox.installed(app)) cleanLegacyHomeBin(home);
-        } catch (Throwable t) {
-            Log.w(TAG, "no se pudieron regenerar los envoltorios: " + t);
-        }
-    }
-
-    private static void cleanLegacyHomeBin(File home) {
-        File dir = new File(home, "bin");
-        String[] names = {
-                CommandResolver.SHELL_NAME, CommandResolver.PROOT_NAME,
-                CommandResolver.ENGINE_NAME, CommandResolver.NATIVE_ENV_NAME,
-                CommandResolver.DOCTOR_NAME, CommandResolver.REPAIR_NAME
-        };
-        for (String name : names) {
-            File f = new File(dir, name);
-            if (f.isFile() || java.nio.file.Files.isSymbolicLink(f.toPath())) {
-                //noinspection ResultOfMethodCallIgnored
-                f.delete();
-            }
         }
     }
 
@@ -432,28 +387,24 @@ public final class LocalRuntime {
         File nativeConfigDir = new File(home, ".config/opencode-android");
         mkdirs(nativeConfigDir);
         installSkills(app, nativeConfigDir);
-        String agentShell = LocalToolbox.installed(app)
-                ? LocalToolbox.SANDBOX_PREFIX + "/bin/bash"
-                : "/system/bin/sh";
+        String agentShell = "/bin/bash";
         NativeRuntimeConfig.write(nativeConfigDir, config, agentShell);
         prepareNetworkOverrides(home, etc);
 
         File bin = runtimeBinary(app);
         if (bin == null) bin = new File(nd, "libopencode2_bin.so");
-        File musl = new File(nd, "libld_musl.so");
+        File rootfs = MuslRootfs.dir(app);
         File proot = new File(nd, "libproot.so");
         File loader = new File(nd, "libproot_loader.so");
-        copyIfNeeded(new File(nd, "libstdcxx.so"), new File(lib, "libstdc++.so.6"));
-        copyIfNeeded(new File(nd, "libgcc_s.so"), new File(lib, "libgcc_s.so.1"));
 
         Map<String, String> env = buildEnv(app, home, tmp, etc, lib, nd, loader, prootTmp);
         env.put("PWD", home.getAbsolutePath());
         env.put("SHELL", agentShell);
         env.put("OC_ENGINE", "proot");
         env.put("OPENCODE_CONFIG_DIR", nativeConfigDir.getAbsolutePath());
-        List<String> cmd = prootCmd(app, home, tmp, etc, musl, proot, env,
+        List<String> cmd = prootCmd(app, home, tmp, etc, rootfs, nd, bin, proot, env,
                 home.getAbsolutePath());
-        cmd.add(bin.getAbsolutePath());
+        cmd.add(muslBinPath(nd, bin));
         cmd.add("serve");
         cmd.add("--hostname");
         cmd.add("127.0.0.1");
@@ -482,16 +433,8 @@ public final class LocalRuntime {
     public static Process localShell(Context ctx) throws IOException {
         Context app = ctx.getApplicationContext();
         if (!prootAvailable(app)) throw new IOException("runtime proot no disponible");
-        if (!LocalToolbox.installed(app)) throw new IOException("toolbox no instalado");
-        // No abras un bash a medias: si la primera instalacion sigue en curso,
-        // el terminal mostraria libreadline.so.8. Mejor un error claro que se
-        // puede reintentar cuando termine.
-        if (!LocalToolbox.complete(app)) {
-            throw new IOException("toolbox instalándose; espera y reintenta");
-        }
-        // Antes de abrir el PTY: si falta readline/bash, se rellena desde el
-        // APK para que el terminal no arranque con "libreadline.so.8 not found".
-        LocalToolbox.repairEssentials(app);
+        File rootfs = MuslRootfs.dir(app);
+        if (rootfs == null) throw new IOException("Android 插件（musl rootfs）未安装");
         File nd = new File(app.getApplicationInfo().nativeLibraryDir);
         File home = homeDir(app);
         File tmp = new File(app.getCacheDir(), "tmp");
@@ -504,39 +447,17 @@ public final class LocalRuntime {
         mkdirs(lib);
         mkdirs(prootTmp);
         prepareNetworkOverrides(home, etc);
-        copyIfNeeded(new File(nd, "libstdcxx.so"), new File(lib, "libstdc++.so.6"));
-        copyIfNeeded(new File(nd, "libgcc_s.so"), new File(lib, "libgcc_s.so.1"));
-        File musl = new File(nd, "libld_musl.so");
         File proot = new File(nd, "libproot.so");
         File loader = new File(nd, "libproot_loader.so");
         Map<String, String> env = buildEnv(app, home, tmp, etc, lib, nd, loader, prootTmp);
-        // En el terminal interactivo el shell por defecto es el bash del prefijo.
-        env.put("SHELL", LocalToolbox.SANDBOX_PREFIX + "/bin/bash");
+        env.put("SHELL", "/bin/bash");
         env.put("COLORTERM", "truecolor");
-        List<String> base = prootCmd(app, home, tmp, etc, musl, proot, env,
-                home.getAbsolutePath());
-        boolean hasScript = LocalToolbox.ensureTerminalTools(app);
-        if (hasScript) {
-            List<String> scriptCmd = new ArrayList<>(base);
-            scriptCmd.add(LocalToolbox.SANDBOX_PREFIX + "/bin/script");
-            scriptCmd.add("-q");
-            scriptCmd.add("-c");
-            scriptCmd.add("stty rows 40 cols 100 2>/dev/null; exec bash -l");
-            scriptCmd.add("/dev/null");
-            Process p = startShell(scriptCmd, home, env);
-            // Si script muere enseguida (falta una lib, no puede abrir /dev/ptmx,
-            // etc.) el terminal se quedaria en negro. Se cae a bash sin PTY.
-            if (aliveAfter(p, 350)) return p;
-            Log.w(TAG, "script termino al arrancar; terminal local sin PTY");
-            p.destroy();
-        } else {
-            Log.w(TAG, "script no disponible; terminal local sin PTY");
-        }
-        List<String> bashCmd = new ArrayList<>(base);
-        bashCmd.add(LocalToolbox.SANDBOX_PREFIX + "/bin/bash");
-        bashCmd.add("-i");
-        bashCmd.add("-l");
-        return startShell(bashCmd, home, env);
+        List<String> cmd = prootCmd(app, home, tmp, etc, rootfs, nd,
+                new File(nd, "libopencode2_bin.so"), proot, env, home.getAbsolutePath());
+        cmd.add("/bin/bash");
+        cmd.add("-i");
+        cmd.add("-l");
+        return startShell(cmd, home, env);
     }
 
     private static Process startShell(List<String> cmd, File home, Map<String, String> env)
@@ -568,6 +489,8 @@ public final class LocalRuntime {
             Context app = ctx.getApplicationContext();
             File nd = new File(app.getApplicationInfo().nativeLibraryDir);
             if (!prootAvailable(app)) return "no hay runtime proot";
+            File rootfs = MuslRootfs.dir(app);
+            if (rootfs == null) return "Android 插件（musl rootfs）未安装";
             File home = homeDir(app);
             File tmp = new File(app.getCacheDir(), "tmp");
             File prootTmp = new File(tmp, "proot");
@@ -579,14 +502,13 @@ public final class LocalRuntime {
             mkdirs(lib);
             mkdirs(etc);
             prepareNetworkOverrides(home, etc);
-            File musl = new File(nd, "libld_musl.so");
             File proot = new File(nd, "libproot.so");
             File loader = new File(nd, "libproot_loader.so");
             Map<String, String> env = buildEnv(app, home, tmp, etc, lib, nd, loader, prootTmp);
             env.put("PWD", home.getAbsolutePath());
-            List<String> cmd = prootCmd(app, home, tmp, etc, musl, proot, env,
-                    home.getAbsolutePath());
-            cmd.add("/system/bin/sh");
+            List<String> cmd = prootCmd(app, home, tmp, etc, rootfs, nd,
+                    new File(nd, "libopencode2_bin.so"), proot, env, home.getAbsolutePath());
+            cmd.add("/bin/sh");
             cmd.add("-c");
             cmd.add(command);
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -642,67 +564,51 @@ public final class LocalRuntime {
     private static Map<String, String> buildEnv(Context app, File home, File tmp, File etc,
             File lib, File nd, File loader, File prootTmp) throws IOException {
         Map<String, String> env = new LinkedHashMap<>();
-            // HOME real de la app: una sola ruta, sin alias.
-            env.put("HOME", home.getAbsolutePath());
-            env.put("TMPDIR", tmp.getAbsolutePath());
-            env.put("XDG_CONFIG_HOME", new File(home, ".config").getAbsolutePath());
-            env.put("XDG_DATA_HOME", new File(home, ".local/share").getAbsolutePath());
-            env.put("XDG_CACHE_HOME", new File(home, ".cache").getAbsolutePath());
-            env.put("XDG_STATE_HOME", new File(home, ".local/state").getAbsolutePath());
-            env.put("XDG_RUNTIME_DIR", new File(home, ".run").getAbsolutePath());
-            env.put("ANDROID_ROOT", "/system");
-            env.put("ANDROID_DATA", "/data");
-            env.put("TERMUX_VERSION", "0.118.0");
-            // Caja de herramientas: si esta instalada, su prefijo va delante
-            // del PATH y sus librerias delante del resto.
-            File toolbox = LocalToolbox.prefix(app);
-            boolean hasToolbox = LocalToolbox.installed(app);
-            String path = (hasToolbox ? LocalToolbox.SANDBOX_PREFIX + "/bin:" : "")
-                    + nd + ":/system/bin:/system/xbin:/vendor/bin";
-            env.put("PATH", path);
-            env.put("SHELL", "/system/bin/sh");
-            env.put("LANG", "C.UTF-8");
-            env.put("LC_ALL", "C.UTF-8");
-            env.put("TERM", "xterm-256color");
-            String appUser = "u0_a" + (android.os.Process.myUid() % 100000);
-            env.put("USER", appUser);
-            env.put("LOGNAME", appUser);
-            env.put("NO_COLOR", "1");
-            env.put("CI", "1");
-            env.put("OPENCODE_DISABLE_AUTOUPDATE", "1");
-            env.put("OPENCODE_RUNTIME", "proot");
-            env.put("OC_ENGINE", "proot");
-            env.put("OPENCODE_NATIVE_LIB_DIR", nd.getAbsolutePath());
-            env.put("OPENCODE_SERVER_PASSWORD", serverPassword(app));
-            env.put("OPENCODE_SERVER_USERNAME", "opencode");
-            env.put("OPENCODE_PASSWORD", serverPassword(app));
-            String libPath = (hasToolbox ? LocalToolbox.SANDBOX_PREFIX + "/lib:" : "")
-                    + lib.getAbsolutePath() + ":" + nd;
-            env.put("LD_LIBRARY_PATH", libPath);
-            if (hasToolbox) {
-                env.put("PREFIX", LocalToolbox.SANDBOX_PREFIX);
-                env.put("TERMUX_HOME", LocalToolbox.SANDBOX_PREFIX);
-                env.put("TMPDIR", tmp.getAbsolutePath());
-                // El pkg de Termux re-selecciona mirror (cosa de su app); aqui
-                // el mirror ya esta en sources.list, asi que se le dice que no.
-                env.put("TERMUX_PKG_NO_MIRROR_SELECT", "1");
-                env.put("OPENCODE_TOOLBOX_TOKEN", serverPassword(app));
-                env.put("OPENCODE_TOOLBOX_PORT", Integer.toString(ToolboxServer.PORT));
-            }
-            env.put("PROOT_LOADER", loader.getAbsolutePath());
-            env.put("PROOT_TMP_DIR", prootTmp.getAbsolutePath());
-            mkdirs(new File(home, ".local/share"));
-            mkdirs(new File(home, ".cache"));
-            mkdirs(new File(home, ".local/state"));
-            mkdirs(new File(home, ".run"));
-            return env;
+        env.put("HOME", home.getAbsolutePath());
+        env.put("TMPDIR", tmp.getAbsolutePath());
+        env.put("XDG_CONFIG_HOME", new File(home, ".config").getAbsolutePath());
+        env.put("XDG_DATA_HOME", new File(home, ".local/share").getAbsolutePath());
+        env.put("XDG_CACHE_HOME", new File(home, ".cache").getAbsolutePath());
+        env.put("XDG_STATE_HOME", new File(home, ".local/state").getAbsolutePath());
+        env.put("XDG_RUNTIME_DIR", new File(home, ".run").getAbsolutePath());
+        env.put("ANDROID_ROOT", "/system");
+        env.put("ANDROID_DATA", "/data");
+        env.put("PATH", "/opt/android-sdk/build-tools/36.0.0:"
+                + "/opt/android-sdk/platform-tools:"
+                + "/opt/gradle/gradle-9.9.0/bin:"
+                + "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+        env.put("SHELL", "/bin/bash");
+        env.put("LANG", "C.UTF-8");
+        env.put("LC_ALL", "C.UTF-8");
+        env.put("TERM", "xterm-256color");
+        String appUser = "u0_a" + (android.os.Process.myUid() % 100000);
+        env.put("USER", appUser);
+        env.put("LOGNAME", appUser);
+        env.put("NO_COLOR", "1");
+        env.put("CI", "1");
+        env.put("JAVA_HOME", "/usr/lib/jvm/java-21-openjdk");
+        env.put("ANDROID_HOME", "/opt/android-sdk");
+        env.put("ANDROID_SDK_ROOT", "/opt/android-sdk");
+        env.put("OPENCODE_DISABLE_AUTOUPDATE", "1");
+        env.put("OPENCODE_RUNTIME", "proot");
+        env.put("OC_ENGINE", "proot");
+        env.put("OPENCODE_NATIVE_LIB_DIR", "/opt/androc/lib");
+        env.put("OPENCODE_SERVER_PASSWORD", serverPassword(app));
+        env.put("OPENCODE_SERVER_USERNAME", "opencode");
+        env.put("OPENCODE_PASSWORD", serverPassword(app));
+        env.put("LD_LIBRARY_PATH", "/opt/androc/lib");
+        env.put("PROOT_LOADER", loader.getAbsolutePath());
+        env.put("PROOT_TMP_DIR", prootTmp.getAbsolutePath());
+        mkdirs(new File(home, ".local/share"));
+        mkdirs(new File(home, ".cache"));
+        mkdirs(new File(home, ".local/state"));
+        mkdirs(new File(home, ".run"));
+        return env;
     }
 
     private static List<String> prootCmd(Context app, File home, File tmp, File etc,
-            File musl, File proot, Map<String, String> env, String sandboxCwd)
-            throws IOException {
-        File toolbox = LocalToolbox.prefix(app);
-        boolean hasToolbox = LocalToolbox.installed(app);
+            File rootfs, File nd, File bin, File proot, Map<String, String> env,
+            String sandboxCwd) throws IOException {
         StringBuilder script = new StringBuilder();
         for (Map.Entry<String, String> e : env.entrySet()) {
             script.append("export ").append(e.getKey()).append('=')
@@ -716,24 +622,37 @@ public final class LocalRuntime {
         cmd.add("opencode");
         cmd.add(proot.getAbsolutePath());
         cmd.add("--kill-on-exit");
-        cmd.add("-b");
-        cmd.add(tmp.getAbsolutePath() + ":/tmp");
-        cmd.add("-b");
-        cmd.add(musl.getAbsolutePath() + ":/lib/ld-musl-aarch64.so.1");
-        if (hasToolbox) {
-            // Prefijo estilo Termux: las herramientas llevan dentro rutas
-            // absolutas (/data/data/com.termux/files/usr) y solo funcionan
-            // si ese directorio existe con ese nombre dentro del sandbox.
-            cmd.add("-b");
-            cmd.add(toolbox.getAbsolutePath() + ":" + LocalToolbox.SANDBOX_PREFIX);
+        cmd.add("-r");
+        cmd.add(rootfs.getAbsolutePath());
+        // proot needs the guest bind target to exist; create the app home path
+        // inside the rootfs so absolute paths stay identical.
+        new File(rootfs.getAbsolutePath() + home.getAbsolutePath()).mkdirs();
+        bindPath(cmd, home.getAbsolutePath(), home.getAbsolutePath());
+        bindPath(cmd, nd.getAbsolutePath(), "/opt/androc/lib");
+        File binDir = bin.getParentFile();
+        if (binDir != null && !binDir.equals(nd)) {
+            bindPath(cmd, binDir.getAbsolutePath(), "/opt/androc/bin");
         }
-        cmd.add("-b");
-        cmd.add(new File(etc, "hosts").getAbsolutePath() + ":/etc/hosts");
-        cmd.add("-b");
-        cmd.add(new File(etc, "resolv.conf").getAbsolutePath() + ":/etc/resolv.conf");
+        bindPath(cmd, "/dev", "/dev");
+        bindPath(cmd, "/proc", "/proc");
+        bindPath(cmd, "/sys", "/sys");
+        bindPath(cmd, "/system", "/system");
+        bindPath(cmd, new File(etc, "hosts").getAbsolutePath(), "/etc/hosts");
+        bindPath(cmd, new File(etc, "resolv.conf").getAbsolutePath(), "/etc/resolv.conf");
         cmd.add("-w");
         cmd.add(sandboxCwd == null ? home.getAbsolutePath() : sandboxCwd);
         return cmd;
+    }
+
+    private static void bindPath(List<String> cmd, String host, String guest) {
+        cmd.add("-b");
+        cmd.add(host + ":" + guest);
+    }
+
+    private static String muslBinPath(File nd, File bin) {
+        boolean inNd = bin.getParentFile() != null && bin.getParentFile().equals(nd);
+        return inNd ? "/opt/androc/lib/" + bin.getName()
+                : "/opt/androc/bin/" + bin.getName();
     }
 
     public static void stop() {
@@ -993,7 +912,8 @@ public final class LocalRuntime {
             }
         }
         if (!tmp.renameTo(dest)) {
-            LocalToolbox.copyFile(tmp, dest);
+            java.nio.file.Files.copy(tmp.toPath(), dest.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             //noinspection ResultOfMethodCallIgnored
             tmp.delete();
         }
