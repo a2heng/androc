@@ -62,6 +62,36 @@ glibc 二进制能否在 `gcompat` 下工作。
 也就是说：**JDK + Gradle + AGP + aapt2 在纯 musl 下能完整产出 APK**。
 下一步把整套 rootfs 打成 `android` 插件的 musl pack，替换 termux-bionic。
 
+## aarch64 工具链
+
+设备是 arm64，而 Google 官方 build-tools 只有 x86_64。现有 `make-toolchain.py`
+用的是：
+
+- `lzhiyong/android-sdk-tools` 35.0.2 的 **static aarch64** build-tools
+  （aapt / aapt2 / aidl / zipalign / adb 等）；
+- `third_party/android-build-tools/aapt2-aarch64-16kb`（16 KB 对齐的 aapt2）。
+
+这些是静态 aarch64 二进制，在 musl 下**不需要 gcompat**；gcompat 只是 CI 里
+用 x86_64 build-tools 做可行性验证时需要。
+
+## musl rootfs 组成
+
+```text
+packs/android/
+├─ pack.json
+├─ skills/                 # android-* + termux
+├─ tools/                  # 构建输入：aapt2-aarch64-16kb 等（不打包）
+└─ rootfs/                 # 产物，不提交
+   ├─ bin/sh ...           # Alpine minirootfs
+   ├─ usr/lib/jvm/...      # openjdk21 (musl)
+   └─ opt/android-sdk/     # static build-tools + platforms/android-35
+   └─ opt/gradle/...       # Gradle 9.9
+   └─ opt/androc/env.sh
+```
+
+`scripts/build-android-rootfs.py`（market 仓库）负责组装；`build-pack.py` 把
+`skills + rootfs` 打成 `android` 包。
+
 ## 回滚
 
 - rootfs 与 toolchain 都按 pack 版本安装，失败保留 previous。
