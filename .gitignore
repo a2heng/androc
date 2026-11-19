@@ -48,3 +48,4 @@ app/src/bundle/assets/toolchain/
 # Python bytecode
 __pycache__/
 *.pyc
+app/src/bundle/assets/runtime/

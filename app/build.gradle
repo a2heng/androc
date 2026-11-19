@@ -14,7 +14,7 @@ if (!opencodeVersion) {
 def androcVersionCode = (findProperty("androcVersionCode")
         ?: findProperty("adiaVersionCode") ?: "9").toInteger()
 def androcVersionName = findProperty("androcVersionName")
-        ?: findProperty("adiaVersionName") ?: "0.5.2-androc"
+        ?: findProperty("adiaVersionName") ?: "0.6.0-androc"
 def androcRequireSigning = (findProperty("androcRequireSigning")
         ?: findProperty("adiaRequireSigning")) == "1"
 
@@ -152,4 +152,5 @@ dependencies {
     // Descompresion xz en Java: Android no trae el binario xz y el tar de
     // Toybox lo necesita para los .deb de Termux.
     implementation 'org.tukaani:xz:1.10'
+    implementation 'org.apache.commons:commons-compress:1.26.2'
 }
