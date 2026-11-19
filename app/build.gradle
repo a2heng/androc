@@ -147,6 +147,7 @@ android {
 
 dependencies {
     implementation project(':ui')
+    implementation project(':market')
     // El tema del cliente usa Theme.SplashScreen; sus attrs deben entrar en el APK.
     implementation 'androidx.core:core-splashscreen:1.0.1'
     implementation 'androidx.appcompat:appcompat:1.8.0'

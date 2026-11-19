@@ -31,6 +31,8 @@ data class MarketIndex(
 data class MarketPack(
     val id: String,
     val name: String,
+    val category: String,
+    val kind: String,
     val version: String,
     val upstreamVersion: String,
     val abi: String,
@@ -49,6 +51,8 @@ data class MarketPack(
             return MarketPack(
                 id = o.optString("id", ""),
                 name = o.optString("name", ""),
+                category = o.optString("category", ""),
+                kind = o.optString("kind", "single-file"),
                 version = o.optString("version", ""),
                 upstreamVersion = o.optString("upstreamVersion", ""),
                 abi = o.optString("abi", "arm64-v8a"),

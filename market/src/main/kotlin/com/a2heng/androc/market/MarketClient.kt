@@ -7,6 +7,7 @@ import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable
 import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.json.JSONObject
 import org.tukaani.xz.XZInputStream
 import java.io.BufferedInputStream
@@ -84,6 +85,82 @@ class MarketClient(
             if (f.isFile && f.name != archive.name) f.delete()
         }
         return target
+    }
+
+    // ------------------------------------------------------------------ packs
+
+    /**
+     * Install a directory pack (skills / toolchain / ...) into
+     * files/packs/<id>/<version>/.
+     *
+     * The archive is xz-compressed tar; `installed` in the index is the
+     * SHA-256 of the uncompressed tar stream, so a single pass verifies both
+     * the download and the extraction payload.
+     */
+    @Throws(IOException::class)
+    fun installPack(filesDir: File, packId: String, progress: Progress? = null): File {
+        val index = refresh()
+        val pack = index.find(packId) ?: throw IOException("$packId not in index")
+        return installPack(filesDir, pack, progress)
+    }
+
+    @Throws(IOException::class)
+    fun installPack(filesDir: File, pack: MarketPack, progress: Progress? = null): File {
+        if (pack.kind != "tar") throw IOException("not a tar pack: ${pack.kind}")
+        if (pack.abi != "arm64-v8a") throw IOException("unsupported abi ${pack.abi}")
+        val cache = File(filesDir, "market").apply {
+            if (!isDirectory && !mkdirs()) throw IOException("cannot create cache")
+        }
+        val parent = File(filesDir, "packs/${pack.id}").apply {
+            if (!isDirectory && !mkdirs()) throw IOException("cannot create pack dir")
+        }
+        val target = File(parent, pack.version)
+        val archive = File(cache, "${pack.id}-${pack.version}.tar.xz")
+        download(pack.archiveUrl, archive, pack.archiveSize, pack.archiveSha, progress)
+
+        val tar = File(parent, "${pack.id}-${pack.version}.tar.tmp")
+        decompress(archive, tar)
+        if (tar.length() != pack.installedSize ||
+            !sha256(tar).equals(pack.installedSha, ignoreCase = true)
+        ) {
+            tar.delete()
+            throw IOException("installed hash mismatch")
+        }
+
+        val tmp = File(parent, "${pack.id}-${pack.version}.tmp")
+        tmp.deleteRecursively()
+        if (!tmp.mkdirs()) throw IOException("cannot create temp dir")
+        extractTar(tar, tmp)
+        tar.delete()
+        if (target.exists()) target.deleteRecursively()
+        if (!tmp.renameTo(target)) {
+            tmp.copyRecursively(target, overwrite = true)
+            tmp.deleteRecursively()
+        }
+        archive.delete()
+        return target
+    }
+
+    private fun extractTar(tar: File, dest: File) {
+        val root = dest.canonicalPath + File.separator
+        TarArchiveInputStream(BufferedInputStream(FileInputStream(tar), 1 shl 16)).use { input ->
+            var entry = input.nextEntry
+            while (entry != null) {
+                val out = File(dest, entry.name)
+                val canonical = out.canonicalPath
+                if (canonical != dest.canonicalPath && !canonical.startsWith(root)) {
+                    throw IOException("unsafe tar entry ${entry.name}")
+                }
+                if (entry.isDirectory) {
+                    out.mkdirs()
+                } else {
+                    out.parentFile?.mkdirs()
+                    BufferedOutputStream(FileOutputStream(out), 1 shl 16).use { o -> input.copyTo(o) }
+                    if ((entry.mode and 0b001_000_000) != 0) out.setExecutable(true, true)
+                }
+                entry = input.nextEntry
+            }
+        }
     }
 
     // ------------------------------------------------------------------ crypto

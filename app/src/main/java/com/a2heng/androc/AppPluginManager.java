@@ -166,10 +166,19 @@ public final class AppPluginManager implements PluginManager {
             new Thread(() -> {
                 try {
                     PluginCatalog.setPluginEnabled(ctx, id, true);
-                    ToolchainInstaller.ensure(ctx);
-                    LocalRuntime.installBundledSkills(ctx);
-                    boolean ok = ToolchainInstaller.installed(ctx)
-                            && anySkill(LocalRuntime.homeDir(ctx), skillsFor(id));
+                    // Skills now come from the market pack; the APK no longer
+                    // bundles android-* skills.
+                    File pack = PackInstaller.install(ctx, "android");
+                    for (File config : PackInstaller.configDirs(ctx)) {
+                        PackInstaller.copySkills(pack, config);
+                    }
+                    // The toolchain is still bundled in the offline flavor for
+                    // now; thin builds get it from the pack in a later slice.
+                    try {
+                        ToolchainInstaller.ensure(ctx);
+                    } catch (Throwable ignored) {
+                    }
+                    boolean ok = anySkill(LocalRuntime.homeDir(ctx), skillsFor(id));
                     post(id, ok, ok ? "Android 插件已安装" : "安装不完整，请重试",
                             callback);
                 } catch (Throwable t) {

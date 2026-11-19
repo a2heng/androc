@@ -47,9 +47,14 @@ final class PluginCatalog {
         return pluginEnabled(ctx, pluginFor(skill));
     }
 
-    /** Skill directories currently shipped in the APK for a plugin. */
+    /** Skill directories currently available for a plugin. */
     static List<String> skillsFor(Context ctx, String id) {
-        List<String> out = new ArrayList<>();
+        // Installed market pack first: android / language / writing skills
+        // no longer ship inside the APK.
+        List<String> out = new ArrayList<>(
+                PackInstaller.skillNames(PackInstaller.installedDir(ctx, id)));
+        if (!out.isEmpty()) return out;
+        // Fallback: the tiny core set still bundled in assets.
         try {
             String[] children = ctx.getAssets().list("skills");
             if (children == null) return out;
