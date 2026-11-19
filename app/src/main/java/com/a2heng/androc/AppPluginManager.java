@@ -132,19 +132,23 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void install(String id, Callback callback) {
-        if (PluginInfo.ANDROID.equals(id)) {
+        if (PluginInfo.ANDROID.equals(id) || "runtime-core".equals(id)) {
             new Thread(() -> {
                 try {
-                    File pack = PackInstaller.install(ctx, "android");
-                    for (File config : PackInstaller.configDirs(ctx)) {
-                        PackInstaller.copySkills(pack, config);
+                    File pack = PackInstaller.install(ctx, id);
+                    if (PluginInfo.ANDROID.equals(id)) {
+                        for (File config : PackInstaller.configDirs(ctx)) {
+                            PackInstaller.copySkills(pack, config);
+                        }
                     }
-                    boolean ok = anySkill(LocalRuntime.homeDir(ctx), skillsFor(id));
-                    post(id, ok, ok ? "Android 插件已安装" : "安装不完整，请重试", callback);
+                    boolean ok = PluginInfo.ANDROID.equals(id)
+                            ? anySkill(LocalRuntime.homeDir(ctx), skillsFor(id))
+                            : new File(pack, "rootfs").isDirectory();
+                    post(id, ok, ok ? id + " 已安装" : "安装不完整，请重试", callback);
                 } catch (Throwable t) {
                     post(id, false, "安装失败：" + t.getMessage(), callback);
                 }
-            }, "plugin-install-android").start();
+            }, "plugin-install-" + id).start();
             return;
         }
         if (PluginInfo.OPENCODE.equals(id)) {
@@ -172,12 +176,14 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void uninstall(String id, Callback callback) {
-        if (PluginInfo.ANDROID.equals(id)) {
+        if (PluginInfo.ANDROID.equals(id) || "runtime-core".equals(id)) {
             new Thread(() -> {
-                deleteTree(new File(ctx.getFilesDir(), "packs/android"));
-                LocalRuntime.removePluginSkills(ctx, skillsFor(id));
-                post(id, true, "Android 插件已卸载；项目与会话保留", callback);
-            }, "plugin-uninstall-android").start();
+                deleteTree(new File(ctx.getFilesDir(), "packs/" + id));
+                if (PluginInfo.ANDROID.equals(id)) {
+                    LocalRuntime.removePluginSkills(ctx, skillsFor(id));
+                }
+                post(id, true, id + " 已卸载", callback);
+            }, "plugin-uninstall-" + id).start();
             return;
         }
         post(id, false, "内核正在使用时不能卸载；请先停止本机服务器", callback);

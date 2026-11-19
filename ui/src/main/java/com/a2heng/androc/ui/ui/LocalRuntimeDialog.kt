@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.a2heng.androc.market.MarketClient
+import com.a2heng.androc.market.MarketPack
 import com.a2heng.androc.ui.data.AppModel
 import com.a2heng.androc.ui.data.LocalRuntimeHost
 import kotlinx.coroutines.Dispatchers
@@ -48,12 +49,15 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var installedVersion by remember { mutableStateOf<String?>(null) }
     var marketVersion by remember { mutableStateOf<String?>(null) }
+    var marketPack by remember { mutableStateOf<MarketPack?>(null) }
     var progress by remember { mutableStateOf(0f) }
 
     LaunchedEffect(Unit) {
         marketVersion = withContext(Dispatchers.IO) {
             runCatching {
-                MarketClient().refresh().find("kernel-opencode")?.upstreamVersion
+                val pack = MarketClient().refresh().find("kernel-opencode")
+                marketPack = pack
+                pack?.upstreamVersion
             }.getOrNull()
         }
     }
@@ -121,8 +125,12 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
                         "组件未安装。安装后由 App 启动本机服务，地址和密码自动注入，不需要手动填写。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    val sizeText = marketPack?.let {
+                        "≈ ${it.archiveSize / 1048576} MB 下载 / " +
+                            "${it.installedSize / 1048576} MB 安装"
+                    } ?: "体积以市场索引为准"
                     Text(
-                        "OpenCode 组件 ≈ 89 MB 下载 / 247 MB 安装；从官方 release 检查更新。",
+                        "OpenCode 组件由 Androc 市场分发：$sizeText；是否更新以市场为准，不定期发布。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

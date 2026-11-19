@@ -50,6 +50,8 @@ public class LocalServerService extends Service {
         // foreground, asi que puede esperar en segundo plano.
         new Thread(() -> {
             try {
+                // bundle 内置的 runtime 在这里解压（只做一次），然后再启动。
+                RuntimeAssets.ensure(getApplicationContext());
                 // Con root, el home necesita "sdcard" como bind mount antes
                 // de arrancar el servidor: asi el selector muestra rutas
                 // limpias (~/sdcard/...) y no rutas con "..".

@@ -596,7 +596,9 @@ public final class LocalRuntime {
         env.put("OPENCODE_SERVER_PASSWORD", serverPassword(app));
         env.put("OPENCODE_SERVER_USERNAME", "opencode");
         env.put("OPENCODE_PASSWORD", serverPassword(app));
-        env.put("LD_LIBRARY_PATH", "/opt/androc/lib");
+        // proot itself runs on the host and needs libtalloc/libstdc++ from
+        // the app native lib dir; the guest also needs /opt/androc/lib.
+        env.put("LD_LIBRARY_PATH", nd.getAbsolutePath() + ":/opt/androc/lib");
         env.put("PROOT_LOADER", loader.getAbsolutePath());
         env.put("PROOT_TMP_DIR", prootTmp.getAbsolutePath());
         mkdirs(new File(home, ".local/share"));
@@ -627,6 +629,8 @@ public final class LocalRuntime {
         // proot needs the guest bind target to exist; create the app home path
         // inside the rootfs so absolute paths stay identical.
         new File(rootfs.getAbsolutePath() + home.getAbsolutePath()).mkdirs();
+        new File(rootfs.getAbsolutePath() + "/opt/androc/lib").mkdirs();
+        new File(rootfs.getAbsolutePath() + "/opt/androc/bin").mkdirs();
         bindPath(cmd, home.getAbsolutePath(), home.getAbsolutePath());
         bindPath(cmd, nd.getAbsolutePath(), "/opt/androc/lib");
         File binDir = bin.getParentFile();

@@ -24,10 +24,16 @@ final class MuslRootfs {
     }
 
     static File dir(Context ctx) {
-        File pack = PackInstaller.installedDir(ctx, "android");
-        if (pack == null) return null;
-        File rootfs = new File(pack, "rootfs");
-        return rootfs.isDirectory() ? rootfs : null;
+        // 先看 bundle 内置的 runtime，再看市场安装的 runtime-core。
+        File bundled = RuntimeAssets.rootfs(ctx);
+        if (bundled != null) return bundled;
+        for (String id : new String[]{"runtime-core", "android"}) {
+            File pack = PackInstaller.installedDir(ctx, id);
+            if (pack == null) continue;
+            File rootfs = new File(pack, "rootfs");
+            if (rootfs.isDirectory()) return rootfs;
+        }
+        return null;
     }
 
     static boolean available(Context ctx) {
@@ -56,7 +62,8 @@ final class MuslRootfs {
         List<String> cmd = new ArrayList<>();
         cmd.add("/system/bin/sh");
         cmd.add("-c");
-        cmd.add("PROOT_LOADER=" + q(loader.getAbsolutePath())
+        cmd.add("LD_LIBRARY_PATH=" + q(nd.getAbsolutePath())
+                + " PROOT_LOADER=" + q(loader.getAbsolutePath())
                 + " PROOT_TMP_DIR=" + q(tmp.getAbsolutePath())
                 + " exec \"$@\"");
         cmd.add("musl");

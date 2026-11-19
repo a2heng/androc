@@ -79,14 +79,9 @@ public class MobileFrontendActivity extends AppCompatActivity {
             com.a2heng.androc.ui.OpenCodeMobileHost.showStandalone(this);
             return;
         }
-        if (!com.a2heng.androc.MuslRootfs.available(this)) {
-            // No local runtime yet: mount the UI as a remote frontend instead
-            // of spinning forever. The user can install the OpenCode/Android
-            // component from Settings.
-            showFrontend();
-            return;
-        }
-        startServerAndShow();
+        // 启动只进 UI（远程模式）。本机 OpenCode 只有在用户点“启动并登录”
+        // 时才启动，避免后台常驻耗电。
+        showFrontend();
     }
 
     private void requestNotifPermission() {
@@ -200,8 +195,23 @@ public class MobileFrontendActivity extends AppCompatActivity {
                         public void start(
                                 kotlin.jvm.functions.Function2<? super String, ? super String, kotlin.Unit> onReady,
                                 kotlin.jvm.functions.Function1<? super String, kotlin.Unit> onError) {
-                            LocalServerService.start(MobileFrontendActivity.this);
-                            onReady.invoke(URL, LocalRuntime.serverPassword(MobileFrontendActivity.this));
+                            new Thread(() -> {
+                                LocalServerService.start(MobileFrontendActivity.this);
+                                long deadline = System.currentTimeMillis() + HEALTH_TIMEOUT_MS;
+                                while (System.currentTimeMillis() < deadline) {
+                                    if (probe()) {
+                                        onReady.invoke(URL,
+                                                LocalRuntime.serverPassword(MobileFrontendActivity.this));
+                                        return;
+                                    }
+                                    try {
+                                        Thread.sleep(600);
+                                    } catch (InterruptedException e) {
+                                        return;
+                                    }
+                                }
+                                onError.invoke("本机服务没有启动起来");
+                            }, "local-launcher").start();
                         }
 
                         @Override
@@ -246,7 +256,6 @@ public class MobileFrontendActivity extends AppCompatActivity {
         super.onResume();
         // Si el proceso se recreo o el servicio aun no estaba listo, reintenta solo.
         // Thin builds never start the local server.
-        if (!BuildConfig.THIN && !mounted
-                && com.a2heng.androc.MuslRootfs.available(this)) startServerAndShow();
+        // 不在 onResume 自动拉起本机 server；由用户显式启动。
     }
 }
