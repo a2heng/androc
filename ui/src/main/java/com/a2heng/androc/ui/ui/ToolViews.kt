@@ -1,7 +1,6 @@
 package com.a2heng.androc.ui.ui
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -26,7 +25,10 @@ import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -54,19 +56,9 @@ fun toolIcon(name: String): ImageVector = when (name.lowercase()) {
 fun decodeDataUri(uri: String, maxSide: Int = 1600): Bitmap? {
     val comma = uri.indexOf(',')
     if (!uri.startsWith("data:") || comma < 0) return null
-    return try {
-        val bytes = Base64.decode(uri.substring(comma + 1), Base64.DEFAULT)
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        var sample = 1
-        while (bounds.outWidth / sample > maxSide || bounds.outHeight / sample > maxSide) sample *= 2
-        BitmapFactory.decodeByteArray(
-            bytes, 0, bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sample },
-        )
-    } catch (_: Throwable) {
-        null
-    }
+    return runCatching {
+        decodeBitmapBytes(Base64.decode(uri.substring(comma + 1), Base64.DEFAULT), maxSide)
+    }.getOrNull()
 }
 
 @Composable
@@ -80,6 +72,8 @@ fun DataUriImage(uri: String) {
         )
         return
     }
+    // 点一下全屏看大图：双指缩放、双击放大
+    var open by remember(bitmap) { mutableStateOf(false) }
     Image(
         bitmap = bitmap.asImageBitmap(),
         contentDescription = "工具生成的图片",
@@ -87,8 +81,12 @@ fun DataUriImage(uri: String) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = 300.dp)
-            .padding(top = 4.dp),
+            .padding(top = 4.dp)
+            .clickableNoRipple { open = true },
     )
+    if (open) {
+        ZoomableImageDialog(bitmap, "工具生成的图片") { open = false }
+    }
 }
 
 /** 统一 diff：+ 绿、- 红、@@ 蓝；跳过 Index/---/+++ 这些噪声头。 */

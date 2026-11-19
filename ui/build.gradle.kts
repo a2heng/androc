@@ -59,6 +59,10 @@ dependencies {
 
     implementation("org.connectbot:termlib:0.3.14")
 
+    // 图片缩放手势（双指缩放 / 双击 / 边界回弹）直接用 Telephoto，
+    // 比自己写 TransformableState 手感好得多，图片和文件预览共用。
+    implementation("me.saket.telephoto:zoomable:0.19.0")
+
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 

@@ -2436,77 +2436,7 @@ private fun FilePreviewCard(model: AppModel, path: String, onClose: () -> Unit) 
                     .heightIn(min = contentMin, max = contentMax)
                     .padding(vertical = 4.dp),
             ) {
-                val mediaUri = model.openFileMediaUri
-                val mediaKind = model.openFileMediaKind
-                when {
-                    model.openFileLoading -> CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center).size(20.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    mediaUri != null && mediaKind != null -> Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        MediaPreview(
-                            uri = mediaUri,
-                            kind = mediaKind,
-                            title = path.substringAfterLast('/'),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        if (model.openFileBytesSize > 0L) {
-                            Text(
-                                "${model.openFileMime.ifBlank { mediaKind }} · ${model.openFileBytesSize / 1024} KB",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    model.openFileImage != null -> Image(
-                        bitmap = model.openFileImage!!.asImageBitmap(),
-                        contentDescription = path.substringAfterLast('/'),
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    model.openFileBinary -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            model.openFileText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    model.openFileMarkdown -> Box(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                    ) {
-                        val baseDir = path.substringBeforeLast('/', "")
-                        MarkdownText(
-                            model.openFileText,
-                            compact = false,
-                            onOpenPath = { ref ->
-                                model.openFile(resolveFileRef(ref, baseDir, model.homeDir))
-                            },
-                        )
-                    }
-                    else -> Box(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                    ) {
-                        val baseDir = path.substringBeforeLast('/', "")
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (model.openFileMime.isNotBlank()) {
-                                Text(
-                                    model.openFileMime,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Text(
-                                model.openFileText.take(120_000),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                }
+                FilePreviewContent(model, path, Modifier.fillMaxSize())
             }
         }
     }

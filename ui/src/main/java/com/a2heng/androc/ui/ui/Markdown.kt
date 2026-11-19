@@ -1,6 +1,11 @@
 package com.a2heng.androc.ui.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -12,15 +17,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,8 +37,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.LinkAnnotation
@@ -43,13 +57,17 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.a2heng.androc.ui.data.isAbsolutePath
 import com.a2heng.androc.ui.data.joinPath
 import com.a2heng.androc.ui.data.normPath
+import kotlinx.coroutines.delay
 
 // ---------------------------------------------------------------------------
 // 一个够用的 Markdown 渲染器（不引第三方库）：
@@ -73,6 +91,9 @@ private sealed interface Line {
         val rows: List<List<String>>,
         val aligns: List<Int>,
     ) : Line
+
+    /** 独占一行的图片：![alt](src) —— 渲染成可点开缩放的卡片。 */
+    data class Image(val alt: String, val src: String) : Line
     data object Rule : Line
     data object Gap : Line
 }
@@ -81,6 +102,9 @@ private val headingRe = Regex("^(#{1,6})\\s+(.*)$")
 private val quoteRe = Regex("^\\s*>\\s?(.*)$")
 private val listRe = Regex("^(\\s*)([-*+]|\\d+[.)])\\s+(.*)$")
 private val ruleRe = Regex("^\\s*(---+|\\*\\*\\*+|___+)\\s*$")
+
+/** 整行只有一张图（允许 alt 为空、允许 title）。 */
+private val imageLineRe = Regex("""^\s*!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)\s*$""")
 
 private fun splitRow(line: String): List<String> =
     line.trim().trim('|').split('|').map { it.trim() }
@@ -150,15 +174,41 @@ private fun parseLines(text: String): List<Line> {
         val q = quoteRe.find(line)
         if (q != null) {
             flush()
-            out += Line.Quote(q.groupValues[1])
+            // 连续的 > 行合成一段，左边那根竖线才是一整条
+            val quoted = StringBuilder(q.groupValues[1])
             i++
+            while (i < lines.size) {
+                val next = quoteRe.find(lines[i].trimEnd()) ?: break
+                quoted.append('\n').append(next.groupValues[1])
+                i++
+            }
+            out += Line.Quote(quoted.toString())
             continue
         }
         val l = listRe.find(line)
         if (l != null) {
             flush()
             val indent = l.groupValues[1].length / 2
-            out += Line.ListItem(indent, l.groupValues[2], l.groupValues[3])
+            val body = l.groupValues[3]
+            // 任务列表：- [ ] / - [x] → ☐ / ☑
+            val task = when {
+                body.startsWith("[ ]") -> "☐" to body.removePrefix("[ ]").trimStart()
+                body.startsWith("[x]") || body.startsWith("[X]") ->
+                    "☑" to body.substring(3).trimStart()
+                else -> null
+            }
+            out += if (task != null) {
+                Line.ListItem(indent, task.first, task.second)
+            } else {
+                Line.ListItem(indent, l.groupValues[2], body)
+            }
+            i++
+            continue
+        }
+        val img = imageLineRe.find(line)
+        if (img != null) {
+            flush()
+            out += Line.Image(img.groupValues[1].trim(), img.groupValues[2].trim())
             i++
             continue
         }
@@ -350,8 +400,11 @@ private fun MarkdownTable(
             compact,
         )
     }
-    val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.40f)
-    val headerBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f)
+    // 网格线统一 1dp：以前每个格子自己画 0.5dp 边框，相邻两边叠成 1dp、
+    // 靠外一侧只有 0.5dp，接缝粗细不齐才是表头错位的根源。
+    val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val headerBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f)
+    val stripeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
     val padH = if (compact) 6.dp else 8.dp
     val padV = if (compact) 4.dp else 6.dp
     val fontSize = if (compact) 10.5.sp else 12.sp
@@ -364,64 +417,110 @@ private fun MarkdownTable(
     ) {
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             Column {
-                Row(Modifier.background(headerBg)) {
-                    line.headers.forEachIndexed { c, cell ->
-                        LinkableText(
-                            inline(cell, codeColor, linkColor, onOpenPath),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = fontSize,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            ),
-                            modifier = Modifier
-                                .width(widths[c])
-                                .border(0.5.dp, grid)
-                                .padding(horizontal = padH, vertical = padV),
-                            onOpenPath = onOpenPath,
-                        )
-                    }
-                }
+                TableRow(
+                    cells = line.headers,
+                    widths = widths,
+                    aligns = line.aligns,
+                    fontSize = fontSize,
+                    padH = padH,
+                    padV = padV,
+                    header = true,
+                    bg = headerBg,
+                    grid = grid,
+                    codeColor = codeColor,
+                    linkColor = linkColor,
+                    onOpenPath = onOpenPath,
+                    dividerAbove = false,
+                )
                 if (line.rows.isEmpty()) {
-                    Row {
-                        (0 until colCount).forEach { c ->
-                            Box(
-                                Modifier
-                                    .width(widths[c])
-                                    .border(0.5.dp, grid)
-                                    .padding(horizontal = padH, vertical = padV),
-                            )
-                        }
-                    }
+                    TableRow(
+                        cells = List(colCount) { "" },
+                        widths = widths,
+                        aligns = line.aligns,
+                        fontSize = fontSize,
+                        padH = padH,
+                        padV = padV,
+                        header = false,
+                        bg = Color.Transparent,
+                        grid = grid,
+                        codeColor = codeColor,
+                        linkColor = linkColor,
+                        onOpenPath = onOpenPath,
+                        dividerAbove = true,
+                    )
                 }
                 line.rows.forEachIndexed { r, row ->
-                    Row(
-                        Modifier.background(
-                            if (r % 2 == 0) MaterialTheme.colorScheme.surface
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                        ),
-                    ) {
-                        (0 until colCount).forEach { c ->
-                            val cell = row.getOrElse(c) { "" }
-                            LinkableText(
-                                inline(cell, codeColor, linkColor, onOpenPath),
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = fontSize,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = when (line.aligns.getOrElse(c) { -1 }) {
-                                        0 -> TextAlign.Center
-                                        1 -> TextAlign.End
-                                        else -> TextAlign.Start
-                                    },
-                                ),
-                                modifier = Modifier
-                                    .width(widths[c])
-                                    .border(0.5.dp, grid)
-                                    .padding(horizontal = padH, vertical = padV),
-                                onOpenPath = onOpenPath,
-                            )
-                        }
-                    }
+                    TableRow(
+                        cells = row,
+                        widths = widths,
+                        aligns = line.aligns,
+                        fontSize = fontSize,
+                        padH = padH,
+                        padV = padV,
+                        header = false,
+                        bg = if (r % 2 == 0) Color.Transparent else stripeBg,
+                        grid = grid,
+                        codeColor = codeColor,
+                        linkColor = linkColor,
+                        onOpenPath = onOpenPath,
+                        dividerAbove = true,
+                    )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 一行表格：所有格子用同一高度（IntrinsicSize.Min + fillMaxHeight），
+ * 竖线由格子之间的 1dp Box 画、横线由 drawBehind 画，接缝处处一致。
+ */
+@Composable
+private fun TableRow(
+    cells: List<String>,
+    widths: List<Dp>,
+    aligns: List<Int>,
+    fontSize: TextUnit,
+    padH: Dp,
+    padV: Dp,
+    header: Boolean,
+    bg: Color,
+    grid: Color,
+    codeColor: Color,
+    linkColor: Color,
+    onOpenPath: ((String) -> Unit)?,
+    dividerAbove: Boolean,
+) {
+    Row(
+        Modifier
+            .background(bg)
+            .height(IntrinsicSize.Min)
+            .drawBehind {
+                if (dividerAbove) {
+                    drawLine(grid, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx())
+                }
+            },
+    ) {
+        widths.forEachIndexed { c, w ->
+            if (c > 0) {
+                Box(Modifier.width(1.dp).fillMaxHeight().background(grid))
+            }
+            Box(Modifier.width(w).fillMaxHeight()) {
+                LinkableText(
+                    inline(cells.getOrElse(c) { "" }, codeColor, linkColor, onOpenPath),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = fontSize,
+                        fontWeight = if (header) FontWeight.SemiBold else FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = when (aligns.getOrElse(c) { -1 }) {
+                            0 -> TextAlign.Center
+                            1 -> TextAlign.End
+                            else -> TextAlign.Start
+                        },
+                    ),
+                    modifier = Modifier.padding(horizontal = padH, vertical = padV),
+                    onOpenPath = onOpenPath,
+                )
             }
         }
     }
@@ -502,6 +601,7 @@ private fun MarkdownLines(
                     )
                 }
                 is Line.Table -> MarkdownTable(line, codeColor, linkColor, compact, onOpenPath)
+                is Line.Image -> MarkdownImageCard(line.alt, line.src, compact, onOpenPath)
                 Line.Rule -> HorizontalDivider(Modifier.padding(vertical = if (compact) 4.dp else 6.dp))
                 Line.Gap -> Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
                 is Line.Para -> SelectionContainer {
@@ -514,6 +614,108 @@ private fun MarkdownLines(
                 }
             }
         }
+    }
+}
+
+/**
+ * Markdown 里的图片：卡片式显示（圆角 + 说明 + 点击放大）。
+ * 远程 / data: URI 自己下载解码；本地路径交给文件卡片（onOpenPath）。
+ */
+@Composable
+private fun MarkdownImageCard(
+    alt: String,
+    src: String,
+    compact: Boolean,
+    onOpenPath: ((String) -> Unit)?,
+) {
+    val remote = src.startsWith("data:") ||
+        src.startsWith("http://") ||
+        src.startsWith("https://")
+    var bitmap by remember(src) { mutableStateOf(cachedImage(src)) }
+    var failed by remember(src) { mutableStateOf(false) }
+    var viewerOpen by remember(src) { mutableStateOf(false) }
+    LaunchedEffect(src) {
+        if (bitmap == null && remote) {
+            val loaded = loadImageBitmap(src)
+            if (loaded == null) failed = true else bitmap = loaded
+        }
+    }
+    val title = alt.ifBlank {
+        src.substringAfterLast('/').substringBefore('?').ifBlank { "图片" }
+    }
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = if (compact) 3.dp else 5.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), shape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.20f), shape)
+            .clip(shape),
+    ) {
+        val shown = bitmap
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = if (compact) 72.dp else 96.dp, max = if (compact) 220.dp else 320.dp)
+                .then(
+                    when {
+                        shown != null -> Modifier.clickableNoRipple { viewerOpen = true }
+                        !remote && onOpenPath != null -> Modifier.clickableNoRipple { onOpenPath.invoke(src) }
+                        else -> Modifier
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                shown != null -> Image(
+                    bitmap = shown.asImageBitmap(),
+                    contentDescription = title,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                remote && !failed -> CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+                else -> Text(
+                    if (failed) "图片加载失败" else "本地图片",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                )
+            }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            val hint = when {
+                shown != null -> "点击放大"
+                remote && !failed -> "加载中"
+                failed -> "无法加载"
+                else -> "点击打开"
+            }
+            Text(
+                hint,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (shown != null) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+        }
+    }
+    val openBitmap = bitmap
+    if (viewerOpen && openBitmap != null) {
+        ZoomableImageDialog(openBitmap, title) { viewerOpen = false }
     }
 }
 
@@ -533,6 +735,14 @@ fun MarkdownText(
         blocks.forEach { block ->
             when (block) {
                 is Block.Code -> {
+                    val context = LocalContext.current
+                    var copied by remember(block.code) { mutableStateOf(false) }
+                    LaunchedEffect(copied) {
+                        if (copied) {
+                            delay(1500)
+                            copied = false
+                        }
+                    }
                     Column(
                         Modifier
                             .fillMaxWidth()
@@ -542,29 +752,56 @@ fun MarkdownText(
                                 RoundedCornerShape(8.dp),
                             ),
                     ) {
-                        if (block.lang.isNotBlank()) {
+                        // 头部：左边语言，右边复制按钮
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(start = 10.dp, end = 4.dp, top = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
                                 block.lang,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 10.dp, top = 5.dp),
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                if (copied) "已复制" else "复制",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (copied) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        copyBlockToClipboard(context, block.code)
+                                        copied = true
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
-                        Text(
-                            block.code,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = if (compact) 10.5.sp else 11.sp,
-                            color = mono,
-                            modifier = Modifier
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 10.dp, vertical = 7.dp),
-                        )
+                        SelectionContainer {
+                            Text(
+                                block.code,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = if (compact) 10.5.sp else 11.sp,
+                                color = mono,
+                                modifier = Modifier
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                            )
+                        }
                     }
                 }
                 is Block.Text -> MarkdownLines(block.text, codeColor, linkColor, compact, onOpenPath)
             }
         }
     }
+}
+
+/** 代码块右上角的复制：把整块代码原样写进系统剪贴板。 */
+private fun copyBlockToClipboard(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("OpenCode code", text))
 }
 
 
