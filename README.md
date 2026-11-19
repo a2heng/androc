@@ -5,25 +5,25 @@
 
 - 应用名：**Androc**
 - 包名：`com.a2heng.androc`
-- 形态：**一个 App + 插件**——基础 UI 和 proot 引擎随 APK；OpenCode、Android
-  构建、本地 AI、调试、Termux 都是按需安装的插件（每个插件 = Skill + 工具链）
-- opencode：**2.3.2**（musl arm64，跑在 proot 内）
+- 形态：**两个 APK**——`thin` 只有 UI（远程前端）；`bundle` = UI + musl
+  runtime + OpenCode，本机开箱可用。
+- opencode：**2.3.2**（musl arm64，跑在 proot 内）；OpenCode 组件默认自带
+  runtime（二进制 + rootfs 一个包）。
 - 目标：把「opencode + JDK + Android SDK + Gradle + 调试工具」装进手机，
-  不依赖电脑、不依赖 Termux 外部应用；离线用户用 bundle 构建
+  不依赖电脑、不依赖 Termux 外部应用。
 
 ## 产品形态：一个 App，三层能力
 
 Androc 不再拆成三个 APK。同一个 `com.a2heng.androc` 有三种状态：
 
-| 状态 | 装了什么 | 能做什么 |
+| 发行版 | 装了什么 | 能做什么 |
 |---|---|---|
-| **UI only** | 基础 APK | 连接电脑 / 远程 opencode、官方 App 配对 |
-| **UI + OpenCode 内核** | + OpenCode 插件 | 本机跑 opencode、会话、终端 |
-| **UI + 内核 + Android 构建** | + Android 构建插件 | 端侧构建 Android APK |
+| **thin** | 只有 UI | 连接远程 opencode、终端用服务端 PTY；可下载 OpenCode 组件变成本机 |
+| **bundle** | UI + musl runtime + OpenCode | 本机开箱即用；终端用本机 PTY |
 
-为什么能这样：`proot` 引擎必须随 APK 分发（约 2–3 MB），但 `opencode`、Termux
-toolbox、JDK/SDK/Gradle 都可以下载后在 proot 内执行。完整分层、pack 格式、
-设置页设计见 [`docs/series.md`](docs/series.md)。
+`proot` 引擎随 APK 分发（约 3 MB）；OpenCode 组件（二进制 + rootfs）和
+Android 工具链（JDK/SDK/Gradle + skills）都走市场下载。完整分层见
+[`docs/series.md`](docs/series.md)。
 
 当前仓库结构：
 
@@ -300,30 +300,27 @@ python scripts/fetch-opencode.py
 
 这只是「瘦 APK」；要得到内置工具链的大 APK，继续看下一节。
 
-## 生成离线 bundle 构建
-
-离线包由 `scripts/` 生成（脚本会下载 Termux 包、Android platform、aapt2、
-Gradle 和 Maven 缓存，然后放到 `app/src/bundle/assets/`）：
+## 构建
 
 ```sh
+# 1) opencode 二进制（仓库不提交）
 python scripts/fetch-opencode.py
-python scripts/fetch-toolbox.py
-python scripts/verify-toolbox.py   # 必须通过：bash/readline/符号链接/DT_NEEDED
-python scripts/make-toolchain.py
 
-./gradlew :app:assembleBundleDebug
+# 2) bundle 内置的 musl runtime（38 MB）
+python scripts/fetch-runtime-core.py
+
+# 3) 两个发行版
+./gradlew :app:assembleThinDebug      # UI only
+./gradlew :app:assembleBundleDebug    # UI + runtime + OC
 ```
 
-产物会包含：
+产物：
 
-- `assets/toolbox/*.deb`：Termux 工具链 + `openjdk-21` 及其依赖
-- `assets/toolchain/toolchain.zip`：Android platform 36、aapt2、Gradle 9.9.0、
-  Gradle 依赖缓存
-- `lib/arm64-v8a/libopencode2_bin.so`：opencode musl 运行时
+- `app/build/outputs/apk/thin/debug/app-thin-debug.apk`
+- `app/build/outputs/apk/bundle/debug/app-bundle-debug.apk`
 
-这是 **bundle** 构建，APK 会比较大（当前约 560 MB）：换取完全离线、开箱即用。
-phase 2 之后同一份源码会产出 `thin`（基础 APK + 可下载 pack）和 `bundle`
-（把同样的 pack 放进 assets）。
+release 版由 CI 构建：`assembleRelease` 同时产出
+`androc-<ver>-thin.apk` 和 `androc-<ver>-bundle.apk`。
 
 ## 参考项目与致谢
 

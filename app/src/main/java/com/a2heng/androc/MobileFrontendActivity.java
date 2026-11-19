@@ -182,8 +182,13 @@ public class MobileFrontendActivity extends AppCompatActivity {
                     new com.a2heng.androc.ui.data.LocalRuntimeLauncher() {
                         @Override
                         public boolean getInstalled() {
-                            return com.a2heng.androc.MuslRootfs.available(
-                                    MobileFrontendActivity.this);
+                            // bundle 自带 runtime + OC，永远算已安装；
+                            // thin 只有下载/解压后才算。
+                            return !BuildConfig.THIN
+                                    || com.a2heng.androc.RuntimeAssets.available(
+                                            MobileFrontendActivity.this)
+                                    || com.a2heng.androc.MuslRootfs.available(
+                                            MobileFrontendActivity.this);
                         }
 
                         @Override

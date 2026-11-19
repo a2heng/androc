@@ -1,36 +1,24 @@
-# Androc v0.6.0
+# Androc v0.6.1
 
-本版把运行时固定下来：**musl 取代 Termux/bionic**，并拆成两个发行版。
+0.6.0 之后的修正：OpenCode 与 Runtime 合成一个包，并修复内置 runtime 的解压与判定。
 
-## 两个 APK
+## OpenCode 组件
 
-- **UI 版（thin）**：只有界面。远程连接 opencode 服务，终端用服务端 PTY；不下载、不启动任何本地 runtime。
-- **UI + Runtime + OC 版（bundle）**：内置 musl runtime 和 opencode 二进制，本机开箱可用。
+- OpenCode 现在是一个自包含包：`opencode` 二进制 + musl runtime（bash/git/python/node），安装在 `files/runtime/<version>/`。
+- 安装/更新 OpenCode 不再需要单独安装 runtime。
+- 更新检查与下载只走 Androc 市场；不做增量，始终下载全量包。
 
-## 本机 OpenCode
+## 本机启动
 
-- 启动 App 只进界面，**不自动启动**本地 server；只有点「本机 → 启动并登录」才启动，并等健康检查通过再连接，避免后台耗电。
-- 首次启动时把内置 runtime 解压到应用私有目录；之后直接复用。
-- 终端是 rootfs 里的 bash PTY；远程模式仍用服务端 PTY。
+- bundle 自带 runtime + OC，弹窗显示「已安装」；只有点「启动并登录」才启动本地 server，不后台常驻。
+- 首次启动把内置 runtime 解压到 `files/runtime-core/`，路径修正为 `runtime-core/rootfs`。
 
-## 运行时
+## 修复
 
-- 删除 Termux/bionic 整套：`LocalToolbox`、`ToolboxServer`、`ToolboxService`、`ToolchainInstaller` 和 dpkg 路径全部移除。
-- 唯一运行时：proot + Alpine/musl rootfs（bash、coreutils、git、python3/pip、node/npm、openssh、make、curl、wget）。
-- 在 CI 里验证过：JDK 21 + Gradle 9.9 + AGP + aapt2 可在纯 musl 下构建 APK。
+- tar 解压正确还原符号链接（`/bin/sh`、busybox applets 等）。
+- proot 启动时 `LD_LIBRARY_PATH` 包含 App native lib 目录，rootfs 内预建 `/opt/androc/lib`。
+- OpenCode 更新只查市场，本机更新只匹配已安装的 thin/bundle。
 
-## 插件
+## 清理
 
-- OpenCode、Android、以及后续语言/写作组件都走市场。
-- `android` 插件 = JDK 21 + SDK 35 + Gradle 9.9 + build-tools + adb + `android-*` skills，按需下载。
-- OpenCode 更新只查 Androc 市场，不再查官方上游；本机更新只匹配已安装的 thin/bundle。
-
-## 其它
-
-- `full` flavor 删除，只剩 `thin` / `bundle`。
-- 组件包带签名索引，安装后校验 SHA-256。
-
-## 已知限制
-
-- `thin` 想本机跑仍需下载 OpenCode（以及 runtime-core）；`bundle` 不需要。
-- 插件增量更新暂未启用，当前为全量 xz。
+- 删除 0.6.0 之前的全部 Release 与 tag。
