@@ -4,8 +4,8 @@
 
 ```text
 app/src/main/jniLibs/arm64-v8a/libopencode2_bin.so   # fetch-opencode.py
-app/src/full/assets/toolbox/*.deb                    # fetch-toolbox.py
-app/src/full/assets/toolchain/toolchain.zip          # make-toolchain.py
+app/src/bundle/assets/toolbox/*.deb                    # fetch-toolbox.py
+app/src/bundle/assets/toolchain/toolchain.zip          # make-toolchain.py
 ```
 
 在仓库根目录执行：
@@ -44,9 +44,9 @@ v2 UI 需要一些「不更新的 WebView 没有」的 JavaScript API
 （`URL.canParse`、`Promise.try`、`toSorted` 等）。两个经典脚本在 SPA bundle
 之前执行，由 `MainActivity.injectEarlyScript` 注入 `<head>`：
 
-- `app/src/full/assets/oc-corejs.js`：只含所需模块的 core-js 打包产物
+- `app/src/bundle/assets/oc-corejs.js`：只含所需模块的 core-js 打包产物
   （见 `scripts/make-webview-shims.js`）；
-- `app/src/full/assets/oc-early.js`：`/provider` 缓存、picker 路径，以及
+- `app/src/bundle/assets/oc-early.js`：`/provider` 缓存、picker 路径，以及
   core-js 覆盖不到的 `AbortSignal` 垫片（core-js 只管 JS，不管 DOM）。
 
 改了 `MODULES` 之后要重新生成 polyfill（第一次会下载 `core-js-builder`

@@ -38,7 +38,7 @@ android {
         def androcUi = (findProperty("androcUi")
                 ?: findProperty("adiaUi") ?: "mobile").toString()
         buildConfigField "String", "UI_MODE", "\"${androcUi}\""
-        // Full build bundles the tools payload; thin will set this to false.
+        // Bundle flavor bundles the tools payload; thin sets this to false.
         buildConfigField "boolean", "TOOLS_BUNDLED", "true"
         // v1: canal 4.x del launcher y runtime opencode 1.x.
         buildConfigField "boolean", "V2", "false"
@@ -88,12 +88,12 @@ android {
         buildConfig true
     }
 
-    // Distribution flavors: one code base, two products.
-    //   full = UI + local kernel/assets (offline, heavy)
-    //   thin = UI only + the tiny exec fuse (packs come from the market)
+    // Distribution flavors: the only two products.
+    //   bundle = UI + bundled OpenCode runtime/assets (offline, heavy)
+    //   thin   = UI only; OpenCode and plugins are downloaded from the market
     flavorDimensions "distribution"
     productFlavors {
-        full {
+        bundle {
             dimension "distribution"
             buildConfigField "boolean", "THIN", "false"
         }

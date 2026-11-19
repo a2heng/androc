@@ -15,7 +15,7 @@ include(":ui")
 
 ## 一个 App，一个 UI 源码
 
-- **Androc（本仓库 `:app`）** 是唯一应用；`thin` / `full` 只是构建 flavor。
+- **Androc（本仓库 `:app`）** 是唯一应用；`thin` / `bundle` 只是构建 flavor。
 - 原来的 `a2heng/opencode-android-ui` 不再维护，代码并入 `:ui`，不再维护第二份
   源码，也不再用 git submodule。
 - `:ui` 只依赖 `:contracts`，不依赖 `:kernel`；它通过 `RuntimeConnection`

@@ -151,7 +151,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 ### 5.2 构建
 
 ```sh
-./gradlew :app:assembleFullDebug
+./gradlew :app:assembleBundleDebug
 ./gradlew :plugin-sdk:assembleDebug :runtime-plugin:assembleDebug
 ```
 
@@ -293,7 +293,7 @@ python scripts/make-toolchain.py
 ### 10.1 构建/安装
 
 ```sh
-./gradlew :app:assembleFullDebug
+./gradlew :app:assembleBundleDebug
 adb install -r app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
 
@@ -346,7 +346,7 @@ dc69799 feat: plugin SDK + runtime plugin APK skeleton
 ## 12. 交接清单
 
 - [ ] 读完 `design.md` + 本页 + `paths.md`/`commands.md`
-- [ ] 配好 JDK/SDK，`./gradlew :app:assembleFullDebug` 成功
+- [ ] 配好 JDK/SDK，`./gradlew :app:assembleBundleDebug` 成功
 - [ ] 安装 `app-debug.apk` + `runtime-plugin-debug.apk`
 - [ ] `dumpsys` 能看到 runtime 插件服务
 - [ ] 跑一次 60 秒路径验收

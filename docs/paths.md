@@ -340,4 +340,4 @@ pkg install -y jq
 | 首次安装 / 自测 | `app/src/main/java/com/opencode/launcher/ToolboxService.java` |
 | 离线包清单 | `scripts/fetch-toolbox.py` |
 | 打包前校验 | `scripts/verify-toolbox.py` |
-| agent 规则 | `app/src/full/assets/skills/termux/SKILL.md` |
+| agent 规则 | `app/src/bundle/assets/skills/termux/SKILL.md` |

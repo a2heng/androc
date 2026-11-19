@@ -23,7 +23,7 @@
 发布两种构建，代码同源：
 
 - **thin**（默认）：基础 APK，能力包按需下载；
-- **full**（离线）：同样一个 App，把能力包打进 assets，给不能联网的设备。
+- **bundle**（离线）：同样一个 App，把能力包打进 assets，给不能联网的设备。
 
 ---
 
@@ -34,7 +34,7 @@
 | 三个 applicationId、三条升级链 | 一个 App、一条升级链 |
 | 用户安装前就要选“简单/复杂” | 装完再按需开启 |
 | UI/kernel/tools 三份代码容易漂移 | 同一份源码、同一套测试 |
-| CI 要出三个包 | 出 thin/full 两个 APK + 两个 pack |
+| CI 要出三个包 | 出 thin/bundle 两个 APK + 两个 pack |
 | 跨 App 共享服务器要额外发现协议 | 同进程，`RuntimeController` 直连 |
 
 独立 UI APK 仍可作为“连接别人服务器”的轻量入口，但它不是另一个代码库：
@@ -174,7 +174,7 @@ tools.payload/           # 大头，按需下载或从本地 zip 导入
 :kernel      proot 引擎、server 生命周期、pack 安装与自愈、pairing
 :tools       tools pack 的内容与清单、skills、device API
 :ui          Setup（登录+设置）、会话、聊天、文件、终端
-:app         唯一应用；thin / full 两个 flavor
+:app         唯一应用；thin / bundle 两个 flavor
 ```
 
 依赖规则不变：
@@ -257,7 +257,7 @@ App 拒绝 `minAppVersion` 高于自身的 pack；pack 可以独立更新，不�
 | **1** | Setup 页合并登录/设置；连接本机/远程 | 一个页面完成连接与状态 |
 | **2** | PluginManager + OpenCode 插件（opencode + toolbox）；thin 基础包 | 不装插件只能连远程；装完能本机会话 |
 | **3** | Android 插件（构建/调试/AI 组件） | 端侧构建成功 |
-| **4** | thin / full 两个 flavor + CI 产物（APK + 插件包） | 一次 tag 出 2 APK + 插件包 |
+| **4** | thin / bundle 两个 flavor + CI 产物（APK + 插件包） | 一次 tag 出 2 APK + 插件包 |
 | **5** | 按需拆 repo / 发布 AAR | 外部只依赖 Maven 坐标 |
 
 ---
@@ -270,5 +270,5 @@ App 拒绝 `minAppVersion` 高于自身的 pack；pack 可以独立更新，不�
 4. **UI 不启动进程**；kernel 拥有 server 和插件安装。
 5. **Android 插件可选**：不装它，会话/终端仍然工作。
 6. **官方 App 只走 HTTP + pairing**，不依赖我们的 ContentProvider。
-7. **thin / full 同源**：full 只是把同样的插件包放进 assets，不允许两份代码。
+7. **thin / bundle 同源**：bundle 只是把同样的插件包放进 assets，不允许两份代码。
 8. 文档、skills、验收清单同步更新。

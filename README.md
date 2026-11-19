@@ -9,7 +9,7 @@
   构建、本地 AI、调试、Termux 都是按需安装的插件（每个插件 = Skill + 工具链）
 - opencode：**2.3.2**（musl arm64，跑在 proot 内）
 - 目标：把「opencode + JDK + Android SDK + Gradle + 调试工具」装进手机，
-  不依赖电脑、不依赖 Termux 外部应用；离线用户用 full 构建
+  不依赖电脑、不依赖 Termux 外部应用；离线用户用 bundle 构建
 
 ## 产品形态：一个 App，三层能力
 
@@ -119,7 +119,7 @@ release 构建默认对**随包分发的 64 位 native 库**做严格检查；32
 检查命令：
 
 ```sh
-python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py \
+python3 app/src/bundle/assets/skills/android-build/scripts/check-16kb.py \
   app/src/main/jniLibs/arm64-v8a
 ```
 
@@ -143,7 +143,7 @@ python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py \
   创建 git 仓库；需要 Android 项目时让 agent 用 `android-project` skill 生成。
 - **端侧构建 Android（Android 构建插件）**：Termux 的 `openjdk-21` + Android platform 36 +
   aarch64 `aapt2` + Gradle，直接在手机上执行 `assembleDebug`。
-- **一种代码，两种分发**：`thin` 按需下载插件；`full` 把同样的插件包放进 assets，
+- **一种代码，两种分发**：`thin` 按需下载插件；`bundle` 把同样的插件包放进 assets，
   给不能联网的设备。首次启动只做本地解压/安装。
 - **opencode skill**：`android-build` skill 告诉 agent 如何初始化工具链、构建项目、
   找到产物 APK。
@@ -209,7 +209,7 @@ python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py \
 
 ```text
 .
-├─ app/                       # 唯一应用（thin/full 由 flavor 决定）
+├─ app/                       # 唯一应用（thin/bundle 由 flavor 决定）
 │  └─ src/main/
 │     ├─ assets/skills/       # opencode skills（android-build）
 │     ├─ assets/toolbox/      # 离线 Termux .deb（构建产物，gitignored）
@@ -300,10 +300,10 @@ python scripts/fetch-opencode.py
 
 这只是「瘦 APK」；要得到内置工具链的大 APK，继续看下一节。
 
-## 生成离线 full 构建（phase 0 仍是当前方式）
+## 生成离线 bundle 构建
 
 离线包由 `scripts/` 生成（脚本会下载 Termux 包、Android platform、aapt2、
-Gradle 和 Maven 缓存，然后放到 `app/src/full/assets/`）：
+Gradle 和 Maven 缓存，然后放到 `app/src/bundle/assets/`）：
 
 ```sh
 python scripts/fetch-opencode.py
@@ -311,7 +311,7 @@ python scripts/fetch-toolbox.py
 python scripts/verify-toolbox.py   # 必须通过：bash/readline/符号链接/DT_NEEDED
 python scripts/make-toolchain.py
 
-./gradlew :app:assembleFullDebug
+./gradlew :app:assembleBundleDebug
 ```
 
 产物会包含：
@@ -321,8 +321,8 @@ python scripts/make-toolchain.py
   Gradle 依赖缓存
 - `lib/arm64-v8a/libopencode2_bin.so`：opencode musl 运行时
 
-这是 **full** 构建，APK 会比较大（当前约 560 MB）：换取完全离线、开箱即用。
-phase 2 之后同一份源码会产出 `thin`（基础 APK + 可下载 pack）和 `full`
+这是 **bundle** 构建，APK 会比较大（当前约 560 MB）：换取完全离线、开箱即用。
+phase 2 之后同一份源码会产出 `thin`（基础 APK + 可下载 pack）和 `bundle`
 （把同样的 pack 放进 assets）。
 
 ## 参考项目与致谢

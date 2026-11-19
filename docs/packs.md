@@ -70,14 +70,14 @@ a2heng/androc-packs           # 新仓库：只放 pack 的构建配方和发布
 ## 3. 发布节奏
 
 ```text
-App release:      androc v0.5.0        → thin/full APK + bootstrap
+App release:      androc v0.5.0        → thin/bundle APK + bootstrap
 Kernel release:   kernel 2.3.2-1       → opencode + userland
 Tools release:    tools 36.0-1         → JDK/SDK/Gradle/Maven
 Manifest release: packs-2026.11.1      → 指向上面三个的兼容组合
 ```
 
 - **thin APK**：启动后读 `manifest.json`，按需下载/更新；
-- **full APK**：内置某一版 pack 快照，离线可用；`manifest.json` 仍可用于后续更新；
+- **bundle APK**：内置某一版 pack 快照，离线可用；`manifest.json` 仍可用于后续更新；
 - 用户可以在设置里看到“已安装 / 可更新”，不必换 APK。
 
 ---
@@ -156,7 +156,7 @@ pack 可以比 App 旧；新 pack 不能强行装到旧 App。
 
 ```text
 push/tag → verify-toolbox → check-opencode-latest --strict
-        → assembleThin + assembleFull
+        → assembleThin + assembleBundle
         → 上传 APK + bootstrap（不含大 payload）
 ```
 
@@ -179,9 +179,9 @@ push/tag → verify-toolbox → check-opencode-latest --strict
 
 | 阶段 | 做什么 |
 |---|---|
-| **现在** | 主仓库保留 full 构建；`tools.bootstrap` 随 App；`tools.payload` 可删除/重装（已接好 UI） |
+| **现在** | 主仓库保留 bundle 构建；`tools.bootstrap` 随 App；`tools.payload` 可删除/重装（已接好 UI） |
 | **下一步** | 建 `androc-packs`；先发布 `tools-36.0-1` 和 `kernel-2.3.2-1`；App 读取签名 manifest |
-| **之后** | thin APK 默认按需下载；full APK 内置快照；设置页显示更新 |
+| **之后** | thin APK 默认按需下载；bundle APK 内置快照；设置页显示更新 |
 | **最后** | 需要时再把 kernel/tools **代码**拆 repo；现在不做，避免版本漂移 |
 
 **不要**现在就把 `:kernel` / `:ui` 代码拆成独立仓库。先拆**产物**，代码边界

@@ -60,11 +60,11 @@
 
 | 项 | 数值 | 出处 |
 |---|---:|---|
-| 最新 release APK（full） | **950 MB** | GitHub `v0.4.3` |
+| 最新 release APK（bundle） | **950 MB** | GitHub `v0.4.3` |
 | **thin release（实测 2026-11-19）** | **7.35 MB** | 含 4 MB 执行引信；远程连接/文件/终端已通 |
-| full debug（不含 opencode assets） | 33.9 MB | 本机构建 |
+| bundle debug（不含 opencode assets） | 33.9 MB | 本机构建 |
 | 仓库内 `jniLibs` | 18 MB | `app/src/main/jniLibs` |
-| 仓库内 assets（不含生成物） | 424 KB（full） | `app/src/full/assets`；thin 不打包 |
+| 仓库内 assets（不含生成物） | 424 KB（bundle） | `app/src/bundle/assets`；thin 不打包 |
 | opencode 2.3.2 解包 | **247.7 MB**（单 ELF，内嵌 Bun 1.4.4） | 实测 |
 | opencode zstd -19 | **98.1 MB** | 实测 |
 | 2.3.1→2.3.2 差量 | **7.6 MB（3.1%）** | `zstd --patch-from` 实测 |

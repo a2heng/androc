@@ -13,7 +13,7 @@ It builds a virtual filesystem from every .deb in assets/toolbox, then checks:
 
 Run:
     python3 scripts/verify-toolbox.py
-    python3 scripts/verify-toolbox.py --dir app/src/full/assets/toolbox
+    python3 scripts/verify-toolbox.py --dir app/src/bundle/assets/toolbox
 """
 import argparse
 import bz2
@@ -26,7 +26,7 @@ import sys
 import tarfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_DIR = os.path.join(ROOT, "app", "src", "full", "assets", "toolbox")
+DEFAULT_DIR = os.path.join(ROOT, "app", "src", "bundle", "assets", "toolbox")
 PREFIX = "./data/data/com.termux/files/usr/"
 
 ESSENTIAL = [

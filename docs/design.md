@@ -123,7 +123,7 @@
 | 4 | 运行时插件 APK（proot/opencode/Linux rootfs） + 薄 UI 基础包 | `[进行中]` |
 | 5 | Android 插件（一个：构建/调试/AI/测试 + 工具链） | `[计划]` |
 | 6 | 官方 Mobile 功能对齐（配对、语音、通知、结果摘要） | `[计划]` |
-| 7 | thin/full 分发、插件包签名 manifest、镜像 | `[计划]` |
+| 7 | thin/bundle 分发、插件包签名 manifest、镜像 | `[计划]` |
 | 8 | 数据迁移：旧单 APK → 薄 UI + 运行时插件 | `[待定]` |
 
 ---

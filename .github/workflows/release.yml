@@ -115,12 +115,12 @@ jobs:
             -PandrocVersionCode="${{ steps.version.outputs.code }}" \
             -PandrocRequireSigning=1
 
-      - name: 16 KB check (thin + full)
+      - name: 16 KB check (thin + bundle)
         env:
           ANDROC_16KB_STRICT: "1"
         run: |
           for APK in app/build/outputs/apk/*/release/*.apk; do
-            python3 app/src/full/assets/skills/android-build/scripts/check-16kb.py "$APK"
+            python3 app/src/bundle/assets/skills/android-build/scripts/check-16kb.py "$APK"
           done
 
       - name: Verify signatures
@@ -133,7 +133,7 @@ jobs:
       - name: Rename and checksum
         run: |
           mkdir -p out
-          for FLAVOR in thin full; do
+          for FLAVOR in thin bundle; do
             SRC=$(ls app/build/outputs/apk/$FLAVOR/release/*.apk | head -1)
             NAME="androc-${{ steps.version.outputs.name }}-$FLAVOR.apk"
             cp "$SRC" "out/$NAME"
