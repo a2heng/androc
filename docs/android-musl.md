@@ -48,8 +48,19 @@ glibc 二进制能否在 `gcompat` 下工作。
 | Gradle | ✅ `8.7` |
 
 结论：build-tools 的 glibc 二进制在 `gcompat + libgcc + libstdc++ + zlib`
-下可用，不需要 bionic。下一步在 musl 下跑最小 AGP 工程（生成 APK），再打包成
-`android` 插件的 musl rootfs。
+下可用，不需要 bionic。
+
+**最小 AGP 构建（同一 workflow 的 `assemble` job）：**
+
+| 项 | 值 |
+|---|---|
+| 环境 | Alpine 3.20 + OpenJDK 21 + Gradle 9.9 + AGP 9.5.1 |
+| SDK | platforms;android-36 + build-tools;36.0.0 |
+| 结果 | ✅ `BUILD SUCCESSFUL in 33s` |
+| 产物 | `app-debug.apk` 849.8 KB（含 APK Signing Block） |
+
+也就是说：**JDK + Gradle + AGP + aapt2 在纯 musl 下能完整产出 APK**。
+下一步把整套 rootfs 打成 `android` 插件的 musl pack，替换 termux-bionic。
 
 ## 回滚
 
