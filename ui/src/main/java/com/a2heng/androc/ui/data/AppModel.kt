@@ -289,6 +289,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var serverDefaultModel by mutableStateOf<ModelRef?>(null)
         private set
 
+    /** 新会话默认模式；没有会话时在设置里选，创建会话后自动应用 */
+    var defaultAgent by mutableStateOf(prefs.getString("default_agent", "") ?: "")
+
     /** 前端最近使用的模型；新会话优先用它，而不是改服务器默认 */
     var recentModel by mutableStateOf<ModelRef?>(
         run {
@@ -1579,6 +1582,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                         s = fresh ?: s.copy(model = chosen)
                     }
                 }
+                // 设置里选过的新会话模式，建会话时一次性带上。
+                if (s != null && defaultAgent.isNotBlank() && s.agent.isBlank()) {
+                    runCatching {
+                        withContext(Dispatchers.IO) { c.setAgent(s.id, defaultAgent) }
+                    }
+                    s = s.copy(agent = defaultAgent)
+                }
                 refreshSessions()
                 if (s != null) openSession(s)
             } catch (e: Exception) {
@@ -1666,6 +1676,23 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 lastError = e.message
             }
+        }
+    }
+
+    /**
+     * 模型/模式的唯一入口：聊天和设置都走这里，避免两个页面各改各的。
+     * 有会话就改会话（服务端 + 本地状态），没有会话就记成新会话默认。
+     */
+    fun chooseModel(ref: ModelRef) {
+        if (current != null) setModel(ref) else rememberRecentModel(ref)
+    }
+
+    fun chooseAgent(agent: String) {
+        if (current != null) {
+            setAgent(agent)
+        } else {
+            defaultAgent = agent
+            prefs.edit().putString("default_agent", agent).apply()
         }
     }
 
@@ -1875,7 +1902,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val (a, m) = withContext(Dispatchers.IO) { c.agents() to c.models() }
-                agents = a.filter { it.str("mode") != "subagent" }
+                // 只保留可选择的可见 primary agent：subagent 不进模式列表，
+                // hidden 的 compaction / title / summary 是内部维护 Agent，不能选。
+                agents = a.filter { it.str("mode") != "subagent" && !it.bool("hidden") }
                 contextLimits = m.mapNotNull { item ->
                     val id = item.str("id") ?: return@mapNotNull null
                     val limit = item.obj("limit")?.long("context") ?: 0L

@@ -511,6 +511,29 @@ fun stepsOf(messages: List<Msg>): List<CacheStep> =
         }
         .sortedBy { it.time }
 
+/**
+ * Agent 名字：这些是专业术语，保留英文 id + 中文后缀，例如「Build 构建」。
+ * 未知名字原样返回，不硬翻。
+ */
+fun agentLabel(name: String): String = when (name.lowercase()) {
+    "build" -> "Build 构建"
+    "plan" -> "Plan 规划"
+    "general" -> "General 通用"
+    "explore" -> "Explore 探索"
+    "review" -> "Review 评审"
+    else -> name
+}
+
+/** Agent 描述汉化：内置 Agent 给出固定中文，未知的保留服务端原文。 */
+fun agentDescription(id: String, desc: String): String = when (id.lowercase()) {
+    "build" -> "默认 Agent：按配置的权限执行工具、编辑文件。"
+    "general" -> "通用 Agent：研究复杂问题、并行执行多步任务。"
+    "explore" -> "探索 Agent：按文件名或关键字快速搜索代码库。"
+    "plan" -> "规划 Agent：只读地探索代码库、制定工作计划。"
+    "review" -> "评审 Agent：审查改动与代码质量。"
+    else -> desc
+}
+
 fun formatTokens(n: Long): String = when {
     n >= 1_000_000 -> String.format("%.2fM", n / 1_000_000.0)
     n >= 1_000 -> String.format("%.1fk", n / 1_000.0)
