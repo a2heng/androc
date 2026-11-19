@@ -140,6 +140,12 @@ public final class AutomationServer {
                 body = new org.json.JSONObject()
                         .put("url", MarketConfig.indexUrl(AutomationServerHolder.context()))
                         .toString();
+            } else if ("/musl".equals(path)) {
+                body = new org.json.JSONObject()
+                        .put("available", MuslRootfs.available(AutomationServerHolder.context()))
+                        .put("output", MuslRootfs.run(AutomationServerHolder.context(),
+                                params.getOrDefault("cmd", "echo ok")))
+                        .toString();
             } else if ("/plugins".equals(path)) {
                 body = pluginsJson();
             } else if ("/plugin/install".equals(path) && "POST".equals(method)) {
