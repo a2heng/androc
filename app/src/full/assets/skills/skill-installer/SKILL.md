@@ -1,33 +1,32 @@
 ---
 name: Skill Installer
-description: Install, list or remove opencode skills on this phone from a git repository, zip file or local directory. Use when the user asks to add a skill, or when a new capability is needed as a reusable skill.
+description: 在这台手机上从 git 仓库、zip 文件或本地目录安装、列出或删除 opencode 技能。当用户要求添加技能，或需要把新能力做成可复用技能时使用。
 ---
 
-# Skill Installer
+# 技能安装器
 
-OpenCode discovers skills in `~/.config/opencode/skills/<id>/SKILL.md`.
-This skill installs into both the normal config dir and the app's native
-config dir (`~/.config/opencode-android/skills`).
+OpenCode 会在 `~/.config/opencode/skills/<id>/SKILL.md` 中发现技能。
+本技能会同时安装到普通配置目录和应用的原生配置目录
+（`~/.config/opencode-android/skills`）。
 
-## When to use
+## 何时使用
 
-- The user says "install this skill", "add a skill from GitHub", "make this a skill".
-- You need a reusable procedure and want to install it for future sessions.
-- The user wants to list or remove installed skills.
+- 用户说“安装这个技能”、“从 GitHub 添加一个技能”、“把这个做成技能”。
+- 你需要一套可复用的流程，并想为后续会话安装它。
+- 用户想列出或删除已安装的技能。
 
-## Safety
+## 安全
 
-A skill is **instructions the agent will follow** and can include scripts.
-Only install from sources the user trusts. Never install a random URL without
-confirming with the user.
+技能是**代理将要遵循的指令**，其中可以包含脚本。
+只从用户信任的来源安装。未经用户确认，绝不要安装随意的 URL。
 
-## Install
+## 安装
 
 ```sh
 bash <skill-dir>/scripts/install.sh <git-url|zip-url|local-dir> [name]
 ```
 
-Examples:
+示例：
 
 ```sh
 # GitHub repo (shallow clone)
@@ -43,24 +42,23 @@ bash <skill-dir>/scripts/install.sh https://example.com/skill.zip my-skill
 bash <skill-dir>/scripts/install.sh /path/to/skill
 ```
 
-The script finds `SKILL.md`, validates `name` + `description`, copies the
-whole skill directory (including `scripts/`, `references/`, `assets/`), and
-prints the installed path. Use `--force` to replace an existing skill.
+脚本会找到 `SKILL.md`，校验 `name` + `description`，复制整个技能目录
+（包括 `scripts/`、`references/`、`assets/`），并打印安装路径。用 `--force`
+覆盖已存在的技能。
 
-After installing, start a **new session** (or restart the server) so OpenCode
-re-discovers the skill list.
+安装后，开始一个**新会话**（或重启服务器），以便 OpenCode 重新发现技能列表。
 
-## List
+## 列出
 
 ```sh
 bash <skill-dir>/scripts/list.sh
 ```
 
-## Remove
+## 删除
 
 ```sh
 bash <skill-dir>/scripts/remove.sh <skill-id>
 ```
 
-This removes the skill from both config directories. It never touches
-`android-build` or `skill-installer`.
+这会从两个配置目录中删除该技能。它绝不会触碰
+`android-build` 或 `skill-installer`。

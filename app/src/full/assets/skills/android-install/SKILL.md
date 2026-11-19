@@ -1,29 +1,29 @@
 ---
 name: Android Install
-description: Install, launch, uninstall or grant permissions to an Android app on this phone using the bundled adb, PackageInstaller or Shizuku. Use after a build, or when the user asks to run an APK.
+description: 用内置 adb、PackageInstaller 或 Shizuku 在这台手机上安装、启动、卸载 Android 应用或授予权限。构建完成后，或用户要求运行 APK 时使用。
 ---
 
-# Android Install
+# Android 安装
 
-## Install with adb
+## 用 adb 安装
 
 ```sh
 adb install -r -t /path/to/app-debug.apk
 ```
 
-Both adb binaries (Termux `$PREFIX/bin/adb` and
-`$HOME/toolchain/platform-tools/adb`) work normally: `auto` runs the whole
-command inside proot. No `oc-proot` wrapper is needed.
+两个 adb 二进制（Termux 的 `$PREFIX/bin/adb` 和
+`$HOME/toolchain/platform-tools/adb`）都能正常工作：`auto` 会在 proot 内运行
+整条命令。不需要 `oc-proot` 包装。
 
-`-r` replaces an existing install; `-t` allows test-only APKs. For a signature
-mismatch: uninstall first, then install:
+`-r` 替换已安装的版本；`-t` 允许仅测试用的 APK。遇到签名不匹配时：先卸载，
+再安装：
 
 ```sh
 adb uninstall com.example.app
 adb install /path/to/app.apk
 ```
 
-## Launch
+## 启动
 
 ```sh
 adb shell monkey -p com.example.app -c android.intent.category.LAUNCHER 1
@@ -31,38 +31,37 @@ adb shell monkey -p com.example.app -c android.intent.category.LAUNCHER 1
 adb shell am start -n com.example.app/.MainActivity
 ```
 
-Get the launchable activity:
+获取可启动的 activity：
 
 ```sh
 adb shell cmd package resolve-activity --brief com.example.app | tail -n 1
 ```
 
-## Permissions
+## 权限
 
 ```sh
 adb shell pm grant com.example.app android.permission.POST_NOTIFICATIONS
 adb shell appops set com.example.app MANAGE_EXTERNAL_STORAGE allow
 ```
 
-On some OEM ROMs (OPPO/ColorOS, Xiaomi/HyperOS) `pm grant`/`appops` from the
-shell user is restricted. Do not treat a failure as an app bug; guide the user
-to grant it in Settings.
+在某些厂商 ROM（OPPO/ColorOS、Xiaomi/HyperOS）上，以 shell 用户执行
+`pm grant`/`appops` 会受到限制。不要把失败当成应用 bug；引导用户在设置中
+手动授予。
 
 ## Shizuku / PackageInstaller
 
-If adb is not available, the app can use Android's PackageInstaller intent or
-Shizuku (if installed). These usually show a confirmation dialog; the user must
-tap Install.
+如果 adb 不可用，应用可以使用 Android 的 PackageInstaller intent 或
+Shizuku（如果已安装）。它们通常会弹出确认对话框；需要用户点击安装。
 
-## Verify
+## 验证
 
 ```sh
 adb shell dumpsys package com.example.app | grep -E "versionName|versionCode|firstInstallTime"
 adb shell pidof com.example.app
 ```
 
-## Notes
+## 注意
 
-- The APK must be signed (debug signing is fine).
-- Do not install over an app with a different signature; uninstall first.
-- On the same phone, adb needs Wireless debugging pairing; see `android-debug`.
+- APK 必须已签名（debug 签名即可）。
+- 不要覆盖安装签名不同的应用；先卸载。
+- 在同一台手机上，adb 需要无线调试配对；参见 `android-debug`。

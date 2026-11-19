@@ -1,156 +1,151 @@
 ---
 name: Android Library Cache
-description: Resolve, download and cache Maven/Gradle libraries that are not in the bundled offline cache, in a shared cache that other projects and tools on this phone can reuse. Use when a build says "Could not resolve", "No cached version", or a library is missing offline.
+description: 解析、下载并缓存不在随包离线缓存中的 Maven/Gradle 库，放到本机其他项目和工具都能复用的共享缓存里。当构建提示 "Could not resolve"、"No cached version"，或某个库离线缺失时使用。
 ---
 
-# Android Library Cache
+# Android 库缓存
 
-The APK bundles a **seeded** Gradle/Maven cache. It is not a universal
-mirror: Compose, Hilt, Room, Retrofit, Kotlin plugins and test libraries may
-be absent. This skill downloads a missing library **once** into a shared
-location so every later project and tool on the phone works offline.
+APK 内置了一份**预置（seeded）**的 Gradle/Maven 缓存。它不是通用镜像：
+Compose、Hilt、Room、Retrofit、Kotlin 插件和测试库可能不在其中。本技能
+把缺失的库**一次性**下载到共享位置，使此后手机上的每个项目和工具都能离线工作。
 
-## Shared locations (do not use project-local caches)
+## 共享位置（不要使用项目本地缓存）
 
-| Path | What it is | Who reuses it |
+| 路径 | 是什么 | 谁复用它 |
 |---|---|---|
-| `~/toolchain/gradle-home` | `GRADLE_USER_HOME` with `caches/modules-2` | every Gradle project |
-| `~/toolchain/m2` | Maven repository layout (`group/artifact/version`) | Maven, sbt, javac, kotlinc, scripts, Gradle |
-| `~/toolchain/m2/.androc-index.tsv` | coordinate, file, sha256 | audit / dedupe |
-| `~/.m2/repository` | symlink to `~/toolchain/m2` | tools that hardcode `~/.m2` |
+| `~/toolchain/gradle-home` | 带 `caches/modules-2` 的 `GRADLE_USER_HOME` | 每个 Gradle 项目 |
+| `~/toolchain/m2` | Maven 仓库目录结构（`group/artifact/version`） | Maven、sbt、javac、kotlinc、脚本、Gradle |
+| `~/toolchain/m2/.androc-index.tsv` | 坐标、文件、sha256 | 审计 / 去重 |
+| `~/.m2/repository` | 指向 `~/toolchain/m2` 的符号链接 | 硬编码 `~/.m2` 的工具 |
 
-`HOME` is the app-private root (`/data/user/0/com.a2heng.androc/files/home`),
-so these caches survive app updates and are shared by all projects.
+`HOME` 是应用私有根目录（`/data/user/0/com.a2heng.androc/files/home`），
+因此这些缓存能在应用更新后保留，并被所有项目共享。
 
-What is automatic vs opt-in:
+哪些是自动的、哪些需要显式启用：
 
-- `~/toolchain/gradle-home` is used automatically by
-  `android-build/scripts/build.sh` (`GRADLE_USER_HOME`); it is the real shared
-  cache for Gradle downloads.
-- `~/toolchain/m2` is only populated when you run `export-gradle.sh` or
-  `fetch-maven.sh`; `~/.m2/repository` only exists after `link-m2.sh`. They
-  are for Maven/sbt/javac, not required for Gradle.
-- Project `build/` and `.gradle/` are **not** caches; they are the main growth.
-  Remove them with `android-build/scripts/clean-caches.sh --builds`.
+- `~/toolchain/gradle-home` 由 `android-build/scripts/build.sh`
+  （`GRADLE_USER_HOME`）自动使用；它是 Gradle 下载的真实共享缓存。
+- `~/toolchain/m2` 只在你运行 `export-gradle.sh` 或 `fetch-maven.sh` 时
+  才会填充；`~/.m2/repository` 只在运行 `link-m2.sh` 后才存在。它们
+  面向 Maven/sbt/javac，Gradle 并不需要。
+- 项目的 `build/` 和 `.gradle/` **不是**缓存；它们才是体积增长的主要来源。
+  用 `android-build/scripts/clean-caches.sh --builds` 删除它们。
 
-Rule: never download into `./.gradle`, `./build`, or a per-project
-`mavenLocal()`. Always use the shared paths above, otherwise the next project
-downloads the same 40 MB again.
+规则：绝不要下载到 `./.gradle`、`./build` 或每个项目各自的
+`mavenLocal()`。始终使用上面的共享路径，否则下一个项目会把同样的 40 MB
+再下载一遍。
 
-## Workflow
+## 工作流程
 
-### 1. Confirm what is missing
+### 1. 确认缺什么
 
 ```sh
 bash <skill-dir>/scripts/env.sh
 bash ~/.config/opencode/skills/android-build/scripts/build.sh . debug
 ```
 
-Read the first `Could not resolve <group:artifact:version>` line.
+读取第一行 `Could not resolve <group:artifact:version>`。
 
-### 2. Warm the shared Gradle cache (best for Android projects)
+### 2. 预热共享 Gradle 缓存（对 Android 项目最佳）
 
 ```sh
 bash <skill-dir>/scripts/warm-gradle.sh /path/to/project assembleDebug
 ```
 
-This runs the normal `android-build` script **online once**, with
-`GRADLE_USER_HOME=~/toolchain/gradle-home`, then immediately rebuilds
-**offline** to prove the cache is complete. Transitive dependencies are
-resolved by Gradle, which is more reliable than hand-fetching POMs.
+它会以 `GRADLE_USER_HOME=~/toolchain/gradle-home` **在线运行一次**常规的
+`android-build` 脚本，然后立即**离线**重建，以证明缓存完整。传递依赖由
+Gradle 解析，比手工抓取 POM 更可靠。
 
-Ask the user before using mobile data. After this, every Gradle project that
-uses the same coordinates builds offline.
+使用移动数据前先询问用户。此后，使用相同坐标的每个 Gradle 项目都能离线构建。
 
-### 3. Publish the Gradle cache to the Maven mirror (for non-Gradle tools)
+### 3. 把 Gradle 缓存发布到 Maven 镜像（供非 Gradle 工具使用）
 
 ```sh
 bash <skill-dir>/scripts/export-gradle.sh
 ```
 
-It copies `modules-2` jars/aars/poms into `~/toolchain/m2` so Maven, sbt,
-`javac -cp`, Kotlin scripts and other software can consume the same files.
+它把 `modules-2` 中的 jar/aar/pom 复制到 `~/toolchain/m2`，好让 Maven、sbt、
+`javac -cp`、Kotlin 脚本及其他软件也能使用同一批文件。
 
-### 4. Fetch one coordinate for another tool
+### 4. 为其他工具抓取单个坐标
 
 ```sh
 bash <skill-dir>/scripts/fetch-maven.sh com.squareup.okhttp3:okhttp:4.12.0
 bash <skill-dir>/scripts/fetch-maven.sh androidx.room:room-runtime:2.6.1 --no-deps
 ```
 
-The script tries Google Maven and Maven Central, stores the POM/JAR/AAR in
-Maven layout, verifies SHA-1 when the repository publishes one, and appends
-to `.androc-index.tsv`. Use `--no-deps` for a single file; transitive
-resolution is best done with Gradle (step 2).
+该脚本会依次尝试 Google Maven 和 Maven Central，把 POM/JAR/AAR 按 Maven
+目录结构存放，在仓库发布 SHA-1 时校验它，并追加记录到
+`.androc-index.tsv`。单个文件用 `--no-deps`；传递依赖解析最好交给 Gradle
+（第 2 步）。
 
-### 5. Use the mirror
+### 5. 使用镜像
 
-Gradle — add this to the build (or pass it as an init script):
+Gradle——把下面一行加入构建脚本（或作为 init 脚本传入）：
 
 ```groovy
 maven { url = uri("${System.getenv('HOME')}/toolchain/m2") }
 ```
 
-Maven / sbt / scripts:
+Maven / sbt / 脚本：
 
 ```sh
 export MAVEN_OPTS="-Dmaven.repo.local=$HOME/toolchain/m2"
 mvn -o ...
 ```
 
-One-time symlink for tools that only know `~/.m2`:
+为只认 `~/.m2` 的工具做一次性符号链接：
 
 ```sh
 bash <skill-dir>/scripts/link-m2.sh
 ```
 
-Dependency-free checking with `javac`:
+用 `javac` 做无依赖检查：
 
 ```sh
 javac -cp "$HOME/toolchain/m2/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0.jar" App.java
 ```
 
-## Environment
+## 环境
 
-`scripts/env.sh` exports the canonical values; source it in ad-hoc shells:
+`scripts/env.sh` 导出规范取值；在临时 shell 中 source 它：
 
 ```sh
 . <skill-dir>/scripts/env.sh
 echo "$ANDROC_M2 $GRADLE_USER_HOME"
 ```
 
-Variables:
+变量：
 
-- `ANDROC_M2` — Maven mirror (default `$HOME/toolchain/m2`)
-- `ANDROC_GRADLE_HOME` — shared Gradle home (default `$HOME/toolchain/gradle-home`)
-- `ANDROC_MAVEN_REPOS` — comma-separated extra repository base URLs
+- `ANDROC_M2` — Maven 镜像（默认 `$HOME/toolchain/m2`）
+- `ANDROC_GRADLE_HOME` — 共享 Gradle 主目录（默认 `$HOME/toolchain/gradle-home`）
+- `ANDROC_MAVEN_REPOS` — 以逗号分隔的额外仓库基础 URL
 
-## Rules
+## 规则
 
-- One copy per coordinate. If the file exists and the checksum matches, do not
-  download again.
-- Keep caches outside the project. `scripts/make-toolchain.py` owns the
-  bundled seed; the user cache is everything added at runtime.
-- Do not delete `~/toolchain/gradle-home` or `~/toolchain/m2` to "clean" a
-  build. Delete only the specific version directory if it is corrupt.
-- Never commit `~/toolchain`, `~/toolchain/m2` or a `.aar` into git.
-- Prefer explicit versions. `+` and `latest.release` make the cache ambiguous
-  and break offline builds later.
-- On a metered connection, ask first, then download in one batch.
+- 每个坐标只保留一份副本。如果文件已存在且校验和匹配，就不再下载。
+- 缓存放在项目之外。`scripts/make-toolchain.py` 负责随包种子；用户缓存
+  是运行时新增的一切。
+- 不要为了“清理”构建而删除 `~/toolchain/gradle-home` 或 `~/toolchain/m2`。
+  只在某个版本目录损坏时删除它。
+- 绝不要把 `~/toolchain`、`~/toolchain/m2` 或 `.aar` 提交到 git。
+- 优先使用显式版本。`+` 和 `latest.release` 会让缓存变得不确定，
+  并在之后破坏离线构建。
+- 在计费流量网络上，先询问，再一次性批量下载。
 
-## Troubleshooting
+## 故障排查
 
-| Symptom | Fix |
+| 症状 | 修复 |
 |---|---|
-| `No cached version of ... available for offline mode` | step 2 with `OC_BUILD_ONLINE=1` |
-| `Could not resolve` for a BOM-managed version | warm with Gradle; do not hand-fetch the BOM |
-| `Failed to find target with hash string android-36` | install platform 36, see `android-build` |
-| `Duplicate class` after adding a mirror | remove the old per-project cache and rebuild |
-| Maven ignores the mirror | pass `-Dmaven.repo.local=$HOME/toolchain/m2` |
-| Gradle still uses `~/.gradle` | `export GRADLE_USER_HOME=$HOME/toolchain/gradle-home` |
+| `No cached version of ... available for offline mode` | 带上 `OC_BUILD_ONLINE=1` 执行第 2 步 |
+| 由 BOM 管理的版本出现 `Could not resolve` | 用 Gradle 预热；不要手工抓取 BOM |
+| `Failed to find target with hash string android-36` | 安装 platform 36，见 `android-build` |
+| 添加镜像后出现 `Duplicate class` | 删除旧的项目本地缓存并重建 |
+| Maven 忽略镜像 | 传入 `-Dmaven.repo.local=$HOME/toolchain/m2` |
+| Gradle 仍使用 `~/.gradle` | `export GRADLE_USER_HOME=$HOME/toolchain/gradle-home` |
 
-## References
+## 参考
 
-- `references/repositories.md` — repository order, Google vs Central, SHA-1.
-- `android-build` — the offline build entry point.
-- `android-deps` — version conflicts and dependency insight.
+- `references/repositories.md` — 仓库顺序、Google 与 Central、SHA-1。
+- `android-build` — 离线构建入口。
+- `android-deps` — 版本冲突与依赖分析。

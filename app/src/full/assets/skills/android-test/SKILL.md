@@ -1,58 +1,56 @@
 ---
 name: Android Test
-description: Write and run Android unit tests and on-device instrumentation/UI tests. Use when the user asks for tests, coverage, or to verify a screen/flow on the phone.
+description: 编写并运行 Android 单元测试与真机仪器化/UI 测试。适用于用户要求测试、覆盖率，或在手机上验证某个界面/流程时。
 ---
 
 # Android Test
 
-## Unit tests (JVM, no device)
+## 单元测试（JVM，无需设备）
 
-Put tests in `app/src/test/java/...` and run:
+测试放在 `app/src/test/java/...`，运行：
 
 ```sh
 bash ~/.config/opencode/skills/android-build/scripts/build.sh . debug testDebugUnitTest
 ```
 
-JUnit 4 is usually already resolvable; if not, add:
+JUnit 4 通常已可直接解析；如果不行，添加：
 
 ```groovy
 testImplementation 'junit:junit:4.13.2'
 ```
 
-Prefer pure JVM tests for logic, parsing, and ViewModels with no Android
-dependencies.
+逻辑、解析以及不依赖 Android 的 ViewModel，优先改用纯 JVM 测试。
 
-## Instrumentation tests (on-device)
+## 仪器化测试（真机）
 
-Put tests in `app/src/androidTest/java/...` and run:
+测试放在 `app/src/androidTest/java/...`，运行：
 
 ```sh
 bash ~/.config/opencode/skills/android-build/scripts/build.sh . debug connectedDebugAndroidTest
 ```
 
-This requires a connected adb device. On this phone, use the `android-debug`
-skill to pair Wireless debugging and connect `adb` to `127.0.0.1`.
+这需要已连接的 adb 设备。在这台手机上，用 `android-debug`
+技能配对无线调试，并把 `adb` 连到 `127.0.0.1`。
 
-Dependencies:
+依赖：
 
 ```groovy
 androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
 ```
 
-These artifacts may not be in the offline cache; check with a build before
-promising a test run.
+这些构件可能不在离线缓存里；承诺能跑测试之前，先用一次构建确认。
 
-## UI checks without writing tests
+## 不写测试也能做的 UI 检查
 
-- Launch: `adb shell monkey -p <pkg> -c android.intent.category.LAUNCHER 1`
-- Screenshot: `adb exec-out screencap -p > /tmp/screen.png`
-- Crash/ANR: `android-debug/scripts/crash.sh <pkg>`
-- UI hierarchy: `adb shell uiautomator dump /sdcard/window.xml` then pull it
+- 启动：`adb shell monkey -p <pkg> -c android.intent.category.LAUNCHER 1`
+- 截图：`adb exec-out screencap -p > /tmp/screen.png`
+- 崩溃/ANR：`android-debug/scripts/crash.sh <pkg>`
+- UI 层级：`adb shell uiautomator dump /sdcard/window.xml`，然后把它拉出来
 
-## Rules
+## 规则
 
-- Do not claim tests passed without the Gradle task output and the test report.
-- Reports: `app/build/reports/tests/testDebugUnitTest/index.html` and
-  `app/build/reports/androidTests/connected/`.
-- Keep instrumentation tests small; the phone is slower than a desktop.
+- 没有 Gradle 任务输出和测试报告，就不要声称测试通过。
+- 报告：`app/build/reports/tests/testDebugUnitTest/index.html` 和
+  `app/build/reports/androidTests/connected/`。
+- 仪器化测试保持精简；手机比桌面慢。

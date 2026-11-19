@@ -1,34 +1,33 @@
 ---
 name: Android Build
-description: Build, sign and locate Android APKs locally on this phone with Gradle, JDK 21 and the on-device Android SDK. Use when the user asks to compile, rebuild, package or install an Android project on the device.
+description: 在这台手机上用 Gradle、JDK 21 和端侧 Android SDK 本地构建、签名并定位 Android APK。适用于用户要求在设备上编译、重新构建、打包或安装 Android 项目时。
 ---
 
-# Android Build (on-device)
+# Android Build（设备上）
 
-This phone is the build machine. Everything below runs locally; no PC, no cloud.
+这台手机就是构建机。下面的一切都在本地运行；不需要 PC，也不需要云。
 
-**16 KB first:** the build script audits the produced APK and prints a 16 KB
-alignment report. Set `ANDROC_16KB_STRICT=1` to fail the build when a native
-library is only 4 KB aligned. **A Gradle switch or `zipalign -P 16` does not
-fix this**: the alignment lives inside each prebuilt 64-bit `.so`. When the
-check flags `libonnxruntime`, `libopencv_java4`, `libc++_shared`, etc., upgrade
-the dependency to a version that ships 16 KB-aligned Android prebuilts (see
-`android-16kb` for the ONNX/OpenCV example).
+**先看 16 KB：** 构建脚本会审核产出的 APK 并打印 16 KB 对齐报告。设置
+`ANDROC_16KB_STRICT=1` 可让原生库仅有 4 KB 对齐时直接构建失败。**改 Gradle
+开关或 `zipalign -P 16` 并不能解决这个问题**：对齐信息在每个预编译的 64 位
+`.so` 内部。当检查报告 `libonnxruntime`、`libopencv_java4`、`libc++_shared`
+等时，把依赖升级到提供 16 KB 对齐 Android 预编译库的版本（ONNX/OpenCV 的
+例子见 `android-16kb`）。
 
-## When to use
+## 适用场景
 
-Use this skill when the user wants to:
+用户想要以下操作时使用本技能：
 
-- build an APK from a Gradle/AGP project on this device
-- rebuild after editing Java/Kotlin/XML/resources
-- produce a debug or release APK and report its path
+- 在本机构建 Gradle/AGP 项目的 APK
+- 修改 Java/Kotlin/XML/资源后重新构建
+- 产出 debug 或 release APK 并报告其路径
 
-## Cache hygiene
+## 缓存清理
 
-The bundled Gradle cache lives in `$HOME/toolchain/gradle-home` and is shared
-by every project (`GRADLE_USER_HOME`); the build script prints the `cache`
-line so you can confirm it is not using `~/.gradle`. Dependencies are not the
-usual bloat: project `build/` and `.gradle/` directories are. Use:
+内置的 Gradle 缓存位于 `$HOME/toolchain/gradle-home`，由所有项目共享
+（`GRADLE_USER_HOME`）；构建脚本会打印 `cache` 行，可据此确认没有在用
+`~/.gradle`。真正的体积膨胀通常不是依赖，而是项目的 `build/` 和 `.gradle/`
+目录。可用：
 
 ```sh
 bash <skill-dir>/scripts/clean-caches.sh            # transient files only
@@ -36,98 +35,95 @@ bash <skill-dir>/scripts/clean-caches.sh --builds   # also workspace/*/build + .
 bash <skill-dir>/scripts/clean-caches.sh --all      # also shared dependency caches
 ```
 
-Androc also prunes old temp files, Gradle daemon logs and downloaded `.deb`
-files at startup. It never deletes project `build/` directories automatically.
+Androc 启动时还会清理旧的临时文件、Gradle 守护进程日志和已下载的 `.deb`
+文件。它从不会自动删除项目的 `build/` 目录。
 
-## Prerequisites
+## 前置条件
 
-- arm64 Android device (the toolchain is arm64 only)
-- a Gradle project with a `gradlew` wrapper at its root
-- network on the first build (Gradle distribution + Maven dependencies)
-- at least ~4 GB free storage and ~2 GB free RAM
+- arm64 Android 设备（工具链仅支持 arm64）
+- 根目录带 `gradlew` wrapper 的 Gradle 项目
+- 首次构建需要网络（Gradle 发行版 + Maven 依赖）
+- 至少约 4 GB 可用存储和约 2 GB 可用内存
 
-## Workflow
+## 工作流
 
-> Everything already runs inside proot. Just run
-> `bash <skill-dir>/scripts/build.sh /path debug`.
-> The scripts start with `#!/data/data/com.termux/files/usr/bin/bash`; the
-> caller's `$PWD` is reliable. Do not wrap it in `oc-proot`.
+> 所有操作本来就跑在 proot 里。直接运行
+> `bash <skill-dir>/scripts/build.sh /path debug` 即可。
+> 脚本以 `#!/data/data/com.termux/files/usr/bin/bash` 开头；调用者的
+> `$PWD` 是可靠的。不要再用 `oc-proot` 包一层。
 
-### 1. One-time toolchain setup
+### 1. 一次性工具链配置
 
-Run this once per app install (idempotent):
+每次安装应用后运行一次（幂等）：
 
 ```sh
 bash <skill-dir>/scripts/setup-toolchain.sh
 ```
 
-If the APK was built with the offline bundle, this only verifies the JDK
-(installed from the bundled Termux `.deb`) and the extracted SDK/Gradle tree
-under `$HOME/toolchain`. No network is used.
+如果 APK 是用离线包构建的，这一步只会校验 JDK（从内置 Termux `.deb`
+安装）和 `$HOME/toolchain` 下已解压的 SDK/Gradle 目录树。不使用网络。
 
-For a source build without the bundle, the script falls back to installing
-`openjdk-21` and downloading Android platform 36 plus arm64 `aapt2` (packaged as build-tools 36.0.0).
+不带内置包的源码构建时，脚本会退回到安装 `openjdk-21`，并下载 Android
+platform 36 以及 arm64 `aapt2`（打包为 build-tools 36.0.0）。
 
-### 2. Build
+### 2. 构建
 
 ```sh
 bash <skill-dir>/scripts/build.sh /path/to/project debug
 ```
 
-The second argument is `debug` or `release` (default `debug`). The script:
+第二个参数是 `debug` 或 `release`（默认 `debug`）。脚本会：
 
-- sets `JAVA_HOME`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `PATH`
-- runs `sh ./gradlew --no-daemon --console=plain assembleDebug`
-- passes `-Pandroid.aapt2FromMavenOverride=<arm64 aapt2>` so AGP does not try
-  to download an x86_64 aapt2
-- prints the resulting APK path as `APK=/absolute/path.apk`
+- 设置 `JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT`、`PATH`
+- 执行 `sh ./gradlew --no-daemon --console=plain assembleDebug`
+- 传入 `-Pandroid.aapt2FromMavenOverride=<arm64 aapt2>`，避免 AGP 试图
+  下载 x86_64 的 aapt2
+- 以 `APK=/absolute/path.apk` 的形式打印产出的 APK 路径
 
-Never execute `./gradlew` directly: project files live on a `noexec` mount.
-`sh ./gradlew` reads the script and works.
+绝不要直接执行 `./gradlew`：项目文件位于 `noexec` 挂载点。
+`sh ./gradlew` 是读取脚本执行，可以正常工作。
 
-### 3. Report
+### 3. 汇报
 
-Tell the user the APK path and the build result. Do not invent a path: use the
-`APK=` line printed by the script.
+把 APK 路径和构建结果告诉用户。不要自己编路径：用脚本打印的
+`APK=` 那一行。
 
-## Do not bypass the script
+## 不要绕过脚本
 
-The agent shell is already inside proot. `PREFIX` is
-`/data/data/com.termux/files/usr`; `$PWD` is the project/session directory.
-Never export the Termux prefix by hand and never rebuild the Gradle command
-from scratch: that produces the "tmpdir does not exist" and "`PREFIX/tmp`
-cannot be created" failures. The script resolves everything itself.
+代理的 shell 本来就在 proot 内。`PREFIX` 是
+`/data/data/com.termux/files/usr`；`$PWD` 是项目/会话目录。
+绝不要手工导出 Termux 前缀，也绝不要从零重拼 Gradle 命令：那会导致
+"tmpdir does not exist" 和 "`PREFIX/tmp` cannot be created" 这类失败。
+脚本自己会解析一切。
 
-If the script fails, fix the **project** and re-run it. Only use
-`OC_USE_WRAPPER=1` or raw Gradle as a last resort, and keep
-`GRADLE_USER_HOME=$HOME/toolchain/gradle-home` and
-`-Djava.io.tmpdir=$HOME/.cache/tmp`.
+如果脚本失败，就修**项目**再重跑。只有在万不得已时才用
+`OC_USE_WRAPPER=1` 或裸 Gradle，并且保持
+`GRADLE_USER_HOME=$HOME/toolchain/gradle-home` 和
+`-Djava.io.tmpdir=$HOME/.cache/tmp`。
 
-## Troubleshooting
+## 排查
 
-| Error | Fix |
+| 错误 | 修复 |
 |---|---|
-| `checkDebugAarMetadata` / "AndroidX dependencies" | add `android.useAndroidX=true` to `gradle.properties`; add `android.enableJetifier=true` only for old support libraries |
-| duplicate `kotlin-stdlib` / `kotlin-stdlib-jdk7` classes | force one stdlib version in `configurations.all { resolutionStrategy.force ... }` |
-| `java.io.tmpdir` / `PREFIX/tmp` missing | do not create it by hand; the script uses `$HOME/.cache/tmp` |
-| `Could not resolve` a library | use `android-lib-cache`; do not switch to a raw online Gradle run |
-| `SDK location not found` | the script writes `local.properties`; do not point it at Termux's real prefix |
-| `aapt2` download / x86_64 error | the script passes the bundled arm64 aapt2 override |
+| `checkDebugAarMetadata` / "AndroidX dependencies" | 在 `gradle.properties` 加 `android.useAndroidX=true`；只有旧 support 库才加 `android.enableJetifier=true` |
+| duplicate `kotlin-stdlib` / `kotlin-stdlib-jdk7` classes | 在 `configurations.all { resolutionStrategy.force ... }` 里强制统一 stdlib 版本 |
+| `java.io.tmpdir` / `PREFIX/tmp` missing | 不要手工创建；脚本用的是 `$HOME/.cache/tmp` |
+| `Could not resolve` a library | 用 `android-lib-cache`；不要改成直接联网跑 Gradle |
+| `SDK location not found` | 脚本会写 `local.properties`；不要指向 Termux 的真实前缀 |
+| `aapt2` download / x86_64 error | 脚本会传入内置 arm64 aapt2 的覆盖路径 |
 
-## Notes and limits
+## 说明与限制
 
-- SDK platform is 36 by default. For `compileSdk 37` projects, install platform
-  37 and use a matching aapt2 (see `scripts/setup-toolchain.sh`).
-- No NDK/CMake support in this version.
-- The first build can take 10+ minutes and heat the phone; later builds are
-  incremental.
-- Builds default to `--offline` when the bundled Gradle distribution/cache is
-  present. If a project needs a dependency not in the bundled cache, set
-  `OC_BUILD_ONLINE=1`:
+- 默认 SDK platform 是 36。`compileSdk 37` 的项目需安装 platform
+  37 并使用匹配的 aapt2（见 `scripts/setup-toolchain.sh`）。
+- 此版本不支持 NDK/CMake。
+- 首次构建可能耗时 10 分钟以上并让手机发热；之后的构建是增量式的。
+- 内置 Gradle 发行版/缓存存在时，构建默认走 `--offline`。如果项目
+  需要内置缓存里没有的依赖，设置 `OC_BUILD_ONLINE=1`：
   `OC_BUILD_ONLINE=1 bash <skill-dir>/scripts/build.sh ...`
-- To use the project's own wrapper instead of the bundled Gradle:
+- 想用项目自己的 wrapper 而不是内置 Gradle：
   `OC_USE_WRAPPER=1 bash <skill-dir>/scripts/build.sh ...`
-- If Gradle runs out of memory, lower `org.gradle.jvmargs` in the project's
-  `gradle.properties` to `-Xmx2g` or `-Xmx3g`.
-- If AGP complains about the SDK, check `$ANDROID_HOME/platforms/android-36`
-  contains `android.jar` and `source.properties`.
+- 如果 Gradle 内存不足，把项目 `gradle.properties` 里的
+  `org.gradle.jvmargs` 降到 `-Xmx2g` 或 `-Xmx3g`。
+- 如果 AGP 报 SDK 相关错误，检查 `$ANDROID_HOME/platforms/android-36`
+  里是否包含 `android.jar` 和 `source.properties`。

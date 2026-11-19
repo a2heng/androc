@@ -1,23 +1,23 @@
 ---
 name: Android NDK
-description: Add or debug native C/C++ code in an Android project (CMake/NDK), ABI filters and 16 KB page-size alignment. Use only when a project really needs native code.
+description: 在 Android 项目中添加或调试原生 C/C++ 代码（CMake/NDK）、ABI 过滤与 16 KB 页对齐。仅在项目确实需要原生代码时使用。
 ---
 
 # Android NDK
 
-## Check what is installed
+## 检查已安装内容
 
-The offline bundle does **not** include a full NDK. Check:
+离线包**不**包含完整的 NDK。检查：
 
 ```sh
 ls "$HOME/toolchain/android-sdk/ndk" 2>/dev/null || echo "no NDK"
 ```
 
-If the project needs native code, the NDK/CMake must be installed separately
-(for example with Termux Studio's `studio ndk install`, or a 16 KB-aligned NDK
-package). Do not claim NDK support if it is absent.
+如果项目需要原生代码，必须单独安装 NDK/CMake（例如使用 Termux Studio 的
+`studio ndk install`，或一个按 16 KB 对齐的 NDK 包）。NDK 不存在时不要
+声称支持 NDK。
 
-## Gradle setup
+## Gradle 配置
 
 ```groovy
 android {
@@ -31,7 +31,7 @@ android {
 }
 ```
 
-`CMakeLists.txt`:
+`CMakeLists.txt`：
 
 ```cmake
 cmake_minimum_required(VERSION 3.22)
@@ -40,33 +40,33 @@ add_library(native-lib SHARED native-lib.c)
 target_link_libraries(native-lib log)
 ```
 
-## 16 KB page size
+## 16 KB 页大小
 
-Android 15+ devices may use 16 KB pages. Build native libraries with:
+Android 15+ 设备可能使用 16 KB 页。这样构建原生库：
 
 ```cmake
 target_link_options(native-lib PRIVATE "-Wl,-z,max-page-size=16384")
 ```
 
-or in `build.gradle`:
+或写在 `build.gradle` 中：
 
 ```groovy
 android { defaultConfig { externalNativeBuild { cmake { arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON" } } } }
 ```
 
-Verify with `scripts/check-elf-align.py`; all `PT_LOAD` segments must be
-`0x4000` aligned.
+用 `scripts/check-elf-align.py` 验证；所有 `PT_LOAD` 段都必须按
+`0x4000` 对齐。
 
-## Debug native crashes
+## 调试原生崩溃
 
-- `logcat` shows `DEBUG`, `libc`, `signal 11 (SIGSEGV)`, `backtrace`.
-- `adb shell debuggerd -b <pid>` may work with adb/wireless debugging.
-- Keep `libc++_shared.so` packaging consistent; do not mix STL variants.
-- Use `arm64-v8a` only; the app and toolchain are arm64.
+- `logcat` 会显示 `DEBUG`、`libc`、`signal 11 (SIGSEGV)`、`backtrace`。
+- `adb shell debuggerd -b <pid>` 在 adb/无线调试下可能可用。
+- 保持 `libc++_shared.so` 的打包方式一致；不要混用不同 STL 变体。
+- 只用 `arm64-v8a`；应用和工具链都是 arm64。
 
-## Rules
+## 规则
 
-- Native code is the last resort; prefer Java/Kotlin.
-- Do not enable `abiFilters` for ABIs you cannot test.
-- Rebuild and reinstall after every native change; Gradle caching can hide stale
-  `.so` files.
+- 原生代码是最后手段；优先用 Java/Kotlin。
+- 不要为你无法测试的 ABI 启用 `abiFilters`。
+- 每次改原生代码后都要重建并重装；Gradle 缓存可能藏住过期的
+  `.so` 文件。

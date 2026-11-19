@@ -1,17 +1,17 @@
-# TFLite runtime (Termux Python)
+# TFLite runtime（Termux Python）
 
-Bundled package: `python-tflite-runtime 2.21.0` (Python 3.14), installed at
-`$PREFIX/lib/python3.14/site-packages/tflite_runtime`.
+内置软件包：`python-tflite-runtime 2.21.0`（Python 3.14），安装在
+`$PREFIX/lib/python3.14/site-packages/tflite_runtime`。
 
-This is the **CPU** runtime only. The package contains
-`_pywrap_tensorflow_interpreter_wrapper.so` and nothing else — there is **no**
-`libtensorflowlite_gpu_delegate.so` / NNAPI delegate shipped with it, so don't
-promise GPU/NPU for `.tflite` on this setup.
+这只是 **CPU** 运行时。该包仅包含
+`_pywrap_tensorflow_interpreter_wrapper.so`，别的一无所有——**没有**
+`libtensorflowlite_gpu_delegate.so` / NNAPI delegate 随附，所以在这个环境下
+不要为 `.tflite` 承诺 GPU/NPU 加速。
 
-## Minimal inference
+## 最小推理
 
-The API below is taken from the exact `interpreter.py` in the package (the same
-names exist in TensorFlow's `tf.lite`):
+下面的 API 取自该包中精确的 `interpreter.py`（同名接口在 TensorFlow 的
+`tf.lite` 中也存在）：
 
 ```python
 import numpy as np
@@ -34,35 +34,35 @@ y = it.get_tensor(out["index"])
 print(y.shape, y.dtype)
 ```
 
-Notes:
+说明：
 
-- The path must be absolute; expand `~` yourself.
-- `allocate_tensors()` must be called before `set_tensor`/`invoke`.
-- Dynamic shapes: `resize_tensor_input(inp["index"], new_shape)` before
-  `allocate_tensors()` (or re-allocate after resizing).
-- Multiple inputs/outputs: iterate `get_input_details()` / `get_output_details()`.
+- 路径必须是绝对路径；`~` 需要自行展开。
+- `allocate_tensors()` 必须在 `set_tensor`/`invoke` 之前调用。
+- 动态形状：在 `allocate_tensors()` 之前调用
+  `resize_tensor_input(inp["index"], new_shape)`（或在 resize 之后重新分配）。
+- 多输入/多输出：遍历 `get_input_details()` / `get_output_details()`。
 
-## Models
+## 模型
 
-Convert on a PC with the TensorFlow Lite converter (`tf.lite.TFLiteConverter`,
-`ai-edge-torch` for PyTorch, or a MediaPipe export), then copy the `.tflite`
-into `~/models/tflite/<name>/`.
+在 PC 上用 TensorFlow Lite 转换器（`tf.lite.TFLiteConverter`、PyTorch 用
+`ai-edge-torch`，或 MediaPipe 导出）转换，然后把 `.tflite` 复制到
+`~/models/tflite/<name>/`。
 
-- Prefer **dynamic-range int8** or **int8 full-integer** quantization for CPU.
-- Check `inp["dtype"]`; quantized models need `np.int8`/`np.uint8` and often a
-  scale/zero-point (`inp["quantization"]`).
-- Keep model files small (<100 MB) and mmap-friendly.
+- CPU 上优先用 **dynamic-range int8** 或 **int8 full-integer** 量化。
+- 检查 `inp["dtype"]`；量化模型需要 `np.int8`/`np.uint8`，通常还需要
+  scale/zero-point（`inp["quantization"]`）。
+- 让模型文件保持小巧（<100 MB）并便于 mmap。
 
-## When to use TFLite instead of ONNX
+## 何时用 TFLite 而不是 ONNX
 
-- The model already exists only as `.tflite` (MediaPipe / mobile exports).
-- Extremely small vision/keyword models where the TFLite runtime is leaner.
-- Otherwise, prefer ONNX Runtime: it is the same Python workflow and its
-  Termux build also has XNNPACK/NNAPI providers.
+- 模型只以 `.tflite` 形式存在（MediaPipe / 移动端导出）。
+- 极小的视觉/关键词模型，此时 TFLite runtime 更精简。
+- 其他情况优先用 ONNX Runtime：Python 工作流相同，而且它的 Termux 构建还带有
+  XNNPACK/NNAPI provider。
 
-## Do not
+## 不要做
 
-- `pip install tflite-runtime` (no cp314/manylinux wheel; glibc anyway).
-- `pip install tensorflow` on the phone (huge, unsupported).
-- Expect `load_delegate("libtensorflowlite_gpu_delegate.so")` to work — that
-  library is not bundled.
+- `pip install tflite-runtime`（没有 cp314/manylinux wheel；何况是 glibc）。
+- 在手机上 `pip install tensorflow`（体积巨大，且不受支持）。
+- 指望 `load_delegate("libtensorflowlite_gpu_delegate.so")` 能用——那个库没有
+  随包提供。

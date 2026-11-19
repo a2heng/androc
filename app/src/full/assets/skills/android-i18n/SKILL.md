@@ -1,13 +1,13 @@
 ---
 name: Android i18n
-description: Localize an Android app: string resources, Chinese/English/Spanish, plurals, RTL and locale testing. Use when the user asks for Chinese UI or multiple languages.
+description: 本地化 Android 应用：字符串资源、中文/英文/西班牙文、复数、RTL 与语言区域测试。当用户要求中文界面或多语言时使用。
 ---
 
 # Android i18n
 
-## Put every user-visible string in resources
+## 把所有用户可见的字符串放进资源
 
-`app/src/main/res/values/strings.xml`:
+`app/src/main/res/values/strings.xml`：
 
 ```xml
 <resources>
@@ -16,7 +16,7 @@ description: Localize an Android app: string resources, Chinese/English/Spanish,
 </resources>
 ```
 
-`app/src/main/res/values-zh/strings.xml`:
+`app/src/main/res/values-zh/strings.xml`：
 
 ```xml
 <resources>
@@ -25,10 +25,10 @@ description: Localize an Android app: string resources, Chinese/English/Spanish,
 </resources>
 ```
 
-Use `@string/welcome` in XML and `getString(R.string.welcome)` in code.
-Never hard-code Chinese/English in layouts.
+XML 中用 `@string/welcome`，代码中用 `getString(R.string.welcome)`。
+绝不要在布局里硬编码中文/英文。
 
-## Plurals and formatting
+## 复数与格式化
 
 ```xml
 <plurals name="files">
@@ -37,38 +37,37 @@ Never hard-code Chinese/English in layouts.
 </plurals>
 ```
 
-`getResources().getQuantityString(R.plurals.files, n, n)`.
+`getResources().getQuantityString(R.plurals.files, n, n)`。
 
 ## RTL
 
-- Use `start`/`end` instead of `left`/`right`.
-- Use `android:layout_marginStart`, `paddingStart`.
-- Test with a pseudo-RTL locale if the app supports Arabic/Hebrew.
+- 用 `start`/`end` 代替 `left`/`right`。
+- 用 `android:layout_marginStart`、`paddingStart`。
+- 如果应用支持阿拉伯语/希伯来语，用伪 RTL 语言区域测试。
 
-## Locale testing
+## 语言区域测试
 
 ```sh
 adb shell am start -a android.settings.LOCALE_SETTINGS
 ```
 
-`auto` runs adb inside proot; no wrapper is needed.
+`auto` 在 proot 内运行 adb；不需要额外包装。
 
-Or use per-app languages on Android 13+ (Settings → Apps → My App → Language).
-After changing the locale, relaunch the app and take a screenshot.
+或者在 Android 13+ 上使用按应用设置的语言（设置 → 应用 → My App → 语言）。
+切换语言区域后，重新启动应用并截图。
 
-## Chinese specifics
+## 中文要点
 
-- Use `values-zh` for Simplified/Traditional fallback; add `values-zh-rCN` /
-  `values-zh-rTW` if the wording differs.
-- Keep punctuation Chinese (，。！？) in Chinese strings; do not reuse English
-  punctuation.
-- Avoid translating brand names, file paths, model IDs, code identifiers.
-- This launcher's native UI uses `Zh.java`; the opencode Web UI follows the
-  browser/server language.
+- 用 `values-zh` 作为简体/繁体回退；如果措辞不同，再加 `values-zh-rCN` /
+  `values-zh-rTW`。
+- 中文字符串保留中文标点（，。！？）；不要沿用英文标点。
+- 不要翻译品牌名、文件路径、模型 ID、代码标识符。
+- 此启动器的原生界面使用 `Zh.java`；opencode Web 界面跟随浏览器/服务器的
+  语言。
 
-## Verify
+## 验证
 
-1. Build with `android-build`.
-2. Install/launch with `android-debug/scripts/install-run.sh`.
-3. Screenshot at least Chinese and English.
-4. Check for clipped text and missing translations (`MissingTranslation` lint).
+1. 用 `android-build` 构建。
+2. 用 `android-debug/scripts/install-run.sh` 安装/启动。
+3. 至少截取中文和英文两张截图。
+4. 检查文字被裁切和缺少翻译的问题（`MissingTranslation` lint）。

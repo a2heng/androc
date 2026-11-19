@@ -1,45 +1,44 @@
-# Repositories and cache behavior
+# 仓库与缓存行为
 
-## Order
+## 顺序
 
-`resolve_maven.py` tries repositories in this order:
+`resolve_maven.py` 按以下顺序尝试仓库：
 
-1. `ANDROC_MAVEN_REPOS` (comma-separated, optional)
+1. `ANDROC_MAVEN_REPOS`（逗号分隔，可选）
 2. Google Maven — `https://dl.google.com/dl/android/maven2`
-   (AndroidX, Material, AGP, Google Play libraries)
+   （AndroidX、Material、AGP、Google Play 相关库）
 3. Maven Central — `https://repo1.maven.org/maven2`
-   (Kotlin, OkHttp, Retrofit, Gson, JUnit, most JVM libraries)
+   （Kotlin、OkHttp、Retrofit、Gson、JUnit 以及大多数 JVM 库）
 
-Google-first matters for `androidx.*`, `com.android.*`, `com.google.android.*`.
-Central usually has no AndroidX artifacts.
+对 `androidx.*`、`com.android.*`、`com.google.android.*` 而言，Google 优先很重要。
+Central 通常没有 AndroidX 构建产物。
 
-A mirror can be added without code changes:
+无需改代码即可添加镜像：
 
 ```sh
 export ANDROC_MAVEN_REPOS="https://maven.aliyun.com/repository/public"
 bash scripts/fetch-maven.sh com.squareup.okhttp3:okhttp:4.12.0
 ```
 
-## Verification
+## 校验
 
-Every downloaded POM/JAR/AAR is recorded in `$ANDROC_M2/.androc-index.tsv` with
-its SHA-256. When the repository publishes `<file>.sha1`, the script compares
-it and warns on a mismatch. A file that already exists is not downloaded
-again; delete only the specific version directory if it is corrupt.
+每个下载的 POM/JAR/AAR 都会连其 SHA-256 一起记录在
+`$ANDROC_M2/.androc-index.tsv` 中。当仓库发布 `<file>.sha1` 时，脚本会比对
+它并在不匹配时告警。已存在的文件不会重复下载；仅在某个版本目录损坏时
+删除它。
 
-## Transitive dependencies
+## 传递依赖
 
-Android projects should use `warm-gradle.sh`: Gradle resolves versions,
-BOMs, variant attributes and AAR metadata correctly, then stores everything
-in `~/toolchain/gradle-home`. `export-gradle.sh` publishes those files to the
-Maven mirror.
+Android 项目应使用 `warm-gradle.sh`：Gradle 能正确解析版本、BOM、变体属性
+和 AAR 元数据，然后把所有内容存进 `~/toolchain/gradle-home`。
+`export-gradle.sh` 再把这些文件发布到 Maven 镜像。
 
-`resolve_maven.py` also walks POM `compile`/`runtime` dependencies, but it
-does not import BOMs (`scope=import`) or Gradle module metadata. For a BOM
-project, warm with Gradle instead of hand-fetching.
+`resolve_maven.py` 也会遍历 POM 中的 `compile`/`runtime` 依赖，但它不会导入
+BOM（`scope=import`）或 Gradle 模块元数据。对使用 BOM 的项目，用 Gradle
+预热，不要手工抓取。
 
-## What not to cache
+## 不要缓存什么
 
-- Do not cache credentials, `settings.xml` or `.netrc` in the mirror.
-- Do not commit the mirror; it is runtime state under `HOME`.
-- Do not mix a project-local `.gradle` cache with the shared one.
+- 不要把凭据、`settings.xml` 或 `.netrc` 缓存进镜像。
+- 不要提交镜像；它是 `HOME` 下的运行时状态。
+- 不要把项目本地 `.gradle` 缓存与共享缓存混用。

@@ -1,11 +1,11 @@
 ---
 name: Android Architecture
-description: Structure an Android app cleanly: MVVM/MVI, ViewModel, StateFlow, repositories, navigation and optional DI. Use when a project grows beyond one screen or the user asks for a maintainable structure.
+description: 整洁地组织 Android 应用结构：MVVM/MVI、ViewModel、StateFlow、仓库层、导航和可选的依赖注入。适用于项目超出单个界面，或用户要求可维护的结构时。
 ---
 
 # Android Architecture
 
-## Default: MVVM, no over-engineering
+## 默认：MVVM，不过度设计
 
 ```text
 app/
@@ -16,10 +16,10 @@ app/
    └─ detail/
 ```
 
-- **UI** observes state and sends events.
-- **ViewModel** owns UI state and calls repositories.
-- **Repository** hides data sources (network, DB, files).
-- Do not put Android `Context` in ViewModels.
+- **UI** 观察状态并发送事件。
+- **ViewModel** 持有 UI 状态并调用仓库。
+- **Repository** 隐藏数据源（网络、数据库、文件）。
+- 不要在 ViewModel 里放 Android `Context`。
 
 ## ViewModel + StateFlow
 
@@ -39,24 +39,23 @@ class HomeViewModel(private val repo: ItemRepository) : ViewModel() {
 }
 ```
 
-In Compose: `collectAsStateWithLifecycle()`. In Views: `repeatOnLifecycle`.
+Compose 中：`collectAsStateWithLifecycle()`。Views 中：`repeatOnLifecycle`。
 
-## Navigation
+## 导航
 
-- Compose: `androidx.navigation:navigation-compose`.
-- Views: Navigation Component or a simple single-activity + fragments.
-- Keep one source of truth for routes; pass IDs, not whole objects.
+- Compose：`androidx.navigation:navigation-compose`。
+- Views：Navigation Component，或简单的单 Activity + Fragment。
+- 路由只保留一处真相来源；传 ID，不要传整个对象。
 
-## DI
+## 依赖注入
 
-Hilt/Koin are optional and add dependencies. For small apps, manual
-construction in an `Application` class or a simple `ServiceLocator` is enough
-and works offline.
+Hilt/Koin 是可选项，会引入额外依赖。小应用在 `Application` 类里手动构造，
+或用一个简单的 `ServiceLocator` 就够了，而且能离线工作。
 
-## Rules
+## 规则
 
-- One class, one reason to change.
-- No business logic in Activities/Fragments/Composables.
-- No singletons holding Activity context.
-- Prefer immutable state and explicit events.
-- Before adding a library, check the offline dependency cache (`android-deps`).
+- 一个类，只有一个变更理由。
+- 不要在 Activity/Fragment/Composable 里写业务逻辑。
+- 不要用单例持有 Activity context。
+- 优先使用不可变状态和显式事件。
+- 添加库之前，先查离线依赖缓存（`android-deps`）。

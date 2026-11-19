@@ -1,17 +1,17 @@
 ---
 name: Android Database
-description: Store data on Android with Room, SQLite or DataStore, including schema, migrations, threading and testing. Use when the app needs persistence.
+description: 在 Android 上用 Room、SQLite 或 DataStore 存储数据，涵盖 schema、迁移、线程与测试。应用需要持久化时使用。
 ---
 
-# Android Database
+# Android 数据库
 
-## Choose
+## 选型
 
-- **DataStore (Preferences/Proto)**: small key-value settings, no schema.
-- **Room**: relational data, queries, migrations, Flow support.
-- **Raw SQLite**: only for tiny cases or existing code; Room is safer.
+- **DataStore（Preferences/Proto）**：小型键值配置，无需 schema。
+- **Room**：关系型数据、查询、迁移、Flow 支持。
+- **原生 SQLite**：只用于极小场景或既有代码；Room 更安全。
 
-## Room setup
+## Room 配置
 
 ```groovy
 implementation 'androidx.room:room-runtime:2.6.1'
@@ -34,29 +34,28 @@ abstract class AppDb : RoomDatabase() {
 }
 ```
 
-## Rules
+## 规则
 
-- Never access the database on the main thread.
-- Use `suspend`/`Flow`; Room enforces it for queries.
-- Every schema change needs a migration or `fallbackToDestructiveMigration`
-  only for debug builds.
-- Export the schema (`room.schemaLocation`) so migrations are reviewable.
-- Test with an in-memory database (`Room.inMemoryDatabaseBuilder`).
-- Back up/restore is the app's responsibility; `allowBackup` may be disabled
-  for token-bearing apps.
+- 绝不在主线程访问数据库。
+- 使用 `suspend`/`Flow`；Room 对查询会强制这一点。
+- 每次 schema 变更都需要迁移，或仅对 debug 构建使用
+  `fallbackToDestructiveMigration`。
+- 导出 schema（`room.schemaLocation`），让迁移可被评审。
+- 用内存数据库测试（`Room.inMemoryDatabaseBuilder`）。
+- 备份/恢复由应用自己负责；持有令牌的应用可以禁用 `allowBackup`。
 
-## Check dependencies
+## 检查依赖
 
-Room artifacts may not be in the offline cache. Check with a small build; if
-missing, ask before `OC_BUILD_ONLINE=1`.
+Room 的构建产物可能不在离线缓存中。用一次小构建检查；如果缺失，
+在启用 `OC_BUILD_ONLINE=1` 之前先询问。
 
-## Debug on device
+## 在设备上调试
 
 ```sh
 adb shell run-as com.example.app ls databases
 adb shell run-as com.example.app sqlite3 databases/app.db '.tables'
 ```
 
-Run adb normally; `auto` sends the whole command (including variables) to proot.
+正常使用 adb 即可；`auto` 会把整条命令（含变量）送进 proot。
 
-`sqlite3` may not be present on the device; do not depend on it for the app.
+设备上可能没有 `sqlite3`；不要依赖它来支撑应用。

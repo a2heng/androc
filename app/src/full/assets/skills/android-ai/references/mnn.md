@@ -1,72 +1,70 @@
-# MNN (native Android) — status: **not bundled**
+# MNN（原生 Android）— 状态：**未内置**
 
-MNN is Alibaba's inference engine (Apache-2.0). It is a good fit when you want
-one engine for vision + LLM + NPU experiments, but **it is not a Termux
-package**, so it cannot be used with `pkg install` or `pip install`.
+MNN 是阿里巴巴的推理引擎（Apache-2.0）。当你希望用一套引擎覆盖视觉 + LLM +
+NPU 实验时，它很合适，但**它不是 Termux 软件包**，所以无法通过 `pkg install`
+或 `pip install` 使用。
 
-## Size
+## 体积
 
-Official release `3.6.2` ships:
+官方发布 `3.6.2` 提供：
 
 ```text
 mnn_3.6.2_android_armv7_armv8_cpu_opencl_vulkan.zip   6,746,981 bytes (~6.4 MiB)
 ```
 
-That zip covers **two ABIs** (armv7 + armv8) and three backends (CPU, OpenCL,
-Vulkan), so the arm64-only subset is smaller than 6.4 MiB. **APK size is not the
-blocker**; the blocker is native integration and device testing.
+该 zip 覆盖 **两个 ABI**（armv7 + armv8）和三个后端（CPU、OpenCL、Vulkan），
+所以仅 arm64 的子集小于 6.4 MiB。**APK 体积不是阻碍**；阻碍是原生集成和真机
+测试。
 
-## Why it is not in the toolbox
+## 为什么它不在工具箱里
 
-- Termux packages are built for Android bionic and installed with `pkg`; MNN
-  ships prebuilt native libraries and headers, not a Termux package.
-- Using it requires either:
-  1. **JNI/AAR in Androc** — copy the arm64 `libMNN*.so` into
-     `app/src/main/jniLibs/arm64-v8a/`, compile a small JNI wrapper with the
-     NDK, and expose it to the UI/agent (e.g. a localhost-only HTTP endpoint);
-     or
-  2. **A cross-compiled CLI** — build a tiny `mnn` runner with the NDK and put
-     it in `$PREFIX/bin`, then call it from a proot shell.
-- Models must be converted to `.mnn` on a PC with `MNNConvert` (or exported by
-  the MNN toolchain). `.onnx`/`.tflite`/`.gguf` are not loaded directly.
+- Termux 软件包是为 Android bionic 构建并用 `pkg` 安装的；MNN 提供的是预制的
+  原生库和头文件，不是 Termux 软件包。
+- 使用它需要以下之一：
+  1. **在 Androc 里做 JNI/AAR** —— 把 arm64 的 `libMNN*.so` 复制到
+     `app/src/main/jniLibs/arm64-v8a/`，用 NDK 编译一个小的 JNI 包装层，并把
+     它暴露给 UI/代理（例如一个仅监听 localhost 的 HTTP 端点）；
+     或者
+  2. **交叉编译的 CLI** —— 用 NDK 构建一个极小的 `mnn` 运行器，放进
+     `$PREFIX/bin`，再从 proot shell 调用它。
+- 模型必须在 PC 上用 `MNNConvert` 转换成 `.mnn`（或由 MNN 工具链导出）。
+  `.onnx`/`.tflite`/`.gguf` 不能直接加载。
 
-## NPU / GPU reality
+## NPU / GPU 的实际情况
 
-- MNN has an **NNAPI** backend, but whether an Android phone exposes a usable
-  NPU through NNAPI depends on the vendor driver and op coverage. NNAPI itself
-  is deprecated on newer Android versions; do not promise NPU speedups.
-- MNN's **OpenCL** backend can use the phone GPU (Adreno/Mali) on some devices;
-  **Vulkan** is another option. Both need real-device benchmarking.
-- The **CPU** backend (ARM82/NEON, int8) is the only predictable path. Compare
-  it against llama.cpp (LLM) or ONNX Runtime (small models) before adding a
-  second engine.
+- MNN 有 **NNAPI** 后端，但 Android 手机能否通过 NNAPI 提供可用的 NPU，取决于
+  厂商驱动和算子覆盖。NNAPI 本身在较新的 Android 版本上已被弃用；不要承诺
+  NPU 加速。
+- MNN 的 **OpenCL** 后端在某些设备上可以用手机 GPU（Adreno/Mali）；
+  **Vulkan** 是另一个选择。两者都需要真机基准测试。
+- **CPU** 后端（ARM82/NEON，int8）是唯一可预测的路径。在引入第二套引擎之前，
+  先和 llama.cpp（LLM）或 ONNX Runtime（小模型）对比。
 
-## If we decide to add it
+## 如果我们决定加入它
 
-1. Download the Android zip, take only `arm64-v8a` libs + headers.
-2. Run `python app/src/main/assets/skills/android-build/scripts/check-16kb.py`
-   on every `.so`; MNN releases are recent but verify, because `jniLibs` is
-   packaged with `extractNativeLibs=true`.
-3. Build the smallest possible runner:
-   - vision: MobileNet/ResNet `.mnn` → one image → top-5;
-   - LLM: MNN-LLM demo with a 0.5B–1.5B quantized model.
-4. Benchmark on the **actual phone**: load time, first token, tok/s, RAM, heat.
-5. Only bundle it if it beats the existing path (otherwise it is dead weight).
+1. 下载 Android zip，只取 `arm64-v8a` 的库 + 头文件。
+2. 对每个 `.so` 运行
+   `python app/src/main/assets/skills/android-build/scripts/check-16kb.py`；
+   MNN 的发布较新，但仍要验证，因为 `jniLibs` 是按
+   `extractNativeLibs=true` 打包的。
+3. 构建尽可能小的运行器：
+   - 视觉：MobileNet/ResNet `.mnn` → 一张图片 → top-5；
+   - LLM：用 0.5B–1.5B 量化模型的 MNN-LLM demo。
+4. 在**真机**上做基准测试：加载时间、首 token、tok/s、内存、发热。
+5. 只有当它胜过现有路径时才内置（否则只是死重量）。
 
-## When MNN is the right choice
+## 什么时候 MNN 是正确选择
 
-- You need one runtime for **vision + LLM + audio** and are willing to write
-  native code.
-- You explicitly target a vendor NPU and can test it on that device.
-- You already have `.mnn` models from a PC pipeline.
+- 你需要一套运行时覆盖**视觉 + LLM + 音频**，并且愿意写原生代码。
+- 你明确针对某个厂商 NPU，并且能在该设备上测试。
+- 你已经有了来自 PC 流水线的 `.mnn` 模型。
 
-## When not to
+## 什么时候不要用
 
-- A `.onnx` model works — use ONNX Runtime (already bundled).
-- A `.gguf` LLM works — use llama.cpp (already bundled, simpler).
-- You only need CPU inference for a small model — the bundled stack is enough.
+- 一个 `.onnx` 模型就能用 —— 用 ONNX Runtime（已经内置）。
+- 一个 `.gguf` LLM 就能用 —— 用 llama.cpp（已经内置，更简单）。
+- 你只需要小模型的 CPU 推理 —— 内置的栈就够了。
 
-## Licensing
+## 许可证
 
-MNN is Apache-2.0. Model weights have their own licenses; check them before
-shipping an APK with weights inside.
+MNN 是 Apache-2.0。模型权重有自己的许可证；把权重打进 APK 之前先检查它们。

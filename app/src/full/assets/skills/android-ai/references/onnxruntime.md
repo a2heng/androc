@@ -1,19 +1,19 @@
-# ONNX Runtime (Termux Python)
+# ONNX Runtime（Termux Python）
 
-Bundled package: `python-onnxruntime 1.31.1` + `python-numpy 2.5.4`
-(Python 3.14). Installed in `$PREFIX/lib/python3.14/site-packages/onnxruntime`;
-the C++ runtime is `$PREFIX/lib/libonnxruntime.so`.
+内置软件包：`python-onnxruntime 1.31.1` + `python-numpy 2.5.4`
+（Python 3.14）。安装在 `$PREFIX/lib/python3.14/site-packages/onnxruntime`；
+C++ 运行时是 `$PREFIX/lib/libonnxruntime.so`。
 
-## Verified smoke test
+## 已验证的冒烟测试
 
-The Python package ships two tiny models (`mul_1.onnx`, `logreg_iris.onnx`), so
-you can verify the runtime without downloading anything:
+Python 包自带两个极小的模型（`mul_1.onnx`、`logreg_iris.onnx`），因此不用下载
+任何东西就能验证运行时：
 
 ```sh
 python ~/.config/opencode/skills/android-ai/scripts/onnx_smoke.py
 ```
 
-Expected (tested):
+预期输出（已测试）：
 
 ```text
 onnxruntime 1.31.1
@@ -24,7 +24,7 @@ output      [[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]]
 OK
 ```
 
-## Minimal inference
+## 最小推理
 
 ```python
 import numpy as np
@@ -40,22 +40,20 @@ y = sess.run(None, {sess.get_inputs()[0].name: x})[0]
 print(y.shape, y.dtype)
 ```
 
-## Execution providers
+## 执行提供程序
 
-The Termux build is compiled with **CPU**, **XNNPACK** and **NNAPI** providers
-(confirmed in `libonnxruntime.so`). What actually works depends on the phone:
+Termux 构建编译时包含 **CPU**、**XNNPACK** 和 **NNAPI** provider
+（已在 `libonnxruntime.so` 中确认）。实际能用什么取决于手机：
 
 ```python
 print(ort.get_available_providers())
 ```
 
-- Start with `CPUExecutionProvider`.
-- `XnnpackExecutionProvider` is available in this build; add it explicitly
-  (`providers=["XnnpackExecutionProvider", "CPUExecutionProvider"]`) when the
-  CPU path is too slow and the model is float.
-- `NnapiExecutionProvider` may use a vendor NPU, but op coverage is limited and
-  drivers vary. Always keep `CPUExecutionProvider` in the list so unsupported
-  nodes can fall back:
+- 从 `CPUExecutionProvider` 开始。
+- 此构建中有 `XnnpackExecutionProvider`；当 CPU 路径太慢且模型是浮点模型时，
+  显式加上它（`providers=["XnnpackExecutionProvider", "CPUExecutionProvider"]`）。
+- `NnapiExecutionProvider` 可能用到厂商 NPU，但算子覆盖有限且驱动差异很大。
+  始终在列表里保留 `CPUExecutionProvider`，以便不支持的节点可以回退：
 
 ```python
 sess = ort.InferenceSession(model, providers=[
@@ -63,9 +61,9 @@ sess = ort.InferenceSession(model, providers=[
 ])
 ```
 
-If creation or the first `run()` fails, drop NNAPI and use CPU.
+如果创建会话或第一次 `run()` 失败，就放弃 NNAPI，改用 CPU。
 
-## Threads and memory
+## 线程与内存
 
 ```python
 so = ort.SessionOptions()
@@ -75,19 +73,18 @@ so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 sess = ort.InferenceSession(model, so, providers=["CPUExecutionProvider"])
 ```
 
-- Prefer int8-quantized `.onnx` for CPU; fp16 is not faster on most phone CPUs.
-- Run `onnxruntime_test` (shipped in `$PREFIX/bin`) only for diagnostics.
-- The C++ library is 22 MB; models are separate and belong in `~/models/onnx/`.
+- CPU 上优先用 int8 量化的 `.onnx`；fp16 在大多数手机 CPU 上并不会更快。
+- 仅在诊断时运行 `onnxruntime_test`（随 `$PREFIX/bin` 提供）。
+- C++ 库有 22 MB；模型是分开的，应放在 `~/models/onnx/`。
 
-## Converting models
+## 转换模型
 
-Conversion is normally done on a PC (`torch.onnx.export` / `onnxsim`), not on the
-phone. Copy the resulting `.onnx` (and external-data files) into
-`~/models/onnx/<name>/`. Keep opset ≤ the runtime version (1.31 supports recent
-opsets; check `onnxruntime.__version__`).
+转换通常在 PC 上完成（`torch.onnx.export` / `onnxsim`），而不是在手机上。把
+生成的 `.onnx`（以及外部数据文件）复制到 `~/models/onnx/<name>/`。保持
+opset ≤ 运行时版本（1.31 支持较新的 opset；用 `onnxruntime.__version__` 确认）。
 
-## Do not
+## 不要做
 
-- `pip install onnxruntime` (manylinux/glibc wheel — fails on bionic).
-- Pass `~` to `InferenceSession`; expand it first (`os.path.expanduser`).
-- Feed a different shape than `get_inputs()[0].shape` for static models.
+- `pip install onnxruntime`（manylinux/glibc 的 wheel——在 bionic 上会失败）。
+- 把 `~` 直接传给 `InferenceSession`；先展开它（`os.path.expanduser`）。
+- 对静态模型喂入与 `get_inputs()[0].shape` 不同的形状。
