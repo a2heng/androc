@@ -79,6 +79,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -168,6 +169,7 @@ import com.a2heng.androc.ui.data.Msg
 import com.a2heng.androc.ui.data.Part
 import com.a2heng.androc.ui.data.PermissionReq
 import com.a2heng.androc.ui.data.SessionInfo
+import com.a2heng.androc.ui.data.Tokens
 import com.a2heng.androc.ui.data.formatCost
 import com.a2heng.androc.ui.data.formatTokens
 import com.a2heng.androc.ui.data.rateLabel
@@ -352,36 +354,32 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             if (wide) Modifier
                             else Modifier.windowInsetsPadding(WindowInsets.statusBars),
                         )
-                        .height(50.dp)
-                        .padding(horizontal = 6.dp),
+                        .padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilledTonalIconButton(
-                        onClick = {
-                            model.closeSession()
-                            model.refreshSessions()
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                CircleShape,
-                            ),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ),
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            .clickableNoRipple {
+                                model.closeSession()
+                                model.refreshSessions()
+                            },
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "返回",
-                            modifier = Modifier.size(19.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    // 顶栏：名字一行，下面一行是没放进底栏的信息（上下文 / tokens / 显示 / Git / 会话）。
-                    Column(Modifier.weight(1f)) {
+                    // 两个圆按钮之间只有两行：标题 + 右侧上下两行的 tokens；下面是模型/模式胶囊。
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 session.shortTitle,
@@ -391,7 +389,8 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
-                            SessionPill("会话 ${model.openSessions.size}") { openMenu = true }
+                            Spacer(Modifier.width(8.dp))
+                            TokenStack(aggregateTokens)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StatusChip(
@@ -404,6 +403,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                 },
                                 modifier = Modifier.weight(1f),
                             )
+                            Spacer(Modifier.width(5.dp))
                             StatusChip(
                                 "模式",
                                 agentDisplay,
@@ -412,14 +412,23 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                     pickAgent = true
                                 },
                             )
-                            Spacer(Modifier.width(6.dp))
-                            MetaText(
-                                aggregateTokens?.let {
-                                    "↑${formatTokens(it.input)} ↓${formatTokens(it.output)}"
-                                } ?: "↑— ↓—",
-                            )
-
                         }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    // 和左下角「+」同一种实心主色圆：右侧切会话
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            .clickableNoRipple { openMenu = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = "切换会话（${model.openSessions.size}）",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(22.dp),
+                        )
                     }
                 }
             }
@@ -1266,7 +1275,7 @@ private fun ChatComposer(
                     shape = CircleShape,
                 ) {
                     Icon(
-                        if (stopMode) Icons.Rounded.Stop else Icons.Rounded.ArrowUpward,
+                        if (stopMode) Icons.Rounded.Stop else Icons.AutoMirrored.Rounded.Send,
                         contentDescription = if (stopMode) "停止" else "发送",
                         modifier = Modifier.size(20.dp),
                     )
@@ -1417,7 +1426,7 @@ private fun StatusChip(
     val shape = RoundedCornerShape(8.dp)
     Row(
         modifier
-            .height(22.dp)
+            .height(20.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f), shape)
             .then(
                 if (onClick != null) {
@@ -1432,7 +1441,7 @@ private fun StatusChip(
                     Modifier
                 },
             )
-            .padding(horizontal = 7.dp),
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
@@ -1457,25 +1466,27 @@ private fun StatusChip(
     }
 }
 
+/** 顶栏右侧：tokens 上下两行（上是输入、下是输出），单位自动 k / M。 */
 @Composable
-private fun SessionPill(text: String, onClick: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
-        modifier = Modifier.clickable(onClick = onClick),
+private fun TokenStack(tokens: Tokens?) {
+    Column(
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
-        Row(
-            Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text, fontSize = 9.sp, lineHeight = 10.sp)
-            Icon(
-                Icons.Rounded.KeyboardArrowDown,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp),
-            )
-        }
+        Text(
+            tokens?.let { "↑${formatTokens(it.input)}" } ?: "↑—",
+            fontSize = 9.5.sp,
+            lineHeight = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Text(
+            tokens?.let { "↓${formatTokens(it.output)}" } ?: "↓—",
+            fontSize = 9.5.sp,
+            lineHeight = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 
