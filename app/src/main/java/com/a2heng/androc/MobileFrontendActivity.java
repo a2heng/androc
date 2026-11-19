@@ -79,6 +79,13 @@ public class MobileFrontendActivity extends AppCompatActivity {
             com.a2heng.androc.ui.OpenCodeMobileHost.showStandalone(this);
             return;
         }
+        if (!com.a2heng.androc.MuslRootfs.available(this)) {
+            // No local runtime yet: mount the UI as a remote frontend instead
+            // of spinning forever. The user can install the OpenCode/Android
+            // component from Settings.
+            showFrontend();
+            return;
+        }
         startServerAndShow();
     }
 
@@ -180,7 +187,8 @@ public class MobileFrontendActivity extends AppCompatActivity {
                     new com.a2heng.androc.ui.data.LocalRuntimeLauncher() {
                         @Override
                         public boolean getInstalled() {
-                            return true;
+                            return com.a2heng.androc.MuslRootfs.available(
+                                    MobileFrontendActivity.this);
                         }
 
                         @Override
@@ -238,6 +246,7 @@ public class MobileFrontendActivity extends AppCompatActivity {
         super.onResume();
         // Si el proceso se recreo o el servicio aun no estaba listo, reintenta solo.
         // Thin builds never start the local server.
-        if (!BuildConfig.THIN && !mounted) startServerAndShow();
+        if (!BuildConfig.THIN && !mounted
+                && com.a2heng.androc.MuslRootfs.available(this)) startServerAndShow();
     }
 }
