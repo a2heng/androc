@@ -86,6 +86,15 @@ fun LocalRuntimeDialog(model: AppModel, onDismiss: () -> Unit) {
         scope.launch {
             try {
                 val file = withContext(Dispatchers.IO) {
+                    // OpenCode 组件自带 runtime：先确保 runtime-core 存在。
+                    val bundled = java.io.File(context.filesDir, "runtime-core/rootfs")
+                    val rcRoot = java.io.File(context.filesDir, "packs/runtime-core")
+                    val rcInstalled = rcRoot.listFiles()?.any {
+                        java.io.File(it, "rootfs").isDirectory
+                    } == true
+                    if (!bundled.isDirectory && !rcInstalled) {
+                        MarketClient().installPack(context.filesDir, "runtime-core")
+                    }
                     var last = 0f
                     MarketClient().installOpencode(context.filesDir) { done, total ->
                         if (total > 0) {
