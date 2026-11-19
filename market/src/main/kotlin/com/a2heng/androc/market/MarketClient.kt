@@ -75,6 +75,34 @@ class MarketClient(
 
         val archive = File(cache, "opencode-${pack.version}.xz")
         download(pack.archiveUrl, archive, pack.archiveSize, pack.archiveSha, progress)
+
+        if (pack.kind == "tar") {
+            val tar = File(cache, "opencode-${pack.version}.tar")
+            decompress(archive, tar)
+            if (tar.length() != pack.installedSize ||
+                !sha256(tar).equals(pack.installedSha, ignoreCase = true)
+            ) {
+                tar.delete()
+                throw IOException("installed hash mismatch")
+            }
+            val parent = targetDir.parentFile ?: throw IOException("bad runtime dir")
+            val tmpDir = File(parent, "${pack.upstreamVersion}.tmp")
+            tmpDir.deleteRecursively()
+            if (!tmpDir.mkdirs()) throw IOException("cannot create runtime tmp")
+            extractTar(tar, tmpDir)
+            tar.delete()
+            if (targetDir.exists()) targetDir.deleteRecursively()
+            if (!tmpDir.renameTo(targetDir)) {
+                tmpDir.copyRecursively(targetDir, overwrite = true)
+                tmpDir.deleteRecursively()
+            }
+            val bin = File(targetDir, "opencode")
+            if (!bin.isFile) throw IOException("opencode binary missing in pack")
+            bin.setExecutable(true, true)
+            archive.delete()
+            return bin
+        }
+
         decompress(archive, tmp)
 
         if (tmp.length() != pack.installedSize || !sha256(tmp).equals(pack.installedSha, ignoreCase = true)) {

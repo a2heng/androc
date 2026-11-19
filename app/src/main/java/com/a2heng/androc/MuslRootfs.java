@@ -24,9 +24,21 @@ final class MuslRootfs {
     }
 
     static File dir(Context ctx) {
-        // 先看 bundle 内置的 runtime，再看市场安装的 runtime-core。
+        // 1) OC 组件自带的 runtime：files/runtime/<ver>/rootfs
+        File runtime = new File(ctx.getFilesDir(), "runtime");
+        File[] versions = runtime.listFiles(File::isDirectory);
+        if (versions != null) {
+            File best = null;
+            for (File v : versions) {
+                if (!new File(v, "rootfs").isDirectory()) continue;
+                if (best == null || v.getName().compareTo(best.getName()) > 0) best = v;
+            }
+            if (best != null) return new File(best, "rootfs");
+        }
+        // 2) bundle 内置的 runtime
         File bundled = RuntimeAssets.rootfs(ctx);
         if (bundled != null) return bundled;
+        // 3) 兼容：市场安装的 runtime-core / android 包
         for (String id : new String[]{"runtime-core", "android"}) {
             File pack = PackInstaller.installedDir(ctx, id);
             if (pack == null) continue;

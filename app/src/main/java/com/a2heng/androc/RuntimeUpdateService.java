@@ -102,10 +102,6 @@ public class RuntimeUpdateService extends Service {
             return;
         }
 
-        // OC 自带 runtime：升级前先保证 runtime-core 在。
-        if (MuslRootfs.dir(this) == null) {
-            PackInstaller.install(this, "runtime-core");
-        }
         File dest = client.installOpencode(getFilesDir(),
                 (done, total) -> updateProgress(done, total));
         File destDir = dest.getParentFile();
