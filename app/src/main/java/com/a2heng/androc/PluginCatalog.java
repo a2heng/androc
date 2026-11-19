@@ -59,11 +59,26 @@ final class PluginCatalog {
             String[] children = ctx.getAssets().list("skills");
             if (children == null) return out;
             for (String child : children) {
-                if (id.equals(pluginFor(child))) out.add(child);
+                if (!id.equals(pluginFor(child))) continue;
+                if (!isSkillDir(ctx, child)) continue;
+                out.add(child);
             }
         } catch (Exception ignored) {
         }
         return out;
+    }
+
+    /** A real skill directory contains SKILL.md; README.md etc. are skipped. */
+    private static boolean isSkillDir(Context ctx, String name) {
+        try {
+            String[] files = ctx.getAssets().list("skills/" + name);
+            if (files == null) return false;
+            for (String file : files) {
+                if ("SKILL.md".equals(file)) return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     private static android.content.SharedPreferences prefs(Context ctx) {

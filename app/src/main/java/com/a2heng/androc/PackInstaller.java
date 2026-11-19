@@ -29,7 +29,13 @@ final class PackInstaller {
     }
 
     static File install(Context ctx, String packId) throws IOException {
-        return new MarketClient().installPack(ctx.getFilesDir(), packId, null);
+        String url = MarketConfig.indexUrl(ctx);
+        // A custom index is a debug/mirror override; only the default index is
+        // signature-checked strictly.
+        boolean requireSignature = MarketClient.DEFAULT_INDEX_URL.equals(url);
+        MarketClient client = new MarketClient(
+                url, MarketClient.DEFAULT_PUBLIC_KEY, requireSignature);
+        return client.installPack(ctx.getFilesDir(), packId, null);
     }
 
     /** Latest installed version directory for a pack, or null. */

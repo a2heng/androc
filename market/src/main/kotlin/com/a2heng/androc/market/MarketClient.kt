@@ -33,6 +33,8 @@ import java.util.concurrent.TimeUnit
 class MarketClient(
     private val indexUrl: String = DEFAULT_INDEX_URL,
     publicKeyBase64: String = DEFAULT_PUBLIC_KEY,
+    /** Debug/mirror override: skip the detached signature check. */
+    private val requireSignature: Boolean = true,
 ) {
     fun interface Progress {
         fun onProgress(done: Long, total: Long)
@@ -47,8 +49,10 @@ class MarketClient(
 
     fun refresh(): MarketIndex {
         val index = fetch(indexUrl)
-        val signature = fetch("$indexUrl.sig")
-        verify(index, signature)
+        if (requireSignature) {
+            val signature = fetch("$indexUrl.sig")
+            verify(index, signature)
+        }
         return MarketIndex.parse(JSONObject(String(index, Charsets.UTF_8)))
     }
 
