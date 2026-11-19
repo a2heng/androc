@@ -153,6 +153,7 @@ public class UpdateCheck {
                 if (!rawTag.startsWith(launcherChannel())) continue;
                 String tag = parseVer(rawTag);
                 if (tag == null) continue;
+                // 本体更新必须跟随已安装的发行版：thin 只换 thin，bundle 只换 bundle。
                 String apk = null;
                 JSONArray assets = o.optJSONArray("assets");
                 if (assets != null) {
@@ -161,7 +162,11 @@ public class UpdateCheck {
                         if (a == null) continue;
                         String name = a.optString("name", "");
                         String url = a.optString("browser_download_url", "");
-                        if (name.endsWith(".apk") && !url.isEmpty()) {
+                        if (url.isEmpty() || !name.endsWith(".apk")) continue;
+                        boolean match = BuildConfig.THIN
+                                ? name.endsWith("-thin.apk")
+                                : (name.endsWith("-bundle.apk") || name.endsWith("-full.apk"));
+                        if (match) {
                             apk = url;
                             break;
                         }

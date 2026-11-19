@@ -18,6 +18,10 @@ import androidx.core.app.NotificationCompat;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import com.a2heng.androc.market.MarketClient;
+import com.a2heng.androc.market.MarketIndex;
+import com.a2heng.androc.market.MarketPack;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -72,89 +76,58 @@ public class RuntimeUpdateService extends Service {
     }
 
     private void runUpdate() throws Exception {
-        UpdateCheck.RuntimeAsset asset = UpdateCheck.opencodeRuntimeAsset();
-        if (asset == null) {
-            fail(ServerWatch.t(this, "No se pudo consultar la release",
-                    "Could not read the release"));
+        String url = MarketConfig.indexUrl(this);
+        boolean require = MarketClient.DEFAULT_INDEX_URL.equals(url);
+        MarketClient client = new MarketClient(url, MarketClient.DEFAULT_PUBLIC_KEY, require);
+        MarketIndex index = client.refresh();
+        MarketPack pack = index.find("kernel-opencode");
+        if (pack == null) {
+            fail("市场里没有 OpenCode 组件");
             return;
         }
+        String version = pack.getUpstreamVersion();
+        if (version == null || version.isEmpty()) version = pack.getVersion();
         String active = LocalRuntime.activeVersion(this);
-        if (UpdateCheck.cmpVer(asset.version, active) <= 0) {
-            markUpToDate(active, asset.version);
+        if (UpdateCheck.cmpVer(version, active) <= 0) {
+            markUpToDate(active, version);
             ServerWatch.notifyId(this, ServerWatch.NID_OC,
                     ServerWatch.t(this, "OpenCode al día", "OpenCode is up to date"),
                     active);
             return;
         }
         if (!requestedVersion.isEmpty()
-                && UpdateCheck.cmpVer(asset.version, requestedVersion) < 0) {
+                && UpdateCheck.cmpVer(version, requestedVersion) < 0) {
             fail(ServerWatch.t(this, "La release cambió, reintenta",
                     "The release changed, retry"));
             return;
         }
 
-        File cache = new File(getCacheDir(), "runtime-update");
-        try {
-            deleteRecursive(cache);
-            mkdirs(cache);
-            File archive = new File(cache, asset.name);
-            File part = new File(cache, asset.name + ".part");
-            download(part, asset);
-            if (!part.renameTo(archive)) throw new IOException("no se pudo cerrar la descarga");
-            String archiveHash = sha256(archive);
-            if (!archiveHash.equalsIgnoreCase(asset.sha256)) {
-                throw new IOException("SHA-256 no coincide");
-            }
+        File dest = client.installOpencode(getFilesDir(),
+                (done, total) -> updateProgress(done, total));
+        File destDir = dest.getParentFile();
+        SharedPreferences p = getSharedPreferences("app", MODE_PRIVATE);
+        p.edit()
+                .putString("opencode_runtime_version", version)
+                .putString("opencode_runtime_path", dest.getAbsolutePath())
+                .putLong("opencode_runtime_installed_at", System.currentTimeMillis())
+                .apply();
 
-            File extracted = new File(cache, "extract-" + asset.version);
-            mkdirs(extracted);
-            untar(archive, extracted);
-            File binary = findBinary(extracted);
-            if (binary == null) throw new IOException("no se encontró el binario opencode");
-            String binaryHash = sha256(binary);
-
-            File runtimeRoot = new File(getFilesDir(), "runtime");
-            File destDir = new File(runtimeRoot, asset.version);
-            mkdirs(destDir);
-            File dest = new File(destDir, "opencode");
-            File destPart = new File(destDir, "opencode.part");
-            copy(binary, destPart);
-            if (!sha256(destPart).equalsIgnoreCase(binaryHash)) {
-                throw new IOException("copia del binario incompleta");
-            }
-            if (dest.exists() && !dest.delete()) throw new IOException("no se pudo reemplazar el binario");
-            if (!destPart.renameTo(dest)) throw new IOException("no se pudo instalar el binario");
-            dest.setReadable(true, true);
-            dest.setExecutable(true, true);
-
-            SharedPreferences p = getSharedPreferences("app", MODE_PRIVATE);
-            p.edit()
-                    .putString("opencode_runtime_version", asset.version)
-                    .putString("opencode_runtime_path", dest.getAbsolutePath())
-                    .putString("opencode_runtime_digest", binaryHash)
-                    .putLong("opencode_runtime_installed_at", System.currentTimeMillis())
-                    .apply();
-
-            LocalRuntime.stop();
-            LocalServerService.start(this);
-            if (!waitHealth(asset.version)) {
-                rollback(destDir);
-                fail(ServerWatch.t(this, "El binario nuevo no arrancó",
-                        "The new binary did not start"));
-                return;
-            }
-
-            markInstalled(asset.version);
-            cleanupRuntimes(runtimeRoot, asset.version);
-            NotificationManager nm =
-                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null) nm.cancel(NID_PROGRESS);
-            ServerWatch.notifyId(this, ServerWatch.NID_OC,
-                    ServerWatch.t(this, "OpenCode actualizado", "OpenCode updated"),
-                    active + " -> " + asset.version);
-        } finally {
-            deleteRecursive(cache);
+        LocalRuntime.stop();
+        LocalServerService.start(this);
+        if (!waitHealth(version)) {
+            rollback(destDir);
+            fail(ServerWatch.t(this, "El binario nuevo no arrancó",
+                    "The new binary did not start"));
+            return;
         }
+        markInstalled(version);
+        cleanupRuntimes(new File(getFilesDir(), "runtime"), version);
+        NotificationManager nm =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) nm.cancel(NID_PROGRESS);
+        ServerWatch.notifyId(this, ServerWatch.NID_OC,
+                ServerWatch.t(this, "OpenCode actualizado", "OpenCode updated"),
+                active + " -> " + version);
     }
 
     private void download(File part, UpdateCheck.RuntimeAsset asset) throws Exception {
