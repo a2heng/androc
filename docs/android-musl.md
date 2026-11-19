@@ -35,7 +35,21 @@
 
 `androc-market/.github/workflows/android-musl.yml` 在 Alpine 容器里直接跑
 `aapt2 version`、`zipalign`、`apksigner --version`，先确认 build-tools 的
-glibc 二进制能否在 `gcompat` 下工作。跑通后再做 JDK + Gradle 的最小构建。
+glibc 二进制能否在 `gcompat` 下工作。
+
+**探针结果（2026-11-19，Alpine 3.20 + `gcompat libgcc libstdc++ zlib`）：**
+
+| 组件 | 结果 |
+|---|---|
+| `aapt2` | ✅ `Android Asset Packaging Tool (aapt) 2.20-13193326` |
+| `zipalign` | ✅ 正常运行 |
+| `apksigner` | ✅ `0.9` |
+| OpenJDK | ✅ `21.0.8+9-alpine-r0` |
+| Gradle | ✅ `8.7` |
+
+结论：build-tools 的 glibc 二进制在 `gcompat + libgcc + libstdc++ + zlib`
+下可用，不需要 bionic。下一步在 musl 下跑最小 AGP 工程（生成 APK），再打包成
+`android` 插件的 musl rootfs。
 
 ## 回滚
 
