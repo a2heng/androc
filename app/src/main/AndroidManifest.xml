@@ -20,11 +20,13 @@
         android:name="${applicationId}.permission.LOCAL_SERVER_INFO"
         android:protectionLevel="normal" />
 
-    <!-- Headless plugin APKs (runtime/tools) are signed by the same key. -->
+    <!-- Headless plugin APKs (runtime/tools) are signed by the same key.
+         El nombre es un placeholder: debug usa el suyo para poder convivir
+         con la version de release instalada. -->
     <permission
-        android:name="com.a2heng.androc.permission.PLUGIN"
+        android:name="${pluginPermission}"
         android:protectionLevel="signature" />
-    <uses-permission android:name="com.a2heng.androc.permission.PLUGIN" />
+    <uses-permission android:name="${pluginPermission}" />
 
     <!-- Android 11+ no deja ver otros paquetes sin declararlos: hacen falta
          para detectar y abrir el gestor de root (Magisk/KernelSU/APatch). -->
