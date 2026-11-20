@@ -1,343 +1,272 @@
-# Androc 路径设计（Termux 前缀 / proot / 真实路径）
+# Androc 路径、挂载与环境
 
-本文是 Androc 里**所有路径的唯一说明**。改代码、加脚本、加工具、排查
-`libreadline.so.8`、`Permission denied`、`No such file or directory` 之前，先读这一页。
+Androc 只有一个运行时：**proot + Alpine musl rootfs**。所有目录都在 App 私有
+目录内，`files/home` 就是 `$HOME`；proot 把 `$HOME` 按原绝对路径 bind 进 rootfs，
+所以宿主和沙箱里看到的是同一条路径。
 
-配套文档：[`commands.md`](commands.md) 说明命令怎么执行、所有路径和 `oc-*` 命令。
-
----
-
-## 0. 设计原则（不是口号，是下面每条规则的来源）
-
-1. **机制承担复杂度，使用者保持透明。**
-   用户/agent 只说“执行这个命令”，不应该被要求知道它在原生还是 proot、
-   需要哪个 `LD_LIBRARY_PATH`、要不要包一层 `oc-proot`。分类、挂载、库路径
-   都是实现细节。
-
-2. **一个事实来源，不要两套路径。**
-   同一个东西只应有一个权威位置：服务器和终端都在同一个 proot；前缀只有
-   `$PREFIX`；项目只有会话目录。出现“这里也有、那里也有”时，先问它是
-   设计上的副本，还是应该被清掉的死副本。
-
-3. **拒绝会腐烂的名单。**
-   `PROOT_COMMANDS`、`SAFE_NATIVE` 这类“按命令名分类”的表永远会漏；
-   漏一个就是 `libreadline` 或 `Permission denied`。用命名空间边界
-   （整个命令进 proot）代替枚举。
-
-4. **失败必须可自愈、可恢复。**
-   前缀缺文件 → 启动时从 APK 补；离线缓存缺 metadata → 构建自动联网补一次；
-   APK 下载中断 → 用 `.part` 续传；用户取消安装 → 已下载的 APK 还在。
-   不要留下“半完成但标记完成”的状态。
-
-5. **每个结论都要能在真机复现。**
-   `oc-doctor`、`scripts/verify-toolbox.py`、60 秒验收、`adb logcat`。
-   文档写的路径和命令，必须能在设备上跑出同样结果。
-
-6. **成本要可见。**
-   预装只放小体积、高频使用的东西；大而少用的依赖按需下载。包大不是问题，
-   重复下载和重复路径才是。
+配套：[`commands.md`](commands.md) 说明构建、调试、发布命令；
+[`android-musl.md`](android-musl.md) 说明 musl 迁移与真机实测。
 
 ---
 
-## 1. 一句话结论
+## 1. 两个发行版
 
-> Termux 的二进制把 `/data/data/com.termux/files/usr/lib` **编译进了 ELF 的
-> `DT_RUNPATH`**。这个目录只在 proot 沙箱里存在。因此：**所有命令
-> （服务器、终端、agent、构建）都在同一个 proot 命名空间里执行。**
+| 发行版 | APK 内容 | release 体积 | 首次启动 |
+|---|---|---:|---|
+| `thin` | UI + `nativeLibraryDir` 里的 proot / loader / musl loader | 约 7 MB | 需要市场包 `kernel-opencode` 提供 rootfs 与 `opencode` |
+| `bundle` | thin 的全部 + `assets/runtime/rootfs.tar.xz` + `libopencode2_bin.so` | 约 164 MB | 装完即可离线起本机 OpenCode |
 
-这不是“路径偶尔找不到”，而是**两套路径空间**：
+| 项 | 值 |
+|---|---|
+| applicationId | `com.a2heng.androc`（debug `.debug`，beta `.beta`） |
+| minSdk / targetSdk / compileSdk | 26 / 34 / 37 |
+| ABI | `arm64-v8a` |
+| 内置 OpenCode 版本 | 由 `opencode.version` 决定（当前 `2.3.2`），Gradle 写入 `BuildConfig.OPENCODE_VERSION` |
 
-| 空间 | 谁在看 | 前缀在哪里 |
+---
+
+## 2. `files/` 目录总表
+
+`<files>` = `Context.getFilesDir()`，即 `/data/data/<pkg>/files`（canonical 形式）。
+
+| 路径 | 内容 | 写入方 |
 |---|---|---|
-| Android 真实空间 | 宿主的 `ProcessBuilder`、Java、opencode 服务器 | `…/files/usr` |
-| Termux 沙箱空间 | `bash`、`git`、`python`、`pkg`、`apt`、`clang`… | `/data/data/com.termux/files/usr` |
+| `<files>/home` | `$HOME`，见 §3 | `LocalRuntime` |
+| `<files>/runtime/<upstream>/` | 市场 `kernel-opencode` 包：`opencode` + `rootfs/` | `MarketClient.installOpencode`、`RuntimeUpdateService` |
+| `<files>/runtime/<upstream>.tmp/` | 解包临时目录，完成后重命名为 `<upstream>` | 同上 |
+| `<files>/runtime-core/rootfs/` | bundle 内置 rootfs，只解压一次 | `RuntimeAssets.ensure`（由 `LocalServerService` 调用） |
+| `<files>/runtime-core/.installed-v2` | 内置 runtime 解压完成标记 | `RuntimeAssets` |
+| `<files>/packs/<id>/<ver>/` | 市场目录包：`android` = `skills/` + `rootfs/` | `MarketClient.installPack` |
+| `<files>/packs/<id>/<id>-<ver>.tar.tmp` | 解压出的 tar（校验后删除） | 同上 |
+| `<files>/packs/<id>/<id>-<ver>.tmp/` | 解包临时目录，完成后重命名为 `<ver>` | 同上 |
+| `<files>/market/` | 下载缓存：`opencode-<packver>.xz`、`<id>-<ver>.tar.xz`、`.part` | `MarketClient` |
+| `<files>/logs/androc.log` | 应用与运行时日志，512 KB 轮转为 `androc.log.1` | `AppLog` |
+| `<files>/logs/thin-runtime.log` | thin 启动器拉起的 server 日志 | `ThinRuntime` |
+| `<files>/lib/` | loader 库目录；thin 启动器在这里放 `libstdc++.so.6`、`libgcc_s.so.1` | `LocalRuntime` / `ThinRuntime` |
 
-在真实空间直接执行 `bash`，内核用 ELF 里的 `DT_RUNPATH` 去找
-`libreadline.so.8` → 该目录不存在 → `CANNOT LINK EXECUTABLE "bash": library
-"libreadline.so.8" not found`。
+缓存目录（`Context.getCacheDir()` = `/data/data/<pkg>/cache`）：
 
-### 证据（可复现）
+| 路径 | 作用 |
+|---|---|
+| `cache/tmp` | `TMPDIR`；沙箱里的 `/tmp` 就是它 |
+| `cache/tmp/proot` | `PROOT_TMP_DIR`（`LocalRuntime` 启动的 proot） |
+| `cache/tmp/musl` | `PROOT_TMP_DIR`（`MuslRootfs.run` 调试通道） |
 
-```sh
-# 在电脑上解包 Termux 的 bash.deb，读动态段
-python3 - <<'PY'
-# …解包 data.tar.xz，取 bin/bash…
-# DT_NEEDED = libandroid-support.so, libreadline.so.8, libiconv.so, libdl.so, libc.so
-# DT_RUNPATH = /data/data/com.termux/files/usr/lib
-PY
-```
+`nativeLibraryDir` 是唯一允许 `exec` 的目录，随每次安装/升级变化，只能运行时读取：
 
-`bash` 的 `DT_RUNPATH` 是写死的 Termux 路径，不是相对路径。所以：
-
-- 在 `/data/data/com.a2heng.androc/files/usr` 里放一份 `libreadline.so.8` **没用**；
-- 把 `LD_LIBRARY_PATH` 指到真实前缀，只有**显式用 `linker64` 启动**时才有效；
-- Android 10+ 还禁止 `untrusted_app` 对应用私有目录做 `execve`，所以“直接运行
-  前缀里的 ELF”本身也不可靠；
-- **proot 把真实前缀 bind 到 `/data/data/com.termux/files/usr`，两条路径同时成立**，
-  这是唯一稳定的解法。
-
----
-
-## 2. 路径总表（真实空间）
-
-包名：`com.a2heng.androc`（debug 为 `com.a2heng.androc.debug`，beta 为
-`com.a2heng.androc.beta`）。**不要在任何脚本里写死包名**，用 `$HOME` / `$PREFIX`。
-
-`HOME` 由 `LocalRuntime.homeDir()` 取 `getFilesDir()/home` 的 **canonical path**，
-所以日志里通常是 `/data/data/com.a2heng.androc/files/home`，而不是
-`/data/user/0/...`。两者是同一目录，但字符串比较必须用 canonical。
-
-| 逻辑名 | 真实路径 | 谁创建 / 谁用 |
-|---|---|---|
-| `HOME` | `/data/data/<pkg>/files/home` | opencode 服务器 cwd、agent、终端 |
-| `PREFIX`（真实） | `/data/data/<pkg>/files/usr` | toolbox 的 `.deb` 解包目标 |
-| `TMPDIR` | `/data/data/<pkg>/cache/tmp` | Java/agent 临时目录；proot 内映射为 `/tmp` |
-| `XDG_CONFIG_HOME` | `$HOME/.config` | opencode / skills / MCP |
-| `XDG_DATA_HOME` | `$HOME/.local/share` | opencode 数据 |
-| `XDG_CACHE_HOME` | `$HOME/.cache` | 缓存、临时构建 |
-| `XDG_STATE_HOME` | `$HOME/.local/state` | 状态 |
-| `XDG_RUNTIME_DIR` | `$HOME/.run` | 运行时 |
-| opencode 配置 | `$HOME/.config/opencode` | 用户配置、`AGENTS.md` |
-| Androc 注入配置 | `$HOME/.config/opencode-android` | `opencode.json`、`engine-mode`、skills |
-| engine 旧文件 | `$HOME/.config/opencode-android/engine-mode` | 已废弃；存在也不影响，永远 proot |
-| 工作区 | `$HOME/workspace` | 服务器默认项目根 |
-| 本地模型 | `$HOME/models/{onnx,tflite,gguf}` | 端侧推理权重；不要放 `cache/` 或 `/tmp` |
-| 共享工具链 | `$HOME/toolchain` | JDK、SDK、Gradle、Maven 种子 |
-| Gradle 用户目录 | `$HOME/toolchain/gradle-home` | `GRADLE_USER_HOME` |
-| Maven 本地库 | `$HOME/toolchain/m2` | 可选离线缓存 |
-| Android SDK | `$HOME/toolchain/android-sdk` | build-tools / platforms |
-| JDK 21 | `$PREFIX/lib/jvm/java-21-openjdk`（toolbox 内置；`build.sh` 自动解析） | 构建 |
-| 工具链解压临时 | `$HOME/toolchain.tmp` | 启动清理 |
-| 应用日志 | `/data/data/<pkg>/files/logs/androc.log` | 512 KB 轮转 |
-| toolbox 工作区 | `$HOME/../toolbox` = `/data/data/<pkg>/files/toolbox` | 索引、下载的 `.deb` |
-| toolbox 完成标记 | `$PREFIX/.opencode-toolbox` | 首次安装完成 |
-| 包清单 | `$HOME/../toolbox/packages.txt` | 已安装版本 |
-| 原生库目录 | `ApplicationInfo.nativeLibraryDir` | **每次升级 APK 都会变** |
-| 旧 git 跳板 | `$HOME/.native-bin/git` → `nativeLibraryDir/libgit.so` | 已废弃；服务器在 proot 内直接用 `$PREFIX/bin/git` |
-| 代理配置 | `$HOME/.oc-etc/hosts`、`resolv.conf` | bind 到 `/etc/` |
-| 共享存储（可选） | `$HOME/sdcard`（root bind） | 只有 root 且挂载成功时 |
-| 真实共享存储 | `/storage/emulated/0` | 不要假设可写 |
-
-> `nativeLibraryDir` 会随每次 APK 升级变化。所有 `oc-*` 脚本必须在**每次启动**
-> 重新生成（`CommandResolver.install`），不能把旧路径留在 `$PREFIX/bin` 里。
+| 文件 | 用途 |
+|---|---|
+| `libproot.so` | proot 本体 |
+| `libproot_loader.so` | `PROOT_LOADER` |
+| `libld_musl.so` | musl loader（沙箱内 ELF 的解释器） |
+| `libtalloc.so`、`libandroid-shmem.so`、`libstdcxx.so`、`libgcc_s.so` | proot / loader 依赖 |
+| `libopencode2_bin.so` | bundle 内置的 opencode 二进制 |
 
 ---
 
-## 3. 路径总表（proot 沙箱内）
+## 3. `$HOME` 布局
 
-proot 由 `LocalRuntime` 启动，bind 表如下（`CommandResolver.prootScript` 与
-`LocalRuntime.prootCmd` 必须保持一致）：
+`LocalRuntime.homeDir()` 返回 `<files>/home` 的 **canonical path**（通常是
+`/data/data/<pkg>/files/home`，不是 `/data/user/0/...`）。字符串比较必须用
+canonical 形式。
 
-| 沙箱路径 | 真实路径 | 作用 |
+| 路径 | 作用 |
+|---|---|
+| `$HOME/workspace` | 默认项目根；服务器启动时保证存在 |
+| `$HOME/.config` | `XDG_CONFIG_HOME` |
+| `$HOME/.config/opencode` | 用户配置：`opencode.jsonc`（`autoupdate:false`）、`tools/grep.ts`、`tools/glob.ts`、`skills/` |
+| `$HOME/.config/opencode-android` | `OPENCODE_CONFIG_DIR`：`opencode.json` 只含 `autoupdate:false` 与 `"shell":"/bin/bash"`；`skills/` 是同一批 skills 的副本 |
+| `$HOME/.local/share` | `XDG_DATA_HOME`：OpenCode DB、会话、日志 |
+| `$HOME/.cache` | `XDG_CACHE_HOME` |
+| `$HOME/.local/state` | `XDG_STATE_HOME` |
+| `$HOME/.run` | `XDG_RUNTIME_DIR` |
+| `$HOME/.oc-etc/hosts` | 每次启动重写，bind 到沙箱 `/etc/hosts` |
+| `$HOME/.oc-etc/resolv.conf` | 每次启动重写（`1.1.1.1`、`8.8.8.8`），bind 到 `/etc/resolv.conf` |
+| `$HOME/.gitconfig` | 启动时追加 `[safe] directory = *` |
+| `$HOME/sdcard` | 有 root 时 `mount --bind /storage/emulated/0`；无 root 时保留空目录 |
+| `$HOME/lib` | 运行时创建，留给 loader 的库目录 |
+
+skills 的两条来源，都会落到上面两个 `skills/` 目录：
+
+| 来源 | 内容 | 代码 |
 |---|---|---|
-| `/data/data/com.termux/files/usr` | `$PREFIX` | Termux 前缀；所有 ELF 的 RUNPATH |
-| `/tmp` | `$TMPDIR` | 临时文件 |
-| `/lib/ld-musl-aarch64.so.1` | `nativeLibraryDir/libld_musl.so` | opencode 的 musl loader |
-| `/etc/hosts` | `$HOME/.oc-etc/hosts` | 固定 opencode/models 的 IPv4 |
+| APK `assets/skills/` | 核心集（如 `skill-installer`），受插件开关控制 | `LocalRuntime.installSkills` |
+| 市场 `android` 包的 `skills/` | android-* 全套 | `PackInstaller.copySkills`（安装插件时） |
+
+---
+
+## 4. rootfs 来源与优先级
+
+`MuslRootfs.dir(ctx)` 按顺序取第一个存在的 rootfs：
+
+| 顺序 | 路径 | 来源 |
+|---:|---|---|
+| 1 | `<files>/packs/android/<ver>/rootfs` | Android 包（skills + JDK/SDK/Gradle），装了就优先 |
+| 2 | `<files>/runtime/<ver>/rootfs` | 市场 `kernel-opencode` 包（同目录还有 `opencode`） |
+| 3 | `<files>/runtime-core/rootfs` | bundle 内置 `assets/runtime/rootfs.tar.xz` 解压 |
+| 4 | `<files>/packs/runtime-core/<ver>/rootfs` | 兼容旧市场包 |
+
+同一层有多个版本目录时取**字符串最大**的版本名。运行时可用条件：
+`prootAvailable()`（§2 的 8 个 `.so` 全部存在）且 `MuslRootfs.dir() != null`；
+否则 `LocalRuntime.start` 直接报错，不会退回其它执行方式。
+
+---
+
+## 5. proot 挂载表
+
+### 5.1 服务器 / 终端（`LocalRuntime.prootCmd`）
+
+| 沙箱路径 | 宿主路径 | 说明 |
+|---|---|---|
+| `/` | rootfs | `proot -r` |
+| `$HOME` | `$HOME` | 绝对路径保持一致，会话/项目路径不用换算 |
+| `/opt/androc/lib` | `nativeLibraryDir` | proot 依赖库、内置 `opencode` |
+| `/opt/androc/bin` | 市场二进制的目录（`files/runtime/<ver>`） | 仅当二进制不在 `nativeLibraryDir` 时挂载 |
+| `/dev`、`/proc`、`/sys` | 同名 | 设备、进程、系统信息 |
+| `/system` | `/system` | 设备命令（`/system/bin/am`、`logcat`…） |
+| `/etc/hosts` | `$HOME/.oc-etc/hosts` | 固定 opencode / models 的 IPv4 |
 | `/etc/resolv.conf` | `$HOME/.oc-etc/resolv.conf` | DNS |
 
-沙箱里的环境变量：
+工作目录用 `proot -w` 指定：服务器和本机终端是 `$HOME`；agent 的每条命令由
+OpenCode 自己切到会话目录，仍然在同一个 proot 命名空间里。
+
+### 5.2 调试通道（`MuslRootfs.command`）
+
+debug API `GET /musl?cmd=` 用最小挂载跑一次性命令：
+
+| 沙箱路径 | 宿主路径 |
+|---|---|
+| `$HOME` | `$HOME`（不存在时先在 rootfs 里建同名空目录） |
+| `/dev`、`/proc`、`/sys`、`/system` | 同名 |
+| `/etc/hosts`、`/etc/resolv.conf` | `$HOME/.oc-etc/*`（存在才挂） |
+
+环境只设 `LD_LIBRARY_PATH=nativeLibraryDir`、`PROOT_LOADER`、`PROOT_TMP_DIR`，
+入口是 `/bin/sh -lc '<cmd>'`。
+
+### 5.3 rootfs 内的固定路径（Android 包提供）
+
+| 路径 | 内容 |
+|---|---|
+| `/opt/android-sdk` | `platform-tools`、`build-tools/36.0.0`（静态 aarch64 aapt2/adb） |
+| `/opt/gradle/gradle-9.9.0` | Gradle 发行版，`bin/` 在 `PATH` 里 |
+| `/usr/lib/jvm/java-21-openjdk` | `JAVA_HOME` |
+| `/opt/androc/env.sh` | 导出 `PATH`、`JAVA_HOME`、`LD_PRELOAD=/usr/local/lib/fixexec.so` |
+| `/usr/local/lib/fixexec.so` | JVM 的 `mprotect(RW→RWX)` shim |
+
+---
+
+## 6. 沙箱环境变量
+
+`LocalRuntime.buildEnv` + `startProot` 注入，`ProcessBuilder.environment()` 会先
+清空再整体写入：
 
 | 变量 | 值 |
 |---|---|
-| `HOME` | 真实 `$HOME`（**不**映射成 `/home`） |
-| `PREFIX` / `TERMUX_HOME` | `/data/data/com.termux/files/usr` |
-| `PATH` | `$PREFIX/bin:/system/bin:/system/xbin:/vendor/bin` |
-| `LD_LIBRARY_PATH` | `$PREFIX/lib:$HOME/lib:nativeLibraryDir` |
-| `TMPDIR` | 真实 `$TMPDIR`（所以 `/tmp` 与 `$TMPDIR` 是同一批文件） |
-| `SHELL` | `/system/bin/sh` |
-| `OC_ENGINE` | `proot`（标记当前已经在沙箱里） |
+| `HOME` | `$HOME`（`<files>/home`） |
+| `PWD` | `$HOME` |
+| `TMPDIR` | `cache/tmp` |
+| `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_CACHE_HOME` / `XDG_STATE_HOME` / `XDG_RUNTIME_DIR` | 见 §3 |
+| `PATH` | `/opt/android-sdk/build-tools/36.0.0:/opt/android-sdk/platform-tools:/opt/gradle/gradle-9.9.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` |
+| `SHELL` | `/bin/bash` |
+| `LANG` / `LC_ALL` | `C.UTF-8` |
+| `TERM` | `xterm-256color` |
+| `USER` / `LOGNAME` | `u0_a<uid % 100000>` |
+| `NO_COLOR` / `CI` | `1` / `1` |
+| `JAVA_HOME` | `/usr/lib/jvm/java-21-openjdk` |
+| `ANDROID_HOME` / `ANDROID_SDK_ROOT` | `/opt/android-sdk` |
+| `ANDROID_ROOT` / `ANDROID_DATA` | `/system` / `/data` |
+| `OPENCODE_DISABLE_AUTOUPDATE` | `1` |
+| `OPENCODE_RUNTIME` / `OC_ENGINE` | `proot` |
+| `OPENCODE_NATIVE_LIB_DIR` | `/opt/androc/lib` |
+| `LD_LIBRARY_PATH` | `nativeLibraryDir:/opt/androc/lib`（proot 本体在宿主侧需要） |
+| `PROOT_LOADER` / `PROOT_TMP_DIR` | `libproot_loader.so` / `cache/tmp/proot` |
+| `OPENCODE_SERVER_USERNAME` | `opencode` |
+| `OPENCODE_SERVER_PASSWORD` / `OPENCODE_PASSWORD` | 首次启动生成的 32 字节随机串（Base64URL），存 `SharedPreferences("app").local_server_password` |
+| `OPENCODE_CONFIG_DIR` | `$HOME/.config/opencode-android` |
 
-**注意**：`HOME` 在沙箱里仍然是应用私有路径，不是 Termux 的
-`/data/data/com.termux/files/home`。这是有意为之：项目、文件页、会话路径只有一套。
-
----
-
-## 3.1 实际运行审计（2026-11-12，PKB110）
-
-在一次真实会话（cwd `$HOME/workspace/测试`，项目 `DenoiseLab`）里观察到的路径：
-
-| 路径 | 大小 | 作用 | 判定 |
-|---|---:|---|---|
-| `$HOME/workspace/测试` | 24 MB | 会话 cwd / 项目父目录 | 真路径 |
-| `$HOME/workspace/测试/DenoiseLab` | 24 MB | 实际 Gradle 项目 | 真路径（嵌套是用户选的目录结构） |
-| `$HOME/toolchain/android-sdk` | 160 MB | SDK 36 / build-tools 36 | 真路径 |
-| `$HOME/toolchain/gradle` | 147 MB | Gradle 9.9.0 发行版 | 真路径 |
-| `$HOME/toolchain/gradle-home` | 1.1 GB | `GRADLE_USER_HOME`，共享依赖缓存 | 真路径（可清理，见下） |
-| `$PREFIX` | 1.1 GB | Termux 用户态 + JDK 21 | 真路径 |
-| `$HOME/.local/share/opencode` | 16 MB | DB、日志、shell 记录 | 真路径 |
-| `$HOME/.config/opencode` | 321 KB | 默认配置 + skills + tools | 真路径（proot/默认） |
-| `$HOME/.config/opencode-android` | 302 KB | 原生服务端配置 + skills 副本 | 设计上的副本 |
-| `$HOME/bin` | 0 | 旧 `oc-*` 包装脚本 | **已清理**（曾经是冗余） |
-| `$HOME/lib` | 2.9 MB | 原生 linker 用的 libstdc++/libgcc | 真路径 |
-| `$PREFIX/bin/adb` + `$HOME/toolchain/platform-tools/adb` | 3.5 MB + 7.4 MB | 两个 adb | 有意保留的 fallback |
-
-结论：
-
-- **`files/usr` 和 `files/home` 不是重复**：前者是 Termux 前缀（真实路径），后者是
-  用户 HOME；proot 只是把前者 bind 到 `/data/data/com.termux/files/usr`。
-- **`toolchain/` 和 `$PREFIX` 不是重复**：`toolchain` 是 Android SDK/Gradle 缓存，
-  `$PREFIX` 是 Termux 用户态和 JDK。两者都由 `build.sh` 显式使用。
-- **两个 `.config` 目录是设计上的重复**：原生 opencode 的 `OPENCODE_CONFIG_DIR`
-  指向 `opencode-android`，默认目录 `opencode` 仍给 proot/兼容路径用。skills
-  因此有两份（约 600 KB）；opencode v2 不列 symlink，所以没有用软链合并。
-- **`$HOME/bin` 曾经是 bug**：首次启动时 toolbox 还没装，包装脚本生成在这里；
-  装好后又在 `$PREFIX/bin` 生成一份，旧的 `$HOME/bin/oc-*` 成了死副本。现在
-  启动时会自动删除这 6 个旧文件。
-- **`workspace/测试/DenoiseLab` 不是重复**：会话目录是 `测试`，项目是它下面的
-  `DenoiseLab`；如果希望路径更短，新建会话时直接选 `DenoiseLab`。
-- **`/` 和 `/tmp/opencode` 不是真路径**：`/` 是 Android 根，应用无权读；
-  `/tmp` 在 proot 里映射到 `$TMPDIR`（`cache/tmp`），没有 `opencode` 子目录。
-  文件页已不再显示这两个入口。
+`/opt/androc/env.sh` 是 Android 包给**构建**用的补充入口：`source` 之后
+`JAVA_HOME`、`ANDROID_HOME`、`LD_PRELOAD` 都指向 §5.3 的路径。
 
 ---
 
-`LocalToolbox.ESSENTIALS` 是唯一的“不可缺失”清单：
+## 7. 市场包布局
 
-| 文件 | 包 | 用途 |
+索引：`https://raw.githubusercontent.com/a2heng/androc-market/main/index.json`
+（`MarketClient.DEFAULT_INDEX_URL`），签名是同目录 `index.json.sig`，Ed25519；
+只有默认索引强制验签，自定义镜像（`MarketConfig`）跳过验签。包本身按
+SHA-256 校验，**全量下载，无增量**（`delta` 字段只解析不使用）。
+
+| 包 | 内容 | 安装结果 |
 |---|---|---|
-| `bin/bash` | `bash` | 终端、agent shell |
-| `lib/libreadline.so.8` | `readline` | **bash 的 DT_NEEDED** |
-| `lib/libhistory.so.8` | `readline` | bash 历史 |
-| `lib/libncursesw.so.6` | `ncurses` | readline 依赖 |
-| `lib/libiconv.so` | `libiconv` | bash 依赖 |
-| `lib/libandroid-support.so` | `libandroid-support` | Termux 兼容层 |
-| `bin/pkg` | `termux-tools` | 包管理器入口 |
+| `kernel-opencode` | `opencode` + `rootfs/`（tar.xz，`kind=tar`） | `<files>/runtime/<upstreamVersion>/` |
+| `android` | `skills/` + `rootfs/`（JDK 21 / SDK 36 / Gradle 9.9 / aapt2 / adb） | `<files>/packs/android/<version>/`；skills 复制到两个 config 目录 |
 
-启动顺序（`LocalRuntime.prepareToolbox`）：
-
-1. `LocalToolbox.repairEssentials()`：逐个 `stat` 清单；缺哪个就从 APK 的
-   `assets/toolbox/<pkg>.deb` **只补缺失文件**（`mergeTree(..., onlyMissing)`），
-   不覆盖用户用 `pkg upgrade` 装的新版本。
-2. `CommandResolver.install()`：重新生成 `oc-doctor` / `oc-repair` /
-   `oc-engine` 三个辅助脚本。
-3. 启动**唯一**的 proot 服务器；没有 native / auto / fast 分支。
-
-首次安装（`ToolboxService.installBundled`）：
-
-1. **Phase 1**：Java 先解包 `bootstrap.txt`。该文件现在**必须包含**
-   `bash`、`readline`、`ncurses`、`libiconv`、`libandroid-support`、
-   `termux-tools`、`util-linux`。这样即使 dpkg 中途失败，shell 也能启动。
-2. **Phase 2**：真 `dpkg --unpack` + `--configure`，让 apt/dpkg 数据库正确。
-3. `repairEssentials()` 再兜底。
-4. 写 `.opencode-toolbox` 标记，重启服务器。
-
-> 旧版只把 apt/dpkg 的依赖放进 Phase 1，dpkg 一失败就留下“bash 在、readline
-> 不在”的前缀，且 `.opencode-toolbox` 仍然写入 → 每次启动都坏。这就是复发的根因。
+`abi` 只接受 `arm64-v8a`。下载先写 `<name>.part`，长度与 SHA-256 都匹配后
+才重命名；已经存在且校验通过的缓存直接复用。
 
 ---
 
-## 5. 为什么不能靠“补一个 LD_LIBRARY_PATH”
+## 8. 端口与监听
 
-| 做法 | 结果 |
-|---|---|
-| 在真实空间 `export LD_LIBRARY_PATH=$PREFIX/lib` 后直接 `bash` | Android 拒绝 `execve` 应用私有文件（126/Permission denied）；即使放行，RUNPATH 仍指向不存在的 Termux 目录 |
-| `linker64 $PREFIX/bin/bash` + `LD_LIBRARY_PATH` | **能启动叶子工具**；但 bash 内部再 `exec` 的 `git`/`python`/脚本仍会走真实路径，继续失败 |
-| 把 `$PREFIX` 软链到 `/data/data/com.termux/files/usr` | 需要 root 且要改别的应用的私有目录；普通安装不可行 |
-| 给每个命令写 shell function | 只覆盖“直接输入的命令”；`env bash`、`find -exec`、脚本内部 `exec` 会绕过 |
-| **proot + bind 前缀** | 所有路径、shebang、RUNPATH、`pkg/apt` 同时成立；**唯一完整解** |
-
----
-
-## 6. 不变量（改代码前必须保持）
-
-1. **所有命令都在同一个 proot 命名空间执行**：服务器、终端、agent、构建。
-   不存在“原生命令”这条路径，也不存在命令白名单。
-2. `$PREFIX` 必须始终能解析出 §4 的 7 个文件；每次启动都检查。
-3. `bootstrap.txt` 必须包含 §4 的包，先于 `dpkg` 解包。
-4. `nativeLibraryDir` 相关的路径只能在运行时生成，不得写死。
-5. 沙箱内的 `PREFIX` 必须是 `/data/data/com.termux/files/usr`；真实前缀只用于
-   Java 解包。
-6. **服务器和 shell 的 cwd 要分清**：服务器进程 cwd 是 `$HOME`；agent 的
-   shell 命令 cwd 是会话目录。不要把 `-w $HOME` 传播成所有命令的 cwd。
-7. **不重新引入** `oc-shell` / `oc-proot` / `oc-native-env.sh`，也不引入
-   `auto` / `fast` / `native` 模式。
-8. 新增系统命令必须在 `$PREFIX/bin` 放包装（先 unset `LD_LIBRARY_PATH`
-   `LD_PRELOAD`，再 exec `/system/bin/*`）。
-
-违反任一条，`libreadline.so.8` / `Permission denied` 就会回来。
-
----
-
-## 8. 排查手册
-
-在 Androc 终端或 agent 里按顺序执行：
-
-```sh
-oc-engine status          # proot（唯一模式）
-oc-doctor                 # 路径、7 个必需文件、proot 实测、Java 状态
-oc-repair                 # 缺文件时从 APK 离线补齐
-```
-
-| 现象 | 原因 | 处理 |
+| 监听 | 端口 | 说明 |
 |---|---|---|
-| `library "libreadline.so.8" not found` | 前缀缺 `readline`，或绕过 Androc 直接 exec | `oc-repair`；从 Androc 的终端/agent 运行 |
-| `Permission denied` / `inaccessible or not found` | 绕过 App 直接 exec 应用私有文件 | 从 Androc 的终端/agent 运行；不要从 Java/`ProcessBuilder` 直接 exec |
-| `pkg: command not found` | `termux-tools` 缺失 | `oc-repair` |
-| `bash: ...: No such file or directory` | 前缀损坏 / 绕过 App | `oc-repair`；从 Androc 内运行 |
-| `proot: la caja de herramientas aun se esta instalando` | 首次安装未完成 | 等通知，或看 `files/logs/androc.log` |
-| `java.io.tmpdir doesn't exist` | `$PREFIX/tmp` 不存在 | 构建脚本已改用 `$HOME/.cache/tmp`，不要手建 `$PREFIX/tmp` |
-| Gradle 找不到 SDK | `local.properties` 指错 | 用 `android-build` skill 的 `build.sh`，它会写真实路径 |
+| 本机 OpenCode server | `127.0.0.1:4096`（release） | `BuildConfig.SERVER_PORT` |
+| 同上的 debug / beta | `127.0.0.1:4098` | 见 `app/build.gradle` 的 `debug` / `beta` |
+| thin 启动器 | `127.0.0.1:4098`–`4199` | 从空闲端口里挑一个，存 `SharedPreferences("thin_runtime").port` |
+| 调试 API | `127.0.0.1:42100` | 仅回环，头 `X-Androc-Token: androc-local-dev` |
+| 出站代理（thin） | `127.0.0.1:<随机>` | `LocalNetworkProxy`，用作 `HTTP(S)_PROXY` |
+| 服务器发现的 ContentProvider | `content://<applicationId>.local-server/info` | 返回 `url`、`username`、`password`、`running`、`port` |
 
-日志：`/data/data/<pkg>/files/logs/androc.log`，过滤 `OpenCodeLocal`、
-`OpenCodeToolbox`、`runtime`。
-
-### 安装后 60 秒验收（每次发版都做）
-
-在 Androc 的本机终端里依次执行：
-
-```sh
-oc-engine status        # 期望：proot
-oc-doctor               # 期望：没有 MISSING，proot-ok/bash-ok/git 版本都出现
-bash -lc 'git --version'
-python3 --version
-pkg install -y jq
-```
-
-四条都通过才算“路径问题已解决”。任何一条失败：
-
-1. `oc-repair`；
-2. 再看 `oc-doctor` 的 `missing`；
-3. 仍然失败就抓 `files/logs/androc.log` 里 `OpenCodeToolbox` / `OpenCodeLocal` 的行。
+服务器认证是 Basic：用户名 `opencode`，密码来自 §6。
 
 ---
 
-## 8.2 预装 vs 按需下载（成本原则）
+## 9. 启动顺序与自愈
 
-- **预装**：小体积、高频。当前 release 流水线预热
-  `androidx.core`、`androidx.appcompat`、`material`、`androidx.activity`、
-  `constraintlayout`、`kotlin-stdlib`，同时写入 `files-2.1` 和
-  `metadata-*/descriptors`。这是“离线能开箱构建”的最小集合。
-- **按需**：Compose 全家桶、ONNX/OpenCV、NDK、冷门库、不同版本的 AGP。
-  这些体积大、版本变化快，塞进 APK 只会让 900 MB 继续膨胀。
-- **兜底**：`build.sh` 发现 `--offline` 因缓存 metadata 缺项失败时，自动
-  联网重试一次，只下载缺的部分；下一次继续离线。
-- **升级**：`ToolchainInstaller.VERSION` 变更会让旧安装重新解压 toolchain，
-  避免继续使用缺 metadata 的旧缓存。
+`LocalServerService` → `RuntimeAssets.ensure`（只有 bundle 有 asset）→
+`ensureSdcardMount`（有 root 才成功）→ `LocalRuntime.start`：
 
-## 9. 加新工具 / 新包的标准流程
+1. `cleanManagedGit`：删遗留目录（`$HOME/toolchain`、`files/usr`）里的 `.git`；对
+   `$HOME`、`workspace`、`projects`、`.config`、`.local` 只删空仓库或
+   `Androc project:` 自动提交生成的仓库；
+2. `pruneTransientCaches`：清 `$HOME/.cache/tmp`、opencode 日志、Gradle daemon
+   里 7 天前的文件，删遗留的 `toolchain.tmp` 与包缓存；
+3. `pruneGeneratedRootfs`：`$HOME/rootfs` 全是符号链接时整目录删除；
+4. 建 `$HOME/workspace`、`$HOME/.config/opencode`、`$HOME/.local/*` 等；
+5. 写 `opencode.jsonc`、`opencode-android/opencode.json`、`.gitconfig`、插件
+   `tools/grep.ts` + `glob.ts`、skills；
+6. 重写 `.oc-etc/hosts` 与 `resolv.conf`；
+7. 用 `proot ... opencode serve --hostname 127.0.0.1 --port <SERVER_PORT>` 启动。
 
-1. 在 `scripts/fetch-toolbox.py` 的 `DEFAULT_SET` 加包名（或运行时 `pkg install`）。
-2. 如果它是“启动 shell 必需”的，再加入 `ESSENTIAL_ROOTS` 和
-   `LocalToolbox.ESSENTIALS`。
-3. 跑 `python3 scripts/fetch-toolbox.py` 和 `python3 scripts/verify-toolbox.py`。
-4. 如果在 `bin/` 里新增系统命令，放一个包装脚本：
-   `unset LD_LIBRARY_PATH LD_PRELOAD; PATH=/system/bin exec /system/bin/<cmd> "$@"`。
-5. 更新 `docs/commands.md` 的命令表。
-6. 真机验证：`oc-doctor`、`oc-engine status`、`bash -lc 'git --version'`、
-   `python3 --version`、`pkg install -y jq`。
+安装/更新 OpenCode 走 `RuntimeUpdateService`：从市场装到
+`<files>/runtime/<ver>/`，写 `opencode_runtime_version` / `opencode_runtime_path`，
+重启服务并做健康检查；失败则回滚到旧二进制。
 
 ---
 
-## 10. 相关代码位置
+## 10. 不变量
+
+1. **一个运行时**：服务器、终端、agent、构建全部在同一个 proot + musl rootfs 里。
+2. **rootfs 优先级唯一**：`files/runtime/<ver>/rootfs` → `files/runtime-core/rootfs`
+   → `files/packs/*/rootfs`；新增来源要同步 `MuslRootfs.dir` 和本页。
+3. **`$HOME` 只有一套**：`files/home`，沙箱里不改名、不映射到 `/home`。
+4. **路径用运行时值**：`nativeLibraryDir`、`$HOME`、`$PWD` 都在运行时取，不写死包名。
+5. **市场只有两个包**：`kernel-opencode`、`android`；索引必须验签。
+6. **下载可续、安装可重试**：`.part` 续传、SHA-256 校验、临时目录改名落盘。
+7. **端口固定**：4096（release）/ 4098（debug、beta、thin），调试 API 42100。
+
+---
+
+## 11. 代码对照
 
 | 责任 | 文件 |
 |---|---|
-| 前缀、`.deb` 解包、自愈 | `app/src/main/java/com/opencode/launcher/LocalToolbox.java` |
-| 唯一 proot 启动、路径挂载 | `app/src/main/java/com/opencode/launcher/LocalRuntime.java` |
-| `oc-doctor` / `oc-repair` / `oc-engine` 生成 | `app/src/main/java/com/opencode/launcher/CommandResolver.java` |
-| `/doctor`、`/repair` HTTP | `app/src/main/java/com/opencode/launcher/ToolboxServer.java` |
-| 首次安装 / 自测 | `app/src/main/java/com/opencode/launcher/ToolboxService.java` |
-| 离线包清单 | `scripts/fetch-toolbox.py` |
-| 打包前校验 | `scripts/verify-toolbox.py` |
-| agent 规则 | `app/src/bundle/assets/skills/termux/SKILL.md` |
+| `$HOME`、proot 启动、挂载、环境变量、清理 | `app/src/main/java/com/a2heng/androc/LocalRuntime.java` |
+| rootfs 选择 | `app/src/main/java/com/a2heng/androc/MuslRootfs.java` |
+| bundle 内置 runtime 解压 | `app/src/main/java/com/a2heng/androc/RuntimeAssets.java` |
+| 市场包目录与 skills 复制 | `app/src/main/java/com/a2heng/androc/PackInstaller.java` |
+| 索引/验签/下载/解包 | `market/src/main/kotlin/com/a2heng/androc/market/MarketClient.kt` |
+| 市场地址覆盖 | `app/src/main/java/com/a2heng/androc/MarketConfig.java` |
+| 调试 API | `app/src/main/java/com/a2heng/androc/AutomationServer.java` |
+| 日志 | `app/src/main/java/com/a2heng/androc/AppLog.java` |
+| 端口、发行版、签名 | `app/build.gradle` |

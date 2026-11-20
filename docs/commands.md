@@ -1,169 +1,260 @@
-# Androc 命令与路径（全部在 proot 内）
+# 构建、调试与发布命令
 
-本文是 Androc 里**命令怎么执行**的唯一说明。路径细节见 [`paths.md`](paths.md)。
-
-## 设计原则
-
-| 原则 | 在代码里的体现 | 反例（不要这样做） |
-|---|---|---|
-| 机制承担复杂度 | 整个命令进 proot；路径/库/linker 都由机制处理 | 要求 agent 记住“git 要包 oc-proot，grep 不用” |
-| 命令透明 | 只写 `git status`、`pkg install`、`./gradlew` | 让用户判断“这条命令属于原生还是 Termux” |
-| 单一事实来源 | 一个 proot、一个 `$PREFIX`、一个会话 cwd | 同时维护原生命令表、proot 命令表、fallback 表 |
-| 拒绝会腐烂的名单 | 没有 `PROOT_COMMANDS` / `SAFE_NATIVE` 分派 | “先按命令名判断，漏了再补一条” |
-| 失败可恢复 | 前缀自愈、缓存自动补、APK 断点续传/取消 | 下载中断就删包、安装取消就重下 |
-| 文档即契约 | docs + skills 与代码同步；有验收清单 | 代码改了，文档/技能还教旧做法 |
-
-这些原则比任何一条命令都重要。下面所有“为什么这样设计”都是它们的展开。
+所有命令在仓库根目录执行。路径细节见 [`paths.md`](paths.md)。
 
 ---
 
-## 1. 唯一原则：一切都在 proot
+## 1. 前置
 
-Androc 里不再有“原生命令 / proot 命令”的分类，也没有 `auto`、`fast`、`native`
-这些模式。启动 opencode 服务器、打开本机终端、执行 agent 命令、跑 Gradle、
-装包，全部在**同一个 proot 沙箱**里。
-
-因此：
-
-- 用户/agent 只写命令，不需要知道命令背后是什么；
-- 不需要 `oc-proot '<命令>'`，不需要 `oc-shell`；
-- 不需要记住“哪些命令要包起来”；
-- 没有命令白名单，也没有会被漏掉的分类表。
-
-`oc-` 前缀只保留三个**辅助命令**：
-
-| 命令 | 作用 |
+| 项 | 要求 |
 |---|---|
-| `oc-doctor` | 诊断路径、7 个必需文件、Java 状态 |
-| `oc-repair` | 从 APK 离线补齐缺失的 bash/readline 等 |
-| `oc-engine` | 兼容旧脚本：只报告 `proot`，不再切换模式 |
-
-`oc-shell`、`oc-proot`、`oc-native-env.sh` 已删除；`$HOME/bin` 里的旧副本
-会在启动时自动清理。
-
----
-
-## 2. 命令怎么执行
-
-```text
-opencode server ──(proot, cwd=$HOME)──> shell tool / bash
-                                        └─ cwd = 会话目录
-                                        └─ $PREFIX = /data/data/com.termux/files/usr
-```
-
-- 服务器进程由 `LocalRuntime.startProot` 启动，固定在 proot 内；
-- opencode 的 `shell` 配置在 `$HOME/.config/opencode-android/opencode.json`，
-  指向 `$PREFIX/bin/bash`；
-- 所以 `git`、`python`、`adb`、`pkg`、`./gradlew`、`build.sh` 天然就在沙箱里；
-- 命令的 cwd 是会话目录（`/api/location` 的 directory），不是 HOME；
-- 系统命令 `am`/`pm`/`dumpsys` 等由 `$PREFIX/bin` 的包装脚本先
-  `unset LD_LIBRARY_PATH LD_PRELOAD`，再 exec `/system/bin/*`。
-
-不需要 `oc-proot`，也不需要判断“这条命令看起来像不像 Termux 路径”。
+| 主机 | Windows 11 + Git Bash；Unix 风格路径（`/d/005_dev/androc`） |
+| JDK | 17（Gradle 自身）；`JAVA_HOME` 指向它 |
+| Android SDK | 平台 34 / 36 / 37.0，build-tools 34.0.0 / 36.0.0 |
+| 设备 | arm64-v8a，Android 8.0+（minSdk 26） |
+| 网络 | 首次拉取 opencode 与 rootfs 需要访问 GitHub 和市场索引 |
 
 ---
 
-## 3. 所有命令和它们使用的路径
+## 2. 脚本一览（`scripts/`）
 
-### 3.1 诊断/修复
+| 命令 | 作用 | 产物 / 缓存 |
+|---|---|---|
+| `python scripts/fetch-opencode.py` | 按 `opencode.version` 下载官方 linux-arm64-musl 二进制 | `app/src/bundle/jniLibs/arm64-v8a/libopencode2_bin.so`；缓存 `.cache/opencode` |
+| `python scripts/fetch-opencode.py --latest` | 取上游最新稳定版，并改写 `opencode.version` | 同上 |
+| `python scripts/fetch-opencode.py --version X.Y.Z` | 指定版本（不改 `opencode.version`） | 同上 |
+| `python scripts/fetch-runtime.py` | 从市场 `kernel-opencode` 包提取 `rootfs/` | `app/src/bundle/assets/runtime/rootfs.tar.xz`；缓存 `.cache/opencode-pack` |
+| `python scripts/check-opencode-latest.py` | 查询上游最新版并与 `opencode.version` 比较 | 退出码 1 表示落后（仅 `--strict`） |
+| `python scripts/check-16kb.py <apk…>` | 检查 APK 内 64 位 ELF 的 16 KB 页对齐 | 退出码 1 表示不合格 |
+| `python scripts/check-elf-align.py <file|dir>…` | 逐个 ELF 打印 `min_align` | 纯报告 |
+| `node scripts/make-webview-shims.js` | 重新生成 core-js 垫片 | `app/src/bundle/assets/oc-corejs.js` |
+| `node scripts/test-webview-shims.js` | 在 Node 里验证垫片覆盖的 API | 自检 |
+
+`fetch-runtime.py` 额外支持离线包：
 
 ```sh
-oc-doctor
-oc-repair
-oc-engine status     # 永远输出 proot
-oc-engine help
+OPENCODE_PACK_FILE=/path/to/kernel-opencode.tar.xz python scripts/fetch-runtime.py
+OPENCODE_PACK_URL=https://… python scripts/fetch-runtime.py
 ```
 
-| 命令 | 使用的路径 |
+两个 `fetch` 脚本都幂等：产物已存在且大小足够时直接复用。
+
+---
+
+## 3. 构建
+
+```sh
+python scripts/fetch-opencode.py      # 1) OpenCode 二进制
+python scripts/fetch-runtime.py       # 2) bundle 内置 rootfs
+
+./gradlew :app:assembleThinDebug      # 只有 UI
+./gradlew :app:assembleBundleDebug    # UI + rootfs + OpenCode
+./gradlew :app:assembleDebug          # 两个 flavor 的 debug
+./gradlew :app:assembleRelease        # 两个 flavor 的 release（需要签名）
+```
+
+产物：
+
+| 任务 | APK |
 |---|---|
-| `oc-doctor` | `$PREFIX` 7 个必需文件、`$HOME/.config/opencode-android/engine-mode`（旧文件，存在也不影响） |
-| `oc-repair` | `POST 127.0.0.1:SERVER_PORT+100/repair`，Java 从 `assets/toolbox/*.deb` 补 `$PREFIX` |
-| `oc-engine` | 只读；不写模式文件 |
+| `assembleThinDebug` | `app/build/outputs/apk/thin/debug/app-thin-debug.apk` |
+| `assembleBundleDebug` | `app/build/outputs/apk/bundle/debug/app-bundle-debug.apk` |
+| `assembleThinRelease` | `app/build/outputs/apk/thin/release/app-thin-release.apk` |
+| `assembleBundleRelease` | `app/build/outputs/apk/bundle/release/app-bundle-release.apk` |
 
-### 3.2 Termux 工具（全部 proot）
+Gradle 属性：
 
-| 类别 | 命令 | 关键路径 |
+| 属性 | 默认 | 说明 |
 |---|---|---|
-| shell | `bash` `sh` | `$PREFIX/bin`、`$PREFIX/lib` |
-| 包管理 | `pkg` `apt` `apt-get` `dpkg` | `$PREFIX/var/lib/dpkg`、`$PREFIX/var/cache/apt` |
-| VCS | `git` `ssh` | `$PREFIX/libexec/git-core`、`$HOME/.ssh` |
-| 语言 | `python3` `pip` `node` `npm` | `$PREFIX/lib/python3.*`、`$PREFIX/lib/node_modules` |
-| 构建 | `make` `cmake` `ninja` `clang` `java` `javac` | `$PREFIX/bin`、`$PREFIX/lib/jvm/java-21-openjdk` |
-| 网络 | `curl` `wget` | `$PREFIX/etc/tls/cert.pem` |
-| Android | `adb` `aidl` | `$PREFIX/bin`；备选 `$HOME/toolchain/platform-tools/adb` |
-| 文本/搜索 | `grep` `sed` `awk` `find` `sort` … | `$PREFIX/bin`、`$PREFIX/lib` |
-| 压缩/校验 | `gzip` `xz` `zstd` `sha256sum` … | `$PREFIX/bin`、`$PREFIX/lib` |
-| 其他 | `rg` `jq` `tree` `gdb` `strace` … | `$PREFIX/bin` |
+| `-PandrocVersionName` | `0.6.2-androc` | 版本名（旧名 `adiaVersionName` 仍接受） |
+| `-PandrocVersionCode` | `9` | 版本号 |
+| `-PandrocRequireSigning=1` | 关闭 | 没有签名材料时直接失败 |
+| `-PandrocUi=mobile|web` | `mobile` | `:ui` 的入口形态 |
 
-### 3.3 设备命令
+签名材料二选一：
 
-| 命令 | 行为 | 路径 |
-|---|---|---|
-| `am` `pm` `settings` `getprop` `logcat` `dumpsys` `input` `monkey` `screencap` `svc` `uiautomator` `wm` `appops` `content` `ip` `ss` `ifconfig` `netstat` `mount` | 包装后 exec `/system/bin/*` | `$PREFIX/bin/<name>` |
-| `su` `sudo` | 转给 `opencode-root`，用 Magisk 的真实 su | `$PREFIX/bin/opencode-root` |
-| `termux-battery-status` 等 | HTTP `/device/*`，由 App 执行 | `$PREFIX/bin/termux-*` |
+- `keystore.properties`（根目录，`storeFile` / `storePassword` / `keyAlias` / `keyPassword`）；
+- 环境变量 `ANDROC_KEYSTORE` / `ANDROC_KEY_ALIAS` / `ANDROC_KEYSTORE_PASS` / `ANDROC_KEY_PASS`。
 
-### 3.4 构建/项目
+---
 
-| 命令 | 使用的路径 |
+## 4. 真机安装与日志
+
+```sh
+adb install -r app/build/outputs/apk/thin/debug/app-thin-debug.apk
+adb install -r app/build/outputs/apk/bundle/debug/app-bundle-debug.apk
+
+adb logcat -s OpenCodeLocal OpenCodeMusl OpenCodePacks OpenCodeRuntimeAssets ThinRuntime
+adb shell run-as com.a2heng.androc.debug cat files/logs/androc.log
+```
+
+| 日志标签 | 来源 |
 |---|---|
-| `bash .../android-build/scripts/build.sh <project>` | JDK `$PREFIX/lib/jvm/java-21-openjdk`；SDK `$HOME/toolchain/android-sdk`；Gradle `$HOME/toolchain/gradle`；缓存 `$HOME/toolchain/gradle-home` |
-| `./gradlew` | 项目目录；`local.properties` 的 `sdk.dir` |
-| `android-debug/scripts/*.sh` | `$PREFIX/bin/adb`，备选 `$HOME/toolchain/platform-tools/adb` |
-| 文件页 | Java/Kotlin 直接读写 `$HOME`，根为 `~` |
-| 新建会话 | `/api/fs/list`，根为 `HOME`；`项目区` = `$HOME/workspace` |
+| `OpenCodeLocal` | proot 启动、挂载、配置写入 |
+| `OpenCodeMusl` | rootfs 选择、调试通道 |
+| `OpenCodeRuntimeAssets` | bundle 内置 runtime 解压 |
+| `OpenCodePacks` | 市场目录包与 skills 复制 |
+| `ThinRuntime` | thin 启动器 |
+| `AutomationServer` | 调试 API |
+
+设备内存日志：`files/logs/androc.log`（512 KB 轮转）、`files/logs/thin-runtime.log`。
 
 ---
 
-## 4. 为什么不会再有 libreadline 错误
+## 5. 调试 API（仅 debug 构建）
 
-`bash` 的 ELF 把 `DT_RUNPATH=/data/data/com.termux/files/usr/lib` 编译进去。
-Androc 把真实前缀 `files/usr` bind 到这个路径；服务器、shell、所有子进程都在
-同一个 proot 命名空间里。所以：
+`MobileFrontendActivity` 在 `BuildConfig.DEBUG` 时启动，绑定 `127.0.0.1:42100`，
+每个请求都要带 `X-Androc-Token: androc-local-dev`。
 
-- `libreadline.so.8` 永远在 `/data/data/com.termux/files/usr/lib`；
-- `bash` 不会再在“真实空间”里找它；
-- 没有“这条命令漏了 proot”的可能，因为根本不存在非 proot 的执行路径。
+```sh
+adb forward tcp:42100 tcp:42100
+H='X-Androc-Token: androc-local-dev'
+B=http://127.0.0.1:42100
 
-前缀本身仍会在每次启动时自愈（7 个必需文件），防止安装中断。
+curl -s -H "$H" "$B/ping"
+curl -s -H "$H" "$B/state"
+curl -s -H "$H" "$B/local"
+curl -s -H "$H" "$B/logs"
+```
 
----
-
-## 5. 报错对照
-
-| 报错 | 原因 | 处理 |
+| 方法 | 路径 | 作用 |
 |---|---|---|
-| `library "libreadline.so.8" not found` | 前缀缺 `readline`，或有人绕过 Androc 直接 exec | `oc-repair`；确认不是从外部 shell 直接跑 |
-| `Permission denied` / `inaccessible or not found` | 绕过 App 直接 exec 应用私有文件 | 从 Androc 的终端/agent 运行 |
-| `pkg: command not found` | `termux-tools` 缺失 | `oc-repair` |
-| `proot: ...` | 首次安装未完成 / 前缀损坏 | 等安装完成，`oc-repair` |
-| `java.io.tmpdir doesn't exist` | `$PREFIX/tmp` 缺失 | `build.sh` 已改用 `$HOME/.cache/tmp`，不要手建 |
-| `doctor-http-failed` | 服务器未启动 / token 缺失 | 从 App 终端运行；重启服务 |
+| GET | `/ping` | 存活 |
+| GET | `/state` | UI 状态、当前连接、本机组件、已保存连接 |
+| GET | `/local` | 已装版本、是否运行、URL |
+| GET | `/logs` | `thin-runtime.log` 尾部 |
+| POST | `/connect?url=&password=` | 连接并保存一个服务器 |
+| POST | `/start-local` | 启动本机组件并自动连接 |
+| GET | `/update/check` | 查询 OpenCode 更新 |
+| POST | `/update/download` | 下载并安装更新 |
+| GET | `/proxy?path=/api/info` | 带 Basic 认证转发到本机 server |
+| GET/POST | `/market?url=` | 查询 / 覆盖市场索引地址 |
+| GET | `/musl?cmd=` | 在 musl rootfs 里跑一次性命令 |
+| GET | `/plugins` | 组件列表（id、版本、skills、是否已装） |
+| POST | `/plugin/install?id=` | 安装组件（`android`） |
+| POST | `/plugin/uninstall?id=` | 卸载组件 |
+
+示例：
+
+```sh
+curl -s -H "$H" "$B/musl?cmd=uname%20-a%20%26%26%20java%20-version"
+curl -s -H "$H" -X POST "$B/plugin/install?id=android"
+curl -s -H "$H" -X POST "$B/market?url=https://mirror.example/androc-market/main/index.json"
+adb forward --remove tcp:42100
+```
+
+直接用 curl 连本机 server（密码见 `/state` 或 `SharedPreferences("app")`）：
+
+```sh
+curl -s -u opencode:<password> http://127.0.0.1:4096/api/info
+adb forward tcp:4096 tcp:4096
+curl -s -u opencode:<password> http://127.0.0.1:4096/global/health
+```
 
 ---
 
-## 6. 迭代检查清单（防止走偏）
+## 6. rootfs 内的命令
 
-- [ ] 不重新引入 `auto`/`fast`/`native` 或命令白名单。
-- [ ] 不重新引入 `oc-shell`/`oc-proot`/`oc-native-env.sh`。
-- [ ] 服务器、终端、构建、agent 命令都在同一个 proot 命名空间。
-- [ ] 新增系统命令必须同时加包装（`unset LD_LIBRARY_PATH LD_PRELOAD`）。
-- [ ] 新增“启动必需”文件同时加入 `LocalToolbox.ESSENTIALS`、
-      `ESSENTIAL_ROOTS`、`docs/paths.md`。
-- [ ] `bootstrap.txt` 仍包含 `bash` 和 `readline`。
-- [ ] `nativeLibraryDir` 路径只在运行时生成。
-- [ ] `oc-doctor` 的 `missing` 为空。
-- [ ] 真机跑过 `pwd`、`git --version`、`python3 --version`、`build.sh`。
-- [ ] `docs/paths.md`、`docs/commands.md` 与 skills 一致。
+agent、本机终端、构建都在同一个 proot 里，命令直接写，不需要包装：
+
+| 类别 | 命令 | 说明 |
+|---|---|---|
+| shell | `sh`、`bash` | `SHELL=/bin/bash` |
+| 包管理 | `apk add <pkg>`、`apk del` | Alpine apk-tools；`/etc/resolv.conf` 已绑定 |
+| VCS | `git` | `$HOME/.gitconfig` 已加 `safe.directory = *` |
+| 语言 | `python3`、`node`、`npm` | rootfs 自带 |
+| JVM | `java`、`javac` | `JAVA_HOME=/usr/lib/jvm/java-21-openjdk` |
+| Android 构建 | `gradle`、`aapt2`、`zipalign`、`apksigner`、`adb` | `PATH` 已含 SDK 与 Gradle |
+| 设备 | `/system/bin/am`、`pm`、`logcat`、`dumpsys`、`input`、`screencap` | `/system` 已 bind，用绝对路径 |
+
+构建前先加载 Android 环境（尤其是 `LD_PRELOAD` 的 JVM shim）：
+
+```sh
+. /opt/androc/env.sh
+java -version
+gradle -v
+aapt2 version
+```
+
+端侧构建一个项目：
+
+```sh
+cd "$HOME/workspace/<project>"
+. /opt/androc/env.sh
+gradle assembleDebug
+```
+
+`android` 组件安装后，它的 skills 会写到
+`$HOME/.config/opencode/skills` 与 `$HOME/.config/opencode-android/skills`。
 
 ---
 
-## 7. 代码位置
+## 7. 发布
+
+```sh
+python scripts/check-opencode-latest.py --strict   # 必须通过
+python scripts/fetch-opencode.py
+python scripts/fetch-runtime.py
+git tag v0.6.2
+git push origin v0.6.2
+```
+
+| 项 | 内容 |
+|---|---|
+| 触发 | push `v*` tag；或 `workflow_dispatch`（只出签名 APK，不建 Release） |
+| 版本 | tag 去掉 `v`；`versionCode = major*10000 + minor*100 + patch` |
+| 任务 | `:app:assembleRelease`，thin + bundle 两个 flavor |
+| 校验 | `check-opencode-latest.py --strict`、每个 APK 跑 `check-16kb.py`、`apksigner verify` |
+| 产物 | `androc-<ver>-thin.apk`、`androc-<ver>-bundle.apk`，各带 `.sha256` |
+| 正文 | `RELEASE_NOTES.md` 全文（只写当前版本，中文） |
+| 密钥 | `ANDROC_KEYSTORE_BASE64`、`ANDROC_KEY_ALIAS`、`ANDROC_KEYSTORE_PASS`、`ANDROC_KEY_PASS` |
+
+CI（`.github/workflows/ci.yml`）在每次 push/PR 上跑
+`assembleThinDebug` + `assembleBundleDebug`，并用
+`ANDROC_16KB_STRICT=1` 检查两个 APK。
+
+---
+
+## 8. 校验命令
+
+```sh
+python scripts/check-opencode-latest.py --strict
+ANDROC_16KB_STRICT=1 python scripts/check-16kb.py \
+  app/build/outputs/apk/*/*/*.apk
+python scripts/check-elf-align.py app/src/main/jniLibs/arm64-v8a
+node scripts/test-webview-shims.js
+```
+
+发布前至少确认：两个 APK 都能装、thin 能装 `kernel-opencode`、bundle 能离线
+起本机 server、`android` 包能在设备内完成一次 `assembleDebug`。
+
+---
+
+## 9. 报错对照
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| `faltan binarios del runtime proot` | `nativeLibraryDir` 缺 proot/loader/musl 库 | 重装 APK；确认 ABI 是 `arm64-v8a` |
+| `Android 插件（musl rootfs）未安装` | 没有任何可用 rootfs | 装 `kernel-opencode`（thin）或确认 bundle 已解压 |
+| `OpenCode 组件未安装` | thin 还没装市场包 | 设置里安装 OpenCode 组件，或 `POST /start-local` 前先安装 |
+| `installed hash mismatch` | 下载不完整或缓存损坏 | 删 `files/market/<包>` 下对应文件后重试 |
+| `HTTP 403/404 …/index.json` | 默认索引不可达 | `POST /market?url=<镜像索引>` |
+| `market index signature rejected` | 索引被改或镜像用了别的密钥 | 换回默认索引 |
+| `java: cannot execute` / JVM 启动崩 | 没加载 fixexec shim | 先 `. /opt/androc/env.sh` |
+| Gradle 找不到 SDK | 没有 `ANDROID_HOME`/`sdk.dir` | 用 `env.sh`；项目里写 `sdk.dir=/opt/android-sdk` |
+| 本机 server 起不来 | 看 `files/logs/androc.log` 的 `OpenCodeLocal` 行 | 重启服务；检查 4096/4098 是否被占 |
+| 16 KB 检查失败 | 某个 ELF 的 `p_align < 0x4000` | 用 `check-16kb.py` 定位具体 `.so` |
+
+---
+
+## 10. 代码位置
 
 | 功能 | 文件 |
 |---|---|
-| 唯一 proot 启动、server 配置 | `LocalRuntime.java` |
-| 生成 `oc-doctor` / `oc-repair` / `oc-engine` | `CommandResolver.java` |
-| `/doctor`、`/repair` | `ToolboxServer.java` |
-| 前缀自愈、`.deb`、系统命令包装 | `LocalToolbox.java` |
-| agent 规则 | `app/src/bundle/assets/skills/termux/SKILL.md` |
+| 构建、flavor、端口、签名 | `app/build.gradle` |
+| 拉取脚本 | `scripts/fetch-opencode.py`、`scripts/fetch-runtime.py` |
+| 版本校验 | `scripts/check-opencode-latest.py`、`opencode.version` |
+| 对齐校验 | `scripts/check-16kb.py`、`scripts/check-elf-align.py` |
+| CI / 发布 | `.github/workflows/ci.yml`、`.github/workflows/release.yml` |
+| 调试 API | `app/src/main/java/com/a2heng/androc/AutomationServer.java` |
+| proot 启动 | `app/src/main/java/com/a2heng/androc/LocalRuntime.java` |

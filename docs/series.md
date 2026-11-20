@@ -1,274 +1,208 @@
-# Androc：一个 App + 插件
+# 产品分层与市场
 
-本文是**产品形态、打包方式和模块边界**的说明。总览与未实现项见
-[`design.md`](design.md)，插件 APK 契约见 [`plugins.md`](plugins.md)，
-默认模型见 [`model.md`](model.md)，连接管理见 [`connections.md`](connections.md)。
-
-路径/命令仍以 [`paths.md`](paths.md)、[`commands.md`](commands.md) 为准。
+本文说明 Androc 的产品分层、两个发行版、安装更新流程和市场包格式。
+运行时与路径见 [`paths.md`](paths.md)，插件条目见 [`plugins.md`](plugins.md)，
+musl rootfs 的组成与实测见 [`android-musl.md`](android-musl.md)。
 
 ---
 
-## 0. 结论
-
-> 一个 App：基础 UI + proot 引擎，其余按**插件**安装（每个插件 = Skill + 工具链）。
-
-三个“产物”变成同一个 App 的三种状态：
-
-| 状态 | 装了什么 | 能做什么 |
-|---|---|---|
-| **UI only** | 基础 APK | 连接电脑 / 远程 opencode、官方 App 配对 |
-| **UI + OpenCode 内核** | + OpenCode 插件 | 本机跑 opencode、会话、终端 |
-| **UI + 内核 + Android** | + Android 插件 | 端侧构建、调试、AI、测试 |
-
-发布两种构建，代码同源：
-
-- **thin**（默认）：基础 APK，能力包按需下载；
-- **bundle**（离线）：同样一个 App，把能力包打进 assets，给不能联网的设备。
-
----
-
-## 1. 为什么不是三个 App
-
-| 三个 APK | 一个 App + 能力包 |
-|---|---|
-| 三个 applicationId、三条升级链 | 一个 App、一条升级链 |
-| 用户安装前就要选“简单/复杂” | 装完再按需开启 |
-| UI/kernel/tools 三份代码容易漂移 | 同一份源码、同一套测试 |
-| CI 要出三个包 | 出 thin/bundle 两个 APK + 两个 pack |
-| 跨 App 共享服务器要额外发现协议 | 同进程，`RuntimeController` 直连 |
-
-独立 UI APK 仍可作为“连接别人服务器”的轻量入口，但它不是另一个代码库：
-以后真需要，只是同一个 `:ui` 的另一个 application 模块。
-
----
-
-## 2. 插件：Skill + 工具链
-
-基础不是插件；**每个插件 = 一组 Skill + 它需要的工具链**。
-
-| 插件 | Skill | 工具链 | 更新 |
-|---|---|---|---|
-| **Runtime / Kernel** | — | opencode、proot、Alpine rootfs、git、python、bash/coreutils | 独立检查 opencode；rootfs 可更新 |
-| **Android 开发** | android-build、android-project、android-ui、android-test、android-debug、android-ai…全部 Android skills | JDK 21、SDK 36、aapt2、Gradle 9.9、adb、AI runtimes | 一个插件；内部组件独立更新 |
-| **基础**（不是插件） | — | Compose UI + proot 引擎（proot + loader + musl） | 随 APK |
-
-规则：
-
-- 卸载一个插件 = 删它的 skills + 工具链；项目、会话、其他插件不受影响；
-- 插件只在**连接本机**时可管理；连远程服务器时设置页只显示提示；
-- 插件动作只有 **安装 / 更新 / 卸载**（没有“修复/删除”两套说法）；
-- OpenCode 内核可以独立检查上游版本并更新，不需要发新 APK；
-- 工具链大头（JDK/SDK/Gradle）不随 App 强制下载，按需安装。
-
-> **Linux 的边界**：Kernel 默认用 **Alpine rootfs**（`apk`），不需要 Termux
-> App；Android 插件因为 JDK/aapt2 是 bionic/glibc，使用专用的 Termux bionic
-> rootfs。两者共享 HOME/workspace；没有 runtime 时仍可连远程服务器。
-> 详见 [`linux-runtime.md`](linux-runtime.md)。
-
----
-
-## 3. Android 的硬约束：哪些能下载
-
-这是“一个基础 + 下载两个阶段”能成立的关键：
-
-| 文件 | 能不能下载 | 原因 |
-|---|---|---|
-| `proot`、`proot_loader`、`ld-musl` | **不能** | 它们在 proot 之外由 Android 直接 `exec`，必须在 `nativeLibraryDir` |
-| `opencode` 二进制 | **能** | 它由 proot 启动（`proot … opencode serve`），在沙箱内执行 |
-| Termux toolbox（bash/git/python） | **能** | 同样在 proot 内执行 |
-| JDK/SDK/Gradle/aapt2 | **能** | 数据文件，在 proot 内运行 |
-
-所以：
-
-1. 基础 APK 永远带一个约 2–3 MB 的 proot 引擎；它是“内核”的引信，不是完整内核。
-2. `OpenCode` 插件下载的是 `opencode` + toolbox，装到 `$HOME`/`$PREFIX` 的私有目录。
-3. 任何下载的 ELF **不得**在 proot 外直接 `exec`；否则 Android 10+ 会
-   `Permission denied`，这是 `docs/paths.md` 的同一类问题。
-4. 如果哪天要把基础 APK 做到几 MB，只有 proot 引擎仍需随包；其余都可以做成 pack。
-
----
-
-## 4. Pack 格式
-
-每个 pack 是一个目录 + 清单，下载后解到 staging，校验通过再原子切换：
+## 1. 分层
 
 ```text
-kernel.pack/
-├─ manifest.json
-├─ bin/opencode          # musl，arm64
-├─ prefix/               # Termux userland（或 .deb + 安装脚本）
-└─ scripts/              # 可选的修复/自检脚本
-
-tools.bootstrap.zip      # 很轻，可随 APK 或本地文档一起给
-├─ manifest.json
-├─ skills/               # android-build 等
-└─ scripts/              # build.sh / setup-toolchain.sh / check-16kb.py
-
-tools.payload/           # 大头，按需下载或从本地 zip 导入
-├─ manifest.json
-├─ jdk/                  # JDK 21
-├─ sdk/                  # platform / build-tools / aapt2
-├─ gradle/               # 发行版 + 共享缓存
-└─ maven/                # 可选的本地库
+┌────────────────────────────────────────────┐
+│ :ui        Compose：连接/设置、会话、聊天、文件、终端 │
+├────────────────────────────────────────────┤
+│ :app       宿主：启动链路、proot、市场安装、自更新     │
+├────────────────────────────────────────────┤
+│ proot + Alpine musl rootfs                 │
+│   ├─ kernel-opencode：opencode + 基础用户态  │
+│   └─ android：JDK/SDK/Gradle/aapt2 + skills │
+└────────────────────────────────────────────┘
 ```
 
-**hot-plug 规则**：
+- `:ui` 只依赖 `:contracts`，不启动进程；本机 server、终端、文件根都由宿主注入。
+- `:app` 是唯一应用，负责 proot、端口、密码、组件安装和前台服务。
+- `:market` 只做签名索引、下载、校验和解压，被 `:app` 与 `:ui` 共用。
+- rootfs 只有一套用户态：Alpine musl；Android 工具链装在自己的 Alpine rootfs 里，
+  通过 `/opt/androc/env.sh` 暴露 `JAVA_HOME`、`ANDROID_HOME` 和 `PATH`。
 
-- `tools.bootstrap.zip` 很小，可以随 APK、随 release 附件，或放在手机的
-  `Documents/Androc/` 里；设置页“从文件导入”即可；
-- `tools.payload` 的大头按组件下载（jdk/sdk/gradle/maven 分开），也可以导入
-  别人准备好的本地 zip；
-- 卸载/禁用 tools 只删 payload 和 skills，不影响 kernel、会话和终端；
-- 没有 tools 时，kernel 仍然能跑 opencode、shell、文件；只是没有构建链。
+---
 
+## 2. 两个发行版
 
-`manifest.json` 至少包含：
+| 发行版 | 内容 | 体积 | 适用 |
+|---|---|---:|---|
+| **thin** | UI only | 约 7 MB | 连接电脑或远程 opencode；需要本机时从市场装 `kernel-opencode` |
+| **bundle** | UI + `assets/runtime/rootfs.tar.xz` + opencode | 约 164 MB | 本机开箱即用，不依赖网络装内核 |
+
+同源规则：
+
+- 同一个 `applicationId`、同一套 `versionCode` / `versionName`；
+- 只有资源和 `BuildConfig.THIN` 不同，行为代码不复制；
+- 自更新按当前发行版取包：thin 只下 thin APK，bundle 只下 bundle APK；
+- bundle 内置的 rootfs 解压一次后，后续以市场组件为准。
+
+---
+
+## 3. 能力与安装位置
+
+| 能力 | 来源 | 安装位置 |
+|---|---|---|
+| UI、proot 引擎、启动链路 | 随 APK（`nativeLibraryDir`） | APK 本体 |
+| OpenCode server | `kernel-opencode` 或 bundle 内置 | `files/runtime/<ver>/`、`files/runtime-core/rootfs` |
+| Android 构建链 | `android` 包 | `files/packs/android/<ver>/` |
+| skills | 对应包的 `skills/` | 安装后复制到 `$HOME/.config/opencode/skills` 与 `$HOME/.config/opencode-android/skills` |
+
+rootfs 优先级固定为：
+
+```text
+files/runtime/<ver>/rootfs
+→ files/packs/android/<ver>/rootfs
+→ files/runtime-core/rootfs
+```
+
+`<ver>` 取目录名字典序最大的一版；`MuslRootfs.dir` 是唯一实现。
+
+---
+
+## 4. 安装与更新
+
+### OpenCode 组件
+
+入口：连接页/设置里的“本机 OpenCode”对话框。
+
+1. 拉取市场 `index.json`，用内置公钥验证 `index.json.sig`；
+2. 取 `kernel-opencode`，下载 `archive.url` 到 `files/market`；
+3. 校验压缩包 size/sha256，解压成 tar，再校验 `installed` 的 size/sha256；
+4. 解到 `files/runtime/<upstreamVersion>.tmp`，成功后改名为正式目录；
+5. 已经安装时可直接“启动并登录”；市场版本更新时对话框显示“更新”。
+
+bundle 第一次启动本机时走 `RuntimeAssets.ensure()`：把内置 rootfs 解到
+`files/runtime-core/rootfs`，写 `.installed-v2` 标记；已经解压则跳过。
+
+### Android 组件
+
+入口：设置 → 插件 → Android。
+
+1. 同一个签名索引里取 `android`；
+2. 下载、校验、解压到 `files/packs/android/<version>/`；
+3. 把包内 `skills/` 复制到两个 opencode 配置目录；
+4. 卸载只删 `files/packs/android` 与对应 skills，不动会话、项目、其他组件。
+
+### App 本体
+
+- 检查 GitHub Releases 中同发行版的 APK；
+- 下载到 `cache/update/`，HTTP/1.1、失败重试、`Range` 续传；
+- 交给系统安装器；安装完成后旧 APK 由系统替换。
+
+### 失败处理
+
+- 下载写 `.part`，校验通过才改名；
+- 解压先进临时目录，成功后原子改名；
+- 校验失败删除临时文件，保留已安装版本；
+- 服务启动失败在对话框和日志里给出尾部输出。
+
+---
+
+## 5. 市场包格式
+
+市场仓库只放索引、签名、构建脚本和发布产物：
+
+```text
+androc-market/
+├─ index.json
+├─ index.json.sig
+├─ keys/
+├─ packs/
+│  └─ android/
+│     ├─ pack.json
+│     ├─ skills/
+│     └─ tools/
+└─ scripts/
+```
+
+索引条目：
 
 ```json
 {
-  "id": "kernel",
-  "version": "2.3.2-1",
+  "id": "kernel-opencode",
+  "name": "OpenCode",
+  "category": "kernel",
+  "kind": "tar",
+  "version": "2.3.2-2",
+  "upstreamVersion": "2.3.2",
   "abi": "arm64-v8a",
-  "minAppVersion": 8,
-  "size": 123456789,
-  "sha256": "…",
-  "files": 1234
+  "minAppVersionCode": 9,
+  "summary": "opencode binary + musl runtime (bash/git/python/node)",
+  "installed": {
+    "size": 429854720,
+    "sha256": "…"
+  },
+  "archive": {
+    "url": "https://…/kernel-opencode-2.3.2-2.tar.xz",
+    "size": 128788404,
+    "sha256": "…",
+    "format": "xz"
+  },
+  "delta": null
 }
 ```
 
-规则：
+字段约定：
 
-- 下载用 `.part` 续传；校验 `sha256`；空间不足直接拒绝，不留半成品；
-- 安装失败自动回滚到上一个版本；`repair` 只补缺失文件；
-- 支持从系统文件选择器导入本地 pack（离线安装）；
-- 只信任 App 内置的公钥/哈希清单；pack 是代码，等同安装 APK；
-- 托管优先 GitHub Releases，镜像可配置。
-
----
-
-## 5. UI：登录和设置合并成“设置”
-
-不再有独立的登录页。入口只有一个 **设置 / Setup**：
-
-| 区块 | 内容 |
+| 字段 | 含义 |
 |---|---|
-| **连接** | 本机内核（启动/停止/状态）、局域网/远程（URL + 密码）、官方 App 配对（链接/二维码） |
-| **插件** | 每个插件显示 Skill、工具链、已安装/可更新、体积；动作只有安装/更新/卸载；仅在连接本机时出现 |
-| **存储** | 各插件占用、清理缓存、导入离线 pack |
-| **诊断** | `oc-doctor`、日志、重置 |
+| `kind` | 固定 `tar`；目录包按 tar 安装 |
+| `version` | 包版本；安装目录用它 |
+| `upstreamVersion` | 上游 opencode 版本；`files/runtime/<ver>` 用它 |
+| `abi` | 当前只有 `arm64-v8a`，不匹配直接拒绝 |
+| `installed.size` / `installed.sha256` | **未压缩 tar** 的字节数与哈希 |
+| `archive.size` / `archive.sha256` | 下载到的 `.tar.xz` 的字节数与哈希 |
+| `delta` | 固定 `null`：每次全量下载 |
 
-行为：
+签名规则：
 
-- 首次启动 → 设置页；选“在这台手机上运行”就安装 OpenCode 插件，选“连接已有服务器”
-  就只填 URL/密码，选“配对官方 App”就显示配对链接。
-- 只有连接成功（本机或远程）才进入会话列表；断线时回到设置页。
-- 设置页后续随时打开，和首次启动是同一个 Composable，不做两份。
-- 原来的 `ConnectScreen` 合并进 `SettingsScreen`；不再维护单独的登录界面。
+- `index.json.sig` 是 Ed25519 对 `index.json` **原始字节**的签名；
+- 公钥编译进 App（`MarketClient.DEFAULT_PUBLIC_KEY`）；
+- 默认索引强制验签；调试/镜像地址可经 `MarketConfig` 覆盖，覆盖时按调试路径处理。
 
----
-
-## 6. 模块图
+安装布局：
 
 ```text
-:contracts   稳定 API（RuntimeConnection / RuntimeController / PackManager…）
-:kernel      proot 引擎、server 生命周期、pack 安装与自愈、pairing
-:tools       tools pack 的内容与清单、skills、device API
-:ui          Setup（登录+设置）、会话、聊天、文件、终端
-:app         唯一应用；thin / bundle 两个 flavor
+files/
+├─ market/                      # 下载缓存
+├─ runtime/<upstreamVersion>/   # kernel-opencode：opencode + rootfs
+├─ runtime-core/rootfs/         # bundle 内置解压
+└─ packs/android/<version>/     # android：skills + rootfs
 ```
 
-依赖规则不变：
+版本与兼容：
 
-```
-:ui      -> :contracts
-:kernel  -> :contracts
-:tools   -> :contracts
-:app     -> :ui + :kernel + :tools
-```
-
-`ui ↛ kernel`、`kernel ↛ tools`、`tools ↛ ui`。
+- opencode 版本唯一来源是仓库根目录 `opencode.version`；
+- 发版前 `python scripts/check-opencode-latest.py --strict` 必须通过；
+- `minAppVersionCode` 声明该包要求的最低 App `versionCode`；
+- 组件可以独立更新，不需要重新发 APK。
 
 ---
 
-## 7. 插件 API（phase 2 落到 `:contracts`）
+## 6. 卸载与占用
 
-```java
-interface PluginManager {
-    List<PluginInfo> list();             // id, name, skills, toolchain, version, size, state
-    void refresh();
-    void checkUpdates(String id, Callback cb);  // OpenCode: upstream; tools: pack manifest
-    void install(String id, Callback cb);
-    void update(String id, Callback cb);
-    void uninstall(String id, Callback cb);
-}
-```
-
-`RuntimeController` 保持现有的启动/停止/连接/配对接口；`ToolsController` 被
-`PluginManager` 取代或包一层。
+- 卸载 `android`：删 `files/packs/android` 和对应 skills；OpenCode、会话、
+  项目文件保留。
+- `opencode` 是运行中的内核，卸载按钮不可用；停止本机 server 后由更新流程替换。
+- 下载缓存 `files/market` 可随时清理；已安装版本不受影响。
+- 旧版本目录按版本号保留，排查回滚时可直接看 `files/runtime` 与
+  `files/packs/android`。
 
 ---
 
-## 8. 官方 opencode 客户端
+## 7. 版本
 
-官方 OpenCode Android（`ai.opencode.mobilecode`）仍然只走标准契约：
-
-| 项 | 值 |
-|---|---|
-| 地址 | `http://127.0.0.1:<port>` |
-| Basic auth | `opencode` + 服务器密码 |
-| 配对 | `POST /api/pair`（新版 `/server/pair`）→ `{code, expires_in}` |
-| 链接 | `<baseUrl>/auth/connect/<code>`，一次性，5 分钟 |
-| 二维码 | `{"code":"…","urls":["http://…"]}` |
-
-设置页负责显示/复制配对链接；kernel pack 没装或没启动时，明确提示先安装。
-
-验收：安装 kernel pack → 启动 → 复制链接 → 官方 App 粘贴 → 看到本机会话。
-
----
-
-## 9. 版本
-
-| 版本 | 例子 | 规则 |
+| 对象 | 例子 | 规则 |
 |---|---|---|
-| App | `0.5.0` | 一个 versionCode |
-| contracts | `1.0.0` | 破坏性改动升 major |
-| kernel pack | `2.3.2-1` | 跟 opencode 版本，后缀是 pack 修订 |
-| tools pack | `36.0.0-1` | 跟 SDK/build-tools 版本 |
-| opencode | `2.3.2` | 上游二进制；唯一来源是 `opencode.version` |
+| App | `0.6.2` | 一个 `versionCode`，thin/bundle 共用 |
+| opencode | `2.3.2` | 上游稳定版，写在 `opencode.version` |
+| `kernel-opencode` | `2.3.2-2` | `upstreamVersion` + 包修订号 |
+| `android` | `2-2` | 工具链批次 + 包修订号 |
 
-**发版硬规则**：每次发版前，`opencode.version` 必须等于上游最新 release。
-
-```sh
-python scripts/check-opencode-latest.py --strict   # 落后就失败
-python scripts/fetch-opencode.py --latest          # 升级并改写版本文件
-```
-
-release CI 已包含 `--strict` 检查；不要绕过它打 tag。
-
-App 拒绝 `minAppVersion` 高于自身的 pack；pack 可以独立更新，不需要发新 APK。
-
----
-
-## 10. 迁移路线
-
-| Phase | 内容 | 完成标志 |
-|---|---|---|
-| **0（本次）** | Androc 改名、`:contracts`、`:kernel`/`:tools` 骨架、合并 UI 仓库 | 五个模块可配置 |
-| **1** | Setup 页合并登录/设置；连接本机/远程 | 一个页面完成连接与状态 |
-| **2** | PluginManager + OpenCode 插件（opencode + toolbox）；thin 基础包 | 不装插件只能连远程；装完能本机会话 |
-| **3** | Android 插件（构建/调试/AI 组件） | 端侧构建成功 |
-| **4** | thin / bundle 两个 flavor + CI 产物（APK + 插件包） | 一次 tag 出 2 APK + 插件包 |
-| **5** | 按需拆 repo / 发布 AAR | 外部只依赖 Maven 坐标 |
-
----
-
-## 11. 不变量
-
-1. **一个应用、一个 applicationId、一个运行时（proot）、一个前缀。**
-2. **下载的 ELF 只能在 proot 内执行**；proot 引擎必须在 APK 的 `nativeLibraryDir`。
-3. **pack 先校验后安装**；失败回滚，不留“半完成但标记完成”。
-4. **UI 不启动进程**；kernel 拥有 server 和插件安装。
-5. **Android 插件可选**：不装它，会话/终端仍然工作。
-6. **官方 App 只走 HTTP + pairing**，不依赖我们的 ContentProvider。
-7. **thin / bundle 同源**：bundle 只是把同样的插件包放进 assets，不允许两份代码。
-8. 文档、skills、验收清单同步更新。
+构建与发布命令见 [`commands.md`](commands.md)，发布说明只保留当前版本。

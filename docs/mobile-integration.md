@@ -49,7 +49,7 @@ include(":ui")
 | 会话列表去重 | `SessionsScreen.kt` | 时间视图必须用 `groupedRest`（`recent` 已从 `rest` 取走前 3 条），否则同一会话出现两次 |
 | 键盘跟随滚动 | `ChatScreen.kt` | 只处理**往下滚**：手指向下滑动 ≥28dp 时 `hide()` 收起键盘；往上滚不做任何事，不再“滑出键盘”。只看用户手势，流式内容/程序滚动不管；系统 IME 不能逐像素跟手 |
 | 流式内容不顶行 | `ChatScreen.kt` | 不在底部时冻结 live 气泡（文本/思考），避免生成中的文字不断改变底部 item 高度、把用户正在看的行顶下去；回到底部自动解冻 |
-| PTY | `AppModel.createPty` | 远端终端先让服务端用自己的默认 shell（Windows 上是 Git Bash/cmd），旧服务端再退回 `bash`；**Androc 本机终端不走这里**，由宿主注入 Termux/proot shell |
+| PTY | `AppModel.createPty` | 远端终端先让服务端用自己的默认 shell（Windows 上是 Git Bash/cmd），旧服务端再退回 `bash`；**Androc 本机终端不走这里**，由宿主注入本机 proot shell |
 | 文件预览只此一份 | `FilePreview.kt` + `ImageViewer.kt` | 聊天里的文件卡片、文件页、Markdown 里的文件引用都调 `FilePreviewContent`；图片统一 `ClickableBitmap` → `ZoomableImageDialog`（手势用 Telephoto），不要在各页面里再写一份 |
 | Markdown 渲染 | `Markdown.kt` | 表格网格线只有一套 1dp（每格各画 0.5dp 会叠成粗细不齐的接缝）；代码块右上角有复制；独占一行的 `![alt](src)` 渲染成图片卡片，点击全屏缩放 |
 

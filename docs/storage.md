@@ -8,7 +8,7 @@
 
 结论先行：
 
-> **运行时、toolbox、JDK/SDK/Gradle 必须留在应用私有目录。**
+> **运行时、JDK/SDK/Gradle、市场包必须留在应用私有目录。**
 > **项目、导入导出、pack 缓存可以用外部目录，但走 SAF / MediaStore / OBB，
 > 不要假设可以直接 `exec` 外部文件。**
 
@@ -18,7 +18,7 @@
 
 | 方案 | 典型路径 | 权限 | 能直接 exec | 卸载后保留 | 适合 |
 |---|---|---|---|---|---|
-| 内部私有 | `/data/data/<pkg>/files` | 无 | 仅 `nativeLibraryDir` 可直接 exec；其余经 proot | 否 | HOME、PREFIX、toolchain、pack 安装 |
+| 内部私有 | `/data/data/<pkg>/files` | 无 | 仅 `nativeLibraryDir` 可直接 exec；其余经 proot | 否 | HOME、runtime、packs |
 | 外部私有 | `/sdcard/Android/data/<pkg>/files` | 无 | 否 | 否 | 大文件缓存、日志、导出中转 |
 | SAF 目录树 | 用户选，如 `Documents/Androc` | 用户授权 + persistable | 否 | 是 | 项目源、导入/导出 |
 | MediaStore | `Downloads/`、`Documents/` | 按集合 | 否 | 是 | 导出 APK、日志、ZIP |
@@ -93,7 +93,7 @@ Androc 的做法：
 | 需求 | 外部目录的问题 |
 |---|---|
 | 执行 `proot`/`opencode` | 共享存储 noexec；SELinux 不允许 |
-| `$PREFIX` 里的 ELF + `DT_RUNPATH` | 需要固定路径 `/data/data/com.termux/files/usr`，靠 proot bind |
+| rootfs 里的 ELF + `DT_RUNPATH` | 需要固定路径与 bind，靠 proot 提供 |
 | symlink、权限位、`chmod +x` | SAF/FUSE 不支持完整 POSIX 语义 |
 | Gradle 的临时文件/锁 | 外部目录慢，且可能被其他 App 改 |
 | 升级/回滚 | 私有目录可以原子 rename；外部目录不可靠 |
@@ -142,7 +142,7 @@ Android **没有**“每个应用目录固定配额”这种限制；能用多�
 如果要做“自限额度”，在设置里加：
 
 ```text
-最大工具链占用：2 GB / 4 GB / 不限制
+最大运行时占用：2 GB / 4 GB / 不限制
 低空间阈值：安装前检查，低于 1 GB 拒绝
 ```
 
@@ -150,7 +150,7 @@ Android **没有**“每个应用目录固定配额”这种限制；能用多�
 
 ## 6. 推荐落地
 
-1. `HOME`、`PREFIX`、`toolchain`、`packs` 安装目录：**内部私有**；
+1. `HOME`、`runtime`、`runtime-core`、`packs`：**内部私有**；
 2. 大文件下载缓存：`getExternalFilesDir("downloads")` 或 OBB；
 3. 项目：默认私有 `workspace/`；可选 SAF 目录 + 导入/导出；
 4. 导出 APK/日志：MediaStore；

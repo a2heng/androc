@@ -1,260 +1,83 @@
-# 插件系统：无界面 APK + Skill + 工具链
+# 插件与组件
 
-状态：`[计划]` 总体；`[进行中]` 当前仅有一版进程内插件管理雏形。
+Androc 用组件承载本机能力：UI 只负责连接、会话和展示，OpenCode 与 Android 工具由市场包提供。
 
----
+## 1. 发行版
 
-## 1. 插件是什么
-
-> **插件 = 一个无界面的独立 APK。**
-> 每个插件带一组 Skill，以及这些 Skill 需要的工具链；安装在系统里，
-> 用 `PackageInstaller` 安装/更新/卸载。
-
-不是插件的东西：基础 UI、proot 引擎（在运行时插件里）。
-
-插件 APK：
-
-- **没有 Activity**，不显示界面；
-- 导出一个 `Service`（AIDL）或 `ContentProvider` 给基础 App；
-- 用签名级权限保护；
-- 在 `assets/plugin.json`（或 `res/xml/plugin.xml`）里声明元数据；
-- 可以有 native 库（例如运行时插件里的 proot/opencode），由插件进程自己执行。
-
-```json
-{
-  "schema": 1,
-  "id": "android-build",
-  "name": "Android 构建",
-  "category": "android",
-  "version": "36.0-1",
-  "versionCode": 3601,
-  "minAppVersion": 8,
-  "skills": ["android-build", "android-project", "android-gradle"],
-  "toolchain": ["jdk21", "sdk36", "aapt2", "gradle"],
-  "homepage": "https://github.com/a2heng/androc-plugins",
-  "updateSource": "https://github.com/a2heng/androc-packs/releases/latest/download/plugins.json"
-}
-```
-
-基础 App 通过 `PackageManager.getResourcesForApplication(pkg)` 读取
-`assets/plugin.json`；通过 `queryIntentServices` 发现插件。
-
----
-
-## 2. 分类与粒度
-
-四类：
-
-| 分类 | 插件 | 说明 |
+| 发行版 | APK 内容 | 本机能力来源 |
 |---|---|---|
-| **核心** | 基础 UI、插件宿主 | 不可卸载；随 App |
-| **运行时** | OpenCode 内核、Linux rootfs（Alpine 默认，Android 用 Termux bionic） | 内核不可卸载但可更新；rootfs 可更新 |
-| **Android** | `android` 一个插件 | 所有 Android skills + JDK/SDK/Gradle/aapt2/adb/AI；内部组件可独立更新 |
-| **其他** | 社区/工具插件 | 独立作者，按签名信任 |
+| thin | 只有 UI | 从市场安装 OpenCode 与 android 组件 |
+| bundle | UI + OpenCode + musl rootfs | 开箱可用；市场有更高版本时仍可更新 |
 
-粒度规则：
+两个发行版共用同一套代码、路径和配置目录。
 
-- **一个插件 = 一个 Skill（或强相关的一组 Skill） + 它需要的工具链**；
-- **Android 是一个插件**，不是十几个：所有 Android skills + 工具链都在 `android`
-  里；内部再分成 build / adb / AI 等组件，组件可以独立下载/更新；
-- 组件共享关系：build 提供 JDK/SDK/Gradle/aapt2，debug 用 adb，AI 用
-  ONNX/TFLite/llama.cpp/MNN；用户只看到“Android 开发”一个插件；
-- 社区插件另算。
+## 2. 组件清单
 
-当前代码里的插件是：`opencode`、`termux`、`android`（过渡期名字可能还是
-“Android 构建/本地 AI/调试”，最终合并为一个 Android 插件）。
+`AppPluginManager` 只暴露两个条目。
 
----
+| id | 名称 | 内容 | 市场包 | 安装位置 |
+|---|---|---|---|---|
+| `opencode` | OpenCode 内核 | opencode 二进制 + Alpine musl rootfs | `kernel-opencode` | `files/runtime/<upstreamVersion>/`，含 `opencode` 与 `rootfs/` |
+| `android` | Android 开发 | `android-*` skills + rootfs（JDK 21、Android SDK 36、Gradle 9.9、静态 aarch64 aapt2/adb） | `android` | `files/packs/android/<version>/` |
 
-## 3. 插件源（仓库 URL）
+`android` 安装完成后，skills 额外复制到两个配置目录：
 
-基础 App 维护一个“插件源”列表，每个源是一个 `plugins.json`：
+- `$HOME/.config/opencode/skills`
+- `$HOME/.config/opencode-android/skills`
 
-```json
-{
-  "schema": 1,
-  "name": "Androc 官方",
-  "url": "https://github.com/a2heng/androc-packs/releases/latest/download/plugins.json",
-  "plugins": [
-    {
-      "id": "android-build",
-      "version": "36.0-1",
-      "apk": "https://…/android-build-36.0-1.apk",
-      "sha256": "…",
-      "minAppVersion": 8,
-      "size": 734003200
-    }
-  ]
-}
-```
+rootfs 里的 Android 工具通过 `/opt/androc/env.sh` 加入 `PATH`。
 
-规则：
+## 3. 状态判定
 
-- 一个源可以有很多插件；一个插件也可以被多个源声明（按 `versionCode` 取高）；
-- 安装前校验 `sha256`、`versionCode`、`minAppVersion`、签名；
-- 源可以禁用/删除；已安装插件不受影响；
-- 支持本地 APK 安装（不走源）。
+| 组件 | 已安装 | 版本 | 体积 |
+|---|---|---|---|
+| `opencode` | proot 运行库齐全（`LocalRuntime.prootAvailable`）；thin 还需市场安装的二进制 | `BuildConfig.OPENCODE_VERSION`，市场版本更高时取市场版本 | 当前 opencode 二进制 |
+| `android` | rootfs 目录存在，且 `$HOME/.config/opencode/skills` 至少有一个对应 skill | rootfs 所在版本目录名 | rootfs + skills 合计 |
 
----
+## 4. 安装与更新
 
-## 4. 添加 / 查看 / 修改网址
-
-### 添加插件
-
-1. **从源安装**：插件 → 源 → 新增源（粘贴 `plugins.json` URL）→ 刷新 → 安装；
-2. **从文件安装**：插件 → 从文件安装 → 选 APK；
-3. **内置插件**：随 App 或首次启动安装，不经过源。
-
-### 查看网址
-
-插件详情显示：
-
-- `主页`：插件作者/项目地址（来自 APK 的 `plugin.json`，只读）；
-- `更新源`：这条插件从哪个 `plugins.json` / APK URL 更新；
-- `签名`：签名指纹（社区插件显示，官方插件可隐藏）；
-- `路径/包名/版本/大小`。
-
-### 修改网址
-
-- **源地址**：插件 → 源 → 编辑 URL；
-- **单个插件的更新源**：插件详情 → 编辑更新源（存基础 App 的偏好，覆盖源里的值）；
-- APK 自带的 `homepage` 只读；不能改别人的 APK 元数据，只能改“我从哪里更新它”。
-
----
-
-## 5. 安装 / 更新 / 卸载
-
-| 动作 | 行为 |
-|---|---|
-| 安装 | 下载 APK → 校验 → `PackageInstaller` 会话 → 用户确认 |
-| 更新 | 同包名、更高 `versionCode`；保留插件数据 |
-| 卸载 | `PackageInstaller.uninstall`；只删插件自己的数据 |
-| 内置运行时 | 更新走同一流程；**卸载按钮禁用** |
-| 失败 | 删除临时文件；已安装版本保持不变 |
-
-进度、失败原因、签名错误都要在插件详情里可见。
-
----
-
-## 6. 通信契约
-
-推荐 AIDL（后续也可用 `ContentProvider.call`）：
-
-```aidl
-interface IRuntimePlugin {
-  String start();                 // 返回 http://127.0.0.1:<port>
-  void stop();
-  String connectionJson();        // url / username / password / running
-  String pairingLink();
-  String pluginInfoJson();
-}
-```
-
-- 基础 App `bindService`；
-- 权限：`com.a2heng.androc.permission.PLUGIN`；
-- 官方插件用 `signature`；社区插件用用户信任 + 指纹确认；
-- 运行时插件启动后，基础 UI 用标准 HTTP + pairing 连接，和远程服务器同一条路。
-
----
-
-## 7. 安全
-
-- 插件 APK 是代码，安全等级等同 App；
-- 官方源 + 签名校验；社区源明确提示“未验证”；
-- 基础 App 不把本机密码交给未信任插件；
-- 插件只能访问自己的数据目录；需要共享数据时走明确的 Provider/AIDL；
-- 安装前展示包名、版本、签名、权限、来源。
-
----
-
-## 8. 体积与 payload
-
-- 小插件（skills/scripts）直接放 APK；
-- 大工具链（JDK/SDK/Gradle）可以：
-  - 放插件 APK（简单，但更新要重下大包）；
-  - 或 APK 只带 manifest/安装器，payload 下载/缓存（推荐）；
-- 无论哪种，**管理单位仍是插件 APK**；payload 是插件内部实现。
-
----
-
-## 8. 独立更新：为什么必须切碎
-
-一个 APK 只有一个 `versionCode`，更新就是整包替换。要让每层独立更新，必须把
-“更新节奏相同”的东西放在一个 APK 里，不同节奏的拆开：
-
-| 插件 APK | 内容 | 更新节奏 |
+| 动作 | `opencode` | `android` |
 |---|---|---|
-| `runtime` | proot、opencode、Linux rootfs（Alpine 默认；Android 用 Termux bionic） | 上游 opencode/rootfs 变时；opencode 二进制可单独更新 |
-| `android` | JDK、SDK、aapt2、Gradle、adb、AI runtimes + 所有 Android skills | 组件独立更新；插件本身随契约变时 |
-| 社区插件 | 作者自己的 skill + 工具链 | 作者决定 |
+| 安装 | thin：登录页 → 本机 → 安装组件 | 设置 → 组件与插件 → 安装 |
+| 更新 | 检查更新 → 更新；`RuntimeUpdateService` 从市场下载 | 再次从市场安装同一包 |
+| 卸载 | —（随 APK 或市场更新） | 删除 `files/packs/android` 与两个配置目录里的 skills |
 
-不建议“一个 skill 一个 APK”：20+ 个安装包管理成本高；纯 skill 用
-`android-skills` 一个包，或后续改成 skill zip/payload，仍可独立更新。
+### 4.1 `opencode` 更新流程
 
-### 8.1 APK 与 payload 分开
+1. 读取市场索引，取 `kernel-opencode`，比较 `upstreamVersion` 与当前版本。
+2. 下载 `tar.xz`，校验 archive 的 `size`/`sha256`。
+3. 解压到 `files/runtime/<version>.tmp`，校验未压缩 tar 的 `size`/`sha256` 后替换目标目录。
+4. 停止本机服务，用新二进制重启。
+5. 30 秒内 `/global/health` 返回目标版本即成功；写入偏好并删除其它 runtime 版本目录。
+6. 启动失败则删除新目录、恢复原版本并重启服务。
 
-- APK 带：契约、manifest、安装器、少量脚本；
-- 大头（JDK/SDK/Gradle、AI 模型）作为 payload 下载/缓存；
-- 更新 payload 不需要发新 APK；只有契约/安装器变了才更新 APK。
+bundle 内置版本低于市场版本时走同一条更新流程；市场目录优先于内置版本。
 
-### 8.2 跨 APK 的数据问题（关键）
+### 4.2 `android` 安装流程
 
-不同 APK 的数据目录互不相通；而 proot/构建必须在 **runtime 插件**的
-`$HOME/$PREFIX` 里执行。所以不能“android-build APK 自己解压 JDK 就完事”。
+1. `PackInstaller` 读取市场 `android` 包。
+2. 解压到 `files/packs/android/<version>/`。
+3. 把 `<pack>/skills/*` 复制到两个配置目录的 `skills/`。
+4. 至少一个 skill 就位才算安装成功；失败保留已安装版本。
 
-正确做法：
+## 5. 管理入口
 
-- runtime 插件拥有 `$HOME`、`$PREFIX`、skills 目录；
-- 其他插件通过 AIDL 把**已校验**的 payload/skill 交给 runtime 安装：
-  ```aidl
-  void installPayload(String id, String url, String sha256, long size);
-  void installSkill(String id, byte[] zip, String sha256);
-  void removeCapability(String id);
-  ```
-- runtime 负责下载/校验/解压/回滚；插件 APK 只是“清单 + 安装请求”；
-- 这样每个插件仍可独立更新，执行和存储仍只有一套。
-
-### 8.3 版本
-
-- 每个插件 APK：`versionCode` / `versionName`；
-- 每个 payload：独立版本 + `sha256`；
-- 基础 UI 只关心“插件是否安装、payload 是否可更新”，不关心内部实现。
-
-## 9. 当前实现（MVP）
-
-已经落地的骨架：
-
-| 模块/文件 | 内容 |
+| 入口 | 作用 |
 |---|---|
-| `:plugin-sdk` | AIDL `IRuntimePlugin` / `IRuntimePluginListener`、`PluginHost`、`PluginContract`、`PluginConnection` |
-| `:runtime-plugin` | 无 Activity、无 launcher 的运行时插件 APK；`RuntimePluginService` 已可绑定，带 `assets/plugin.json` |
-| 权限 | `com.a2heng.androc.permission.PLUGIN`（signature），只有同一签名的插件能绑定 |
-| 服务 | action `com.a2heng.androc.plugin.BIND`，已安装后可用 `dumpsys package` 看到 |
+| 登录页 → 本机 | 显示组件是否安装、市场版本与体积；安装、更新、启动并登录 |
+| 设置 → 组件与插件 | 两个组件卡片：状态、版本、体积、技能、工具链、安装/检查更新/更新/卸载 |
+| 远程连接 | 只管理当前服务器的会话；组件操作在本机连接下进行 |
 
-当前 `RuntimePluginService.start()` 还是占位，返回 `runtime not migrated yet`；
-运行时代码/资产还在旧 `:app`。下一步把它们迁到 `:runtime-plugin`，再把基础
-UI 改成 `PluginHost.bind(...).start()`。
+安装 `opencode` 后，`LocalRuntimeLauncher` 启动本机服务，并把 URL + 密码注入正常登录流程。
 
-## 10. 迁移顺序（薄 UI）
+## 6. 代码位置
 
-1. `:plugin-sdk` 骨架（已完成）；
-2. 把 `LocalRuntime`/`LocalToolbox`/`LocalServerService`/`ToolboxService`/
-   `CommandResolver`/`ToolboxServer`/`ServerWatch`/`RuntimeUpdateService` 等
-   迁到 `:kernel`，`:runtime-plugin` 依赖 `:kernel`；
-3. `assets/toolbox`、`assets/skills`、`jniLibs` 运行时库迁到 `:runtime-plugin`；
-4. `RuntimePluginService.start()` 调用真实 runtime，返回 URL/密码；
-5. 基础 `:app` 删除运行时依赖，改为 `PluginHost` 绑定；
-6. 运行时插件不可卸载，但可单独更新；UI 只保留 provider/服务器/插件管理；
-7. 旧单 APK 的 HOME/sessions 迁移另做（导出/导入或一次性迁移）。
-
-## 11. 当前状态与下一步
-
-| 项 | 状态 |
+| 责任 | 文件 |
 |---|---|
-| 进程内 PluginManager + 插件卡片 | `[已实现]`（过渡） |
-| 本机优先、独立 OpenCode 更新 | `[已实现]` |
-| 插件 APK 契约 + SDK | `[已实现]`（MVP） |
-| 插件源/网址管理 UI | `[计划]` |
-| 运行时插件 APK | `[进行中]`（可绑定骨架） |
-| Android 细粒度插件 | `[计划]` |
-| 官方/社区签名策略 | `[待定]` |
+| 组件列表与操作 | `app/src/main/java/com/a2heng/androc/AppPluginManager.java` |
+| skill → 组件映射 | `app/src/main/java/com/a2heng/androc/PluginCatalog.java` |
+| android 包安装与 skills 复制 | `app/src/main/java/com/a2heng/androc/PackInstaller.java` |
+| rootfs 定位与 proot 命令 | `app/src/main/java/com/a2heng/androc/MuslRootfs.java` |
+| opencode 更新、健康检查、回滚 | `app/src/main/java/com/a2heng/androc/RuntimeUpdateService.java` |
+| 市场索引、下载、校验 | `market/src/main/kotlin/com/a2heng/androc/market/MarketClient.kt` |
+| 本机安装/启动对话框 | `ui/src/main/java/com/a2heng/androc/ui/ui/LocalRuntimeDialog.kt` |
