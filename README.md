@@ -38,7 +38,7 @@
 # 1) opencode 二进制（仓库不提交）
 python scripts/fetch-opencode.py
 
-# 2) bundle 内置的 musl runtime（从市场 OC 包提取 rootfs）
+# 2) bundle 内置的 musl runtime（下载 runtime-rootfs 构建输入，约 40 MB）
 python scripts/fetch-runtime.py
 
 # 3) 两个发行版
