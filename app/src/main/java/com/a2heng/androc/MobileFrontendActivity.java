@@ -72,17 +72,10 @@ public class MobileFrontendActivity extends AppCompatActivity {
                 new androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
                 granted -> { });
         requestNotifPermission();
-        if (BuildConfig.THIN) {
-            // UI-only build: no local kernel, no server wait. The saved remote
-            // connection (or the login screen) is mounted immediately.
-            // The installed pack is started by the thin runtime shell.
-            com.a2heng.androc.ui.data.LocalRuntimeHost.INSTANCE.setLauncher(
-                    new ThinRuntimeLauncher(this));
-            com.a2heng.androc.ui.OpenCodeMobileHost.showStandalone(this);
-            return;
-        }
-        // 启动只进 UI（远程模式）。本机 OpenCode 只有在用户点“启动并登录”
-        // 时才启动，避免后台常驻耗电。
+        // 两个发行版走同一条链路：先显示 UI，本机 OpenCode 只有在用户点
+        // 「本机 → 启动并登录」时才启动。thin 没有内置 runtime，装好市场里的
+        // OpenCode 组件后同样用 proot 启动。
+        // 启动只进 UI（远程模式），避免后台常驻耗电。
         showFrontend();
     }
 

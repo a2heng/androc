@@ -74,7 +74,7 @@ public final class AppPluginManager implements PluginManager {
                 "Android 开发",
                 "构建、调试、AI、测试：skills + musl rootfs",
                 androidSkills,
-                list("musl/Alpine", "JDK 21", "SDK 35", "Gradle 9.9", "aapt2", "adb"),
+                list("musl/Alpine", "JDK 21", "SDK 36", "Gradle 9.9", "aapt2", "adb"),
                 androidVersion,
                 firstNonEmpty(latest.get(PluginInfo.ANDROID), androidVersion),
                 androidBytes > 0 ? human(androidBytes) : "",
@@ -106,14 +106,18 @@ public final class AppPluginManager implements PluginManager {
             new Thread(() -> {
                 String found = "";
                 try {
-                    UpdateCheck.RuntimeAsset asset = UpdateCheck.opencodeRuntimeAsset();
-                    if (asset != null && asset.version != null) found = asset.version;
+                    com.a2heng.androc.market.MarketPack pack =
+                            PackInstaller.latest(ctx, "kernel-opencode");
+                    if (pack != null) {
+                        found = pack.getUpstreamVersion();
+                        if (found == null || found.isEmpty()) found = pack.getVersion();
+                    }
                 } catch (Throwable t) {
                     post(id, false, "检查更新失败：" + t.getMessage(), callback);
                     return;
                 }
                 if (found.isEmpty()) {
-                    post(id, false, "没有拿到上游版本", callback);
+                    post(id, false, "市场里没有 OpenCode 组件", callback);
                     return;
                 }
                 latest.put(id, found);

@@ -24,7 +24,11 @@ final class MuslRootfs {
     }
 
     static File dir(Context ctx) {
-        // 1) OC 组件自带的 runtime：files/runtime/<ver>/rootfs
+        // 1) android 包：完整的 musl rootfs + JDK/SDK/Gradle，装了就优先用它，
+        //    本机 OpenCode 和端侧构建共用这一套。
+        File android = packRootfs(ctx, "android");
+        if (android != null) return android;
+        // 2) OC 组件自带的 runtime：files/runtime/<ver>/rootfs
         File runtime = new File(ctx.getFilesDir(), "runtime");
         File[] versions = runtime.listFiles(File::isDirectory);
         if (versions != null) {
@@ -35,17 +39,18 @@ final class MuslRootfs {
             }
             if (best != null) return new File(best, "rootfs");
         }
-        // 2) bundle 内置的 runtime
+        // 3) bundle 内置的 runtime
         File bundled = RuntimeAssets.rootfs(ctx);
         if (bundled != null) return bundled;
-        // 3) 兼容：市场安装的 runtime-core / android 包
-        for (String id : new String[]{"runtime-core", "android"}) {
-            File pack = PackInstaller.installedDir(ctx, id);
-            if (pack == null) continue;
-            File rootfs = new File(pack, "rootfs");
-            if (rootfs.isDirectory()) return rootfs;
-        }
-        return null;
+        // 4) 兼容：旧版 runtime-core 包
+        return packRootfs(ctx, "runtime-core");
+    }
+
+    private static File packRootfs(Context ctx, String id) {
+        File pack = PackInstaller.installedDir(ctx, id);
+        if (pack == null) return null;
+        File rootfs = new File(pack, "rootfs");
+        return rootfs.isDirectory() ? rootfs : null;
     }
 
     static boolean available(Context ctx) {

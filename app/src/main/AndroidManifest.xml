@@ -96,10 +96,6 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         <service
-            android:name=".ToolboxService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-        <service
             android:name=".AppUpdateService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />

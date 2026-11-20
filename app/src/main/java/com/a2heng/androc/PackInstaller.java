@@ -38,6 +38,16 @@ final class PackInstaller {
         return client.installPack(ctx.getFilesDir(), packId, null);
     }
 
+    /** Market entry for a pack, or null when it is not published. */
+    static com.a2heng.androc.market.MarketPack latest(Context ctx, String packId)
+            throws IOException {
+        String url = MarketConfig.indexUrl(ctx);
+        boolean requireSignature = MarketClient.DEFAULT_INDEX_URL.equals(url);
+        MarketClient client = new MarketClient(
+                url, MarketClient.DEFAULT_PUBLIC_KEY, requireSignature);
+        return client.refresh().find(packId);
+    }
+
     /** Latest installed version directory for a pack, or null. */
     static File installedDir(Context ctx, String packId) {
         File parent = new File(ctx.getFilesDir(), "packs/" + packId);

@@ -42,8 +42,7 @@
 | `android-networking` | OkHttp/Retrofit、超时、离线行为 |
 | `android-background` | WorkManager、前台服务、Doze |
 | `android-performance` | 启动、卡顿、内存、Baseline Profiles |
-| `android-ai` | 端侧推理：ONNX Runtime、TFLite、llama.cpp/GGUF、模型存储、CPU/NPU 限制（MNN 现状） |
-| `termux` | 内置 Termux 用户态环境：bash/git/python/node/clang、pkg/apt、adb、路径陷阱 |
+
 
 ## 发布
 
