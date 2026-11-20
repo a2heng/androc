@@ -289,7 +289,8 @@ private fun parentDir(current: String, base: String): String? {
         cur = if (b.isNotEmpty()) joinPath(b, cur) else "/" + cur.trimStart('/')
         cur = cur.trimEnd('/')
     }
-    if (isRootPath(cur) || cur == b) return null
+    if (isRootPath(cur)) return if (b.isNotEmpty() && b != cur) b else null
+    if (cur == b) return null
     // Windows 上可能切到别的盘；不同根时允许向上，不按 HOME 限制。
     if (b.isNotEmpty() && !isUnder(b, cur) && sameRoot(b, cur) != true) return null
     val rawParent = cur.substringBeforeLast('/', "")

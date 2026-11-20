@@ -702,6 +702,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     ).show()
                     retried
                 }
+                // 路径属于某个服务端：换了服务器就清空，避免把上一个系统
+                // （如 Android）的绝对路径发给 Windows 服务端导致 404。
+                if (serverUrl != target) {
+                    fsDir = ""
+                    fsDirBySession.clear()
+                    fsEntries = emptyList()
+                }
                 serverUrl = target
                 password = pwd
                 recentModel = loadRecentFor(target)
@@ -2167,6 +2174,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 fsEntries = entries.sortedWith(compareByDescending<FsEntry> { it.isDir }.thenBy { it.name.lowercase() })
             } catch (e: Exception) {
                 if (seq == fsLoadSeq) {
+                    // 跨系统/失效路径：404 时回到服务端根目录，用户不用先点胶囊。
+                    if (requested != null && e.message?.contains("404") == true) {
+                        loadDir(null)
+                        return@launch
+                    }
                     fsError = e.message
                     fsEntries = emptyList()
                 }
