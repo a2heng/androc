@@ -1261,6 +1261,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     private val fsDirBySession = mutableMapOf<String, String>()
+    /** 目录列表缓存：server|dir -> 结果，切回上一级时可立即显示。 */
+    private val fsDirCache = mutableMapOf<String, Pair<String, List<FsEntry>>>()
     private data class FsState(val root: String?, val dir: String, val home: String)
     private val fsStateByServer = mutableMapOf<String, FsState>()
 
@@ -2233,14 +2235,23 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             requested = null
         }
         var target = requested ?: fsRootOverride?.let(::normPath)
+        val cacheKey = serverUrl + "|" + (target ?: "")
+        val hit = fsDirCache[cacheKey]
+        if (hit != null) {
+            fsDir = normPath(target ?: hit.first).trimEnd('/').ifBlank { "/" }
+            fsEntries = hit.second
+            fsError = null
+            fsLoading = false
+        }
         val seq = ++fsLoadSeq
-        fsLoading = true
+        if (hit == null) fsLoading = true
         fsError = null
         viewModelScope.launch {
             try {
                 val (dir, entries) = withContext(Dispatchers.IO) { c.listDir(target) }
                 if (seq != fsLoadSeq) return@launch
                 fsRoot = fsBase()
+                fsDirCache[cacheKey] = dir to entries
                 fsDir = normPath(dir.ifBlank { target.orEmpty() }).trimEnd('/').ifBlank { "/" }
                 current?.let { fsDirBySession[it.id] = fsDir }
                 fsEntries = entries.sortedWith(compareByDescending<FsEntry> { it.isDir }.thenBy { it.name.lowercase() })
