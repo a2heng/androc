@@ -193,7 +193,6 @@ fun MainScreen(model: AppModel, wide: Boolean = false) {
                                 } else if (index == 2 && tab == 2) {
                                     // 终端页再次点击：从 shell 回到会话列表
                                     if (model.ptyActive != null) model.detachPty()
-                                    if (model.localTerminalOpen) model.closeLocalTerminalView()
                                 } else {
                                     tab = index
                                 }

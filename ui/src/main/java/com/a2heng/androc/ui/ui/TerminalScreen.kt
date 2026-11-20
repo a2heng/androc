@@ -80,9 +80,6 @@ fun TerminalScreen(model: AppModel) {
     if (active != null) {
         BackHandler { model.detachPty() }
         TerminalView(model, active)
-    } else if (model.localTerminalOpen) {
-        BackHandler { model.closeLocalTerminalView() }
-        LocalTerminalView(model)
     } else {
         // Ojo: antes había un lambda dentro de otro lambda y el toque no hacía
         // nada (el warning "Lambda expression is never invoked").
