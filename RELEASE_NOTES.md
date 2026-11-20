@@ -1,18 +1,26 @@
-# Androc v0.6.2
+# Androc v0.6.3
 
-修复应用内自更新：下载完成后无法打开系统安装器，以及 thin 版误下 bundle 包。
+界面换成 COUI 风格，并修正文件浏览在多系统服务器下的路径问题。
 
-## 修复
+## 界面
 
-- **自更新按发行版取包**：thin 只下载 `androc-<ver>-thin.apk`，bundle 只下载
-  `androc-<ver>-bundle.apk`；thin 不再误下 160MB 的 bundle。
-- **安装器可打开缓存里的 APK**：FileProvider 配置补上 `cache/update/`，修复
-  下载完成后报 `Failed to find configured root that contains .../cache/update/*.apk`。
-- **下载更稳**：更新走 HTTP/1.1，失败自动重试 3 次，并用 `Range` 断点续传，
-  网络中断不再从 0 开始。
-- 删除未使用的 `ui` 模块 `file_paths.xml`，只保留 `app` 的 `@xml/filepaths`。
+- 登录页：协议下拉、主机、端口三段输入，保存的连接改为图标入口 + 确认删除。
+- 自绘 COUI 组件（输入框、下拉、按钮、卡片、开关、对话框、胶囊），不再依赖 Material 组件的默认外观。
+- 设置页按原结构换成 COUI 行卡片；主题色选中用高对比描边。
+- 终端：去掉会报错的「本机终端」入口，统一用「新建」在服务端开 PTY。
 
-## 调试
+## 文件
 
-- 新增 `/update/check`、`/update/download` 调试端点，`/state` 增加
-  `updateMessage`、`updateProgress`，便于在真机上验证自更新。
+- 路径按服务器隔离：本地/远程各自记住 root、当前目录和 HOME，切换服务器时保存与恢复。
+- Windows 服务端有「此电脑」，盘符根上一级回到此电脑；Linux/Android 的顶是 `/`。
+- 快捷目录改为多行换行，并跟随各会话目录。
+- 远程 404 自动回服务端根目录，不再把本机 `/data/...` 发给远程。
+
+## 市场
+
+- OpenCode 不再作为插件：`bundle` 内置，`thin` 不含，市场只剩 `android` 组件。
+- 插件列表不再统计大目录，设置页切换不再卡顿。
+
+## 已知限制
+
+- Windows 盘符的完整枚举依赖逐个探测，个别根路径会被服务端拒绝。
