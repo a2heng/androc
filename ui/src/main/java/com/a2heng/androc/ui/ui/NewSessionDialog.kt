@@ -297,28 +297,8 @@ private fun isUnder(base: String, path: String): Boolean {
 }
 
 /** 已经是根（"/" 或 Windows 的 "D:/"）就没有上一级。 */
-private fun sessionIsRootPath(p: String): Boolean =
-    p.isEmpty() || p == "/" || Regex("^[A-Za-z]:$").matches(p)
-
-/** 上一级，不越过选择器固定的根。 */
-private fun sessionParentDir(current: String, base: String): String? {
-    val b = normPath(base).trimEnd('/')
-    var cur = normPath(current).trimEnd('/')
-    // 不以 / 或盘符开头的相对路径先补到固定根，避免「上一级」只截掉一段。
-    if (cur.isNotEmpty() && !isAbsolutePath(cur)) {
-        cur = if (b.isNotEmpty()) joinPath(b, cur) else "/" + cur.trimStart('/')
-        cur = cur.trimEnd('/')
-    }
-    if (sessionIsRootPath(cur) || cur == b) return null
-    if (b.isNotEmpty() && !isUnder(b, cur)) return null
-    val rawParent = cur.substringBeforeLast('/', "")
-    val parent = when {
-        rawParent.isEmpty() -> "/"
-        Regex("^[A-Za-z]:$").matches(rawParent) -> "$rawParent/"
-        else -> rawParent
-    }
-    return if (b.isNotEmpty() && b != "/" && !isUnder(b, parent)) b else parent
-}
+/** 上一级：与文件页共用 FsNav 规则。 */
+private fun sessionParentDir(current: String, base: String): String? = FsNav.up(current, base)
 
 private fun sessionPathLabel(path: String, home: String): String {
     val h = home.trimEnd('/')

@@ -268,9 +268,7 @@ private fun FsListPane(model: AppModel) {
     }
 }
 
-private fun fullPath(root: String, relative: String): String =
-    if (root == com.a2heng.androc.ui.data.AppModel.DRIVES_PATH) relative
-    else joinPath(root, relative)
+private fun fullPath(root: String, relative: String): String = FsNav.join(root, relative)
 
 private fun isUnder(base: String, path: String): Boolean {
     val b = normPath(base).trimEnd('/')
@@ -290,32 +288,8 @@ private fun sameRoot(a: String, b: String): Boolean? {
 private fun isRootPath(p: String): Boolean =
     p.isEmpty() || p == "/" || Regex("^[A-Za-z]:$").matches(p)
 
-/** Directorio padre, sin salir de la raiz del explorador. */
-private fun parentDir(current: String, base: String): String? {
-    val b = normPath(base).trimEnd('/')
-    var cur = normPath(current).trimEnd('/')
-    // 相对路径（不以 / 或盘符开头）先补到基准根：否则 substringBeforeLast('/')
-    // 只会截掉一段，表现为「上一级」点了没反应或路径显示不全。
-    if (cur.isNotEmpty() && !isAbsolutePath(cur)) {
-        cur = if (b.isNotEmpty()) joinPath(b, cur) else "/" + cur.trimStart('/')
-        cur = cur.trimEnd('/')
-    }
-    // 盘符根（D:/）才回到 HOME；POSIX 的 "/" 就是根，不再往上跳。
-    if (cur == com.a2heng.androc.ui.data.AppModel.DRIVES_PATH) return null
-    // 盘符根上一级是「此电脑」。
-    if (isRootPath(cur)) {
-        return if (Regex("^[A-Za-z]:$").matches(cur)) com.a2heng.androc.ui.data.AppModel.DRIVES_PATH else null
-    }
-
-    val rawParent = cur.substringBeforeLast('/', "")
-    val parent = when {
-        rawParent.isEmpty() -> "/"
-        Regex("^[A-Za-z]:$").matches(rawParent) -> "$rawParent/"
-        else -> rawParent
-    }
-    // Linux/Android 的顶是 "/"；Windows 盘符根会在上面转成「此电脑」。
-    return parent
-}
+/** 上一级；规则集中在 FsNav。 */
+private fun parentDir(current: String, base: String): String? = FsNav.up(current, base)
 
 /** Ruta visible: relativa a HOME; la propia raiz se muestra como "~". */
 private fun pathLabel(base: String, dir: String): String {
