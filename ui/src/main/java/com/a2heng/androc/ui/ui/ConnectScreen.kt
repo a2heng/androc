@@ -12,31 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowDropDown
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Dns
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,8 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.a2heng.androc.ui.data.AppBuild
 import com.a2heng.androc.ui.data.AppModel
 
 @Composable
@@ -59,123 +38,102 @@ fun ConnectScreen(model: AppModel) {
     var scheme by rememberSaveable { mutableStateOf(initial.first) }
     var host by rememberSaveable { mutableStateOf(initial.second) }
     var port by rememberSaveable { mutableStateOf(initial.third) }
-    var schemeMenu by remember { mutableStateOf(false) }
-    val url = composeServerUrl(scheme, host, port)
     var password by rememberSaveable { mutableStateOf(model.password) }
     var showPassword by remember { mutableStateOf(false) }
-    var savedMenuOpen by remember { mutableStateOf(false) }
+    var showSavedDialog by remember { mutableStateOf(false) }
     var showLocalRuntime by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<String?>(null) }
+    val url = composeServerUrl(scheme, host, port)
+    val colors = CouiTheme.colors
+    val type = CouiTheme.type
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(colors.background),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp),
-            horizontalAlignment = Alignment.Start,
+                .padding(horizontal = 24.dp, vertical = 32.dp),
         ) {
             Box(
                 Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(AndrocColor.MediumStrong),
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.accent),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    Icons.Rounded.Terminal,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(34.dp),
-                )
+                CouiGlyph(CouiIcon.Terminal, tint = colors.onAccent, size = 30)
             }
-            Spacer(Modifier.height(20.dp))
-            Text("Androc", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(18.dp))
+            CouiText("Androc", style = type.headline)
             Spacer(Modifier.height(6.dp))
-            Text(
-                "连接局域网里的 opencode 服务：会话、流式回答、缓存命中率、文件与终端。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            CouiText(
+                "连接局域网里的 opencode 服务：会话、文件与终端。",
+                style = type.body,
+                color = colors.onSurfaceVariant,
             )
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(24.dp))
 
-            if (!com.a2heng.androc.ui.data.AppBuild.thin) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = AndrocColor.Medium,
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
+            if (!AppBuild.thin) {
+                CouiCard {
                     Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("在这台手机上运行 OpenCode", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                "内置 OpenCode 与运行时，地址和密码由 App 注入",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            CouiText("在这台手机上运行 OpenCode", style = type.body)
+                            CouiText(
+                                "内置 OpenCode 与运行时",
+                                style = type.bodySmall,
+                                color = colors.onSurfaceVariant,
                             )
                         }
-                        TextButton(onClick = { showLocalRuntime = true }) { Text("本机") }
+                        CouiTextButton("本机") { showLocalRuntime = true }
                     }
                 }
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(20.dp))
             }
 
-            Text(
-                "服务器地址",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth()) {
-                Box {
-                    OutlinedTextField(
-                        value = scheme,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("协议") },
-                        trailingIcon = {
-                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
-                        },
-                        singleLine = true,
-                        modifier = Modifier.width(112.dp),
-                        shape = RoundedCornerShape(14.dp),
-                    )
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .clickableNoRipple { schemeMenu = true },
-                    )
-                    DropdownMenu(
-                        expanded = schemeMenu,
-                        onDismissRequest = { schemeMenu = false },
-                    ) {
-                        listOf("http", "https").forEach { item ->
-                            DropdownMenuItem(
-                                text = { Text(item) },
-                                onClick = {
-                                    scheme = item
-                                    schemeMenu = false
-                                    if (model.connecting || model.connectionError != null) {
-                                        model.cancelConnect()
-                                    }
-                                },
-                            )
-                        }
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CouiText(
+                    "服务器地址",
+                    style = type.labelSmall,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (model.savedConnections.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CouiText(
+                            "${model.savedConnections.size}",
+                            style = type.labelSmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        CouiIconButton(CouiIcon.Server) { showSavedDialog = true }
                     }
                 }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                CouiSelect(
+                    value = scheme,
+                    options = listOf("http", "https"),
+                    onSelect = {
+                        scheme = it
+                        if (model.connecting || model.connectionError != null) model.cancelConnect()
+                    },
+                    label = "协议",
+                    modifier = Modifier.width(84.dp),
+                )
                 Spacer(Modifier.width(8.dp))
-                OutlinedTextField(
+                CouiField(
                     value = host,
                     onValueChange = {
                         if (model.connecting || model.connectionError != null) model.cancelConnect()
@@ -183,180 +141,138 @@ fun ConnectScreen(model: AppModel) {
                         model.savedConnectionFor(composeServerUrl(scheme, it, port))
                             ?.let { saved -> password = saved.password }
                     },
-                    label = { Text("主机 / IP") },
-                    placeholder = { Text("192.168.1.100") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    label = "主机 / IP",
+                    placeholder = "192.168.1.100",
+                    keyboardType = KeyboardType.Uri,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
                 )
-                Text(
-                    ":",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 6.dp),
-                )
-                OutlinedTextField(
+                Spacer(Modifier.width(8.dp))
+                CouiField(
                     value = port,
                     onValueChange = {
                         if (model.connecting || model.connectionError != null) model.cancelConnect()
                         port = it.filter { ch -> ch.isDigit() }.take(5)
                     },
-                    label = { Text("端口") },
-                    placeholder = { Text("4096") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.width(96.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    label = "端口",
+                    placeholder = "4096",
+                    keyboardType = KeyboardType.Number,
+                    modifier = Modifier.width(76.dp),
                 )
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
-                Text(
-                    if (model.savedConnections.isEmpty()) "协议 + 主机 + 端口，密码在下一行"
-                    else "已保存 ${model.savedConnections.size} 个连接",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                if (model.savedConnections.isNotEmpty()) {
-                    Box {
-                        TextButton(onClick = { savedMenuOpen = true }) {
-                            Text("选择已保存")
-                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
-                        }
-                        DropdownMenu(
-                            expanded = savedMenuOpen,
-                            onDismissRequest = { savedMenuOpen = false },
-                        ) {
-                            model.savedConnectionsSorted().forEach { saved ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(
-                                                prettyServer(saved.url),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.widthIn(max = 210.dp),
-                                            )
-                                            Text(
-                                                if (saved.password.isBlank()) "无密码" else "已保存密码",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    },
-                                    trailingIcon = {
-                                        IconButton(
-                                            onClick = { model.forgetConnection(saved.url) },
-                                            modifier = Modifier.size(30.dp),
-                                        ) {
-                                            Icon(
-                                                Icons.Rounded.DeleteOutline,
-                                                contentDescription = "删除",
-                                                modifier = Modifier.size(17.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        val parts = splitServerUrl(saved.url)
-                                        scheme = parts.first
-                                        host = parts.second
-                                        port = parts.third
-                                        password = saved.password
-                                        savedMenuOpen = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
             }
             Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
+            CouiField(
                 value = password,
                 onValueChange = {
                     if (model.connecting || model.connectionError != null) model.cancelConnect()
                     password = it
                 },
-                label = { Text("密码") },
-                leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
-                trailingIcon = {
-                    Text(
-                        if (showPassword) "隐藏" else "显示",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(end = 10.dp)
-                            .clickableNoRipple { showPassword = !showPassword },
-                    )
+                label = "密码",
+                placeholder = "服务器密码",
+                keyboardType = KeyboardType.Password,
+                visualTransformation = if (showPassword) VisualTransformation.None
+                else PasswordVisualTransformation(),
+                trailing = {
+                    CouiTextButton(if (showPassword) "隐藏" else "显示") {
+                        showPassword = !showPassword
+                    }
                 },
-                singleLine = true,
-                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
             )
 
             if (model.connectionError != null) {
-                Spacer(Modifier.height(12.dp))
-                Text(
+                Spacer(Modifier.height(10.dp))
+                CouiText(
                     model.connectionError ?: "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    style = type.bodySmall,
+                    color = colors.error,
                 )
             }
 
             Spacer(Modifier.height(18.dp))
-            Button(
+            CouiPrimaryButton(
+                text = if (model.connecting) "取消连接" else "连接",
                 onClick = {
                     if (model.connecting) model.cancelConnect() else model.connectSmart(url, password)
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(14.dp),
-            ) {
-                if (model.connecting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                    Spacer(Modifier.size(10.dp))
-                    Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(17.dp))
-                    Spacer(Modifier.size(6.dp))
-                    Text("取消连接")
-                } else {
-                    Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text("连接")
+                icon = {
+                    if (model.connecting) {
+                        CouiSpinner(size = 16, color = colors.onAccent)
+                    } else {
+                        CouiGlyph(CouiIcon.CheckCircle, tint = colors.onAccent)
+                    }
+                },
+            )
+            Spacer(Modifier.height(24.dp))
+            CouiText(
+                "手机与电脑在同一局域网；服务端用 --hostname 0.0.0.0 启动。opencode serve 默认 http://，TLS 才选 https。",
+                style = type.labelSmall,
+                color = colors.onSurfaceVariant,
+            )
+        }
+    }
+
+    if (showSavedDialog) {
+        CouiDialog("已保存的连接", onDismiss = { showSavedDialog = false }) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                model.savedConnectionsSorted().forEach { saved ->
+                    CouiCard(
+                        onClick = {
+                            val parts = splitServerUrl(saved.url)
+                            scheme = parts.first
+                            host = parts.second
+                            port = parts.third
+                            password = saved.password
+                            showSavedDialog = false
+                            if (model.connecting || model.connectionError != null) {
+                                model.cancelConnect()
+                            }
+                        },
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                CouiText(prettyServer(saved.url), style = type.body, maxLines = 1)
+                                CouiText(
+                                    if (saved.password.isBlank()) "无密码" else "已保存密码",
+                                    style = type.bodySmall,
+                                    color = colors.onSurfaceVariant,
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            CouiIconButton(
+                                icon = CouiIcon.Delete,
+                                tint = colors.error,
+                            ) { pendingDelete = saved.url }
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.height(18.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "提示：手机与电脑需在同一局域网；服务端启动参数 --hostname 0.0.0.0。opencode serve 默认是 http://（不启用 TLS），不要填 https://。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        }
+    }
+    if (pendingDelete != null) {
+        CouiDialog("删除这个连接？", onDismiss = { pendingDelete = null }) {
+            CouiText(
+                prettyServer(pendingDelete ?: ""),
+                style = type.body,
+                color = colors.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                CouiTextButton("取消") { pendingDelete = null }
+                Spacer(Modifier.width(8.dp))
+                CouiTextButton("删除", color = colors.error) {
+                    pendingDelete?.let { model.forgetConnection(it) }
+                    pendingDelete = null
+                }
             }
-            Spacer(Modifier.height(40.dp))
         }
     }
     if (showLocalRuntime) {
         LocalRuntimeDialog(model) { showLocalRuntime = false }
     }
 }
-
-/** 保存列表里去掉协议前缀，只显示 host:port，省地方。 */
-private fun prettyServer(url: String): String =
-    url.removePrefix("http://").removePrefix("https://").trimEnd('/')
 
 /** "http://host:port" → (scheme, host, port)。 */
 private fun splitServerUrl(raw: String): Triple<String, String, String> {
@@ -374,3 +290,6 @@ private fun composeServerUrl(scheme: String, host: String, port: String): String
     if (h.isEmpty()) return ""
     return if (port.isBlank()) "$scheme://$h" else "$scheme://$h:${port.trim()}"
 }
+
+private fun prettyServer(url: String): String =
+    url.removePrefix("http://").removePrefix("https://").trimEnd('/')

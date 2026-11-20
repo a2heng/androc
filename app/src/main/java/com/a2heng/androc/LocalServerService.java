@@ -99,7 +99,7 @@ public class LocalServerService extends Service {
                 nm.createNotificationChannel(ch);
             }
         }
-        Intent open = new Intent(this, MainActivity.class);
+        Intent open = new Intent(this, MobileFrontendActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int fl = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= 31) fl |= PendingIntent.FLAG_IMMUTABLE;

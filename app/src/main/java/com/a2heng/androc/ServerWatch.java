@@ -161,7 +161,7 @@ public class ServerWatch {
             NotificationChannel cur = nm.getNotificationChannel(CH_UPD);
             if (cur != null && cur.getImportance() == NotificationManager.IMPORTANCE_NONE)
                 return false;
-            Intent open = new Intent(ctx, MainActivity.class);
+            Intent open = new Intent(ctx, MobileFrontendActivity.class);
             open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             int fl = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= 31) fl |= PendingIntent.FLAG_IMMUTABLE;
@@ -227,7 +227,7 @@ public class ServerWatch {
                         NotificationManager.IMPORTANCE_DEFAULT);
                 nm.createNotificationChannel(ch);
             }
-            Intent open = new Intent(ctx, MainActivity.class);
+            Intent open = new Intent(ctx, MobileFrontendActivity.class);
             open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             int fl = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= 31) fl |= PendingIntent.FLAG_IMMUTABLE;

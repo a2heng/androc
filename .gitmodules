@@ -63,3 +63,6 @@
 	url = https://github.com/lzhiyong/android-sdk-tools.git
 	branch = master
 	shallow = true
+[submodule "reference/coui"]
+	path = reference/coui
+	url = https://github.com/ItosEO/COUI-Kit.git

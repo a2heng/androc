@@ -5,7 +5,11 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -73,13 +77,14 @@ private val MonoDark = darkColorScheme(
     onSecondaryContainer = Color(0xFFDCE0E6),
     tertiary = Color(0xFF9DA5B1),
     onTertiary = Color(0xFF14181D),
-    background = Color(0xFF090C11),
-    onBackground = Color(0xFFE6EAF0),
-    surface = Color(0xFF151B23),
-    onSurface = Color(0xFFE6EAF0),
-    surfaceVariant = Color(0xFF242E39),
-    onSurfaceVariant = Color(0xFFAAB6C4),
-    outline = Color(0xFF414C59),
+    background = Color(0xFF0A0A0B),
+    onBackground = Color(0xFFEDEDEF),
+    surface = Color(0xFF141416),
+    onSurface = Color(0xFFEDEDEF),
+    surfaceVariant = Color(0xFF1E1E21),
+    onSurfaceVariant = Color(0xFFA0A0A8),
+    outline = Color(0xFF2C2C31),
+    outlineVariant = Color(0x1FFFFFFF),
     error = Danger,
 )
 
@@ -94,13 +99,14 @@ private val MonoLight = lightColorScheme(
     onSecondaryContainer = Color(0xFF23272E),
     tertiary = Color(0xFF7A8089),
     onTertiary = Color.White,
-    background = Color(0xFFF0F2F6),
-    onBackground = Color(0xFF14181D),
+    background = Color(0xFFF5F5F7),
+    onBackground = Color(0xFF141416),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF14181D),
-    surfaceVariant = Color(0xFFE3E8EF),
-    onSurfaceVariant = Color(0xFF58626F),
-    outline = Color(0xFFB8C1CC),
+    onSurface = Color(0xFF141416),
+    surfaceVariant = Color(0xFFEFEFF2),
+    onSurfaceVariant = Color(0xFF6B6B73),
+    outline = Color(0xFFDCDCE0),
+    outlineVariant = Color(0x14000000),
     error = Color(0xFFC0323D),
 )
 
@@ -216,9 +222,35 @@ fun OcTheme(
             }
         }
     }
-    MaterialTheme(
-        colorScheme = colors,
-        typography = Typography(),
-        content = content,
-    )
+    CouiTheme(dark = dark) {
+        MaterialTheme(
+            colorScheme = colors,
+            typography = CouiTypography,
+            shapes = CouiShapes,
+            content = content,
+        )
+    }
 }
+
+/** ColorOS 风格：更紧的字距、更克制的字重层级。 */
+private val CouiTypography = Typography(
+    headlineSmall = Typography().headlineSmall.copy(fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+    titleLarge = Typography().titleLarge.copy(fontSize = 20.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+    titleMedium = Typography().titleMedium.copy(fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+    titleSmall = Typography().titleSmall.copy(fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+    bodyLarge = Typography().bodyLarge.copy(fontSize = 15.sp),
+    bodyMedium = Typography().bodyMedium.copy(fontSize = 14.sp),
+    bodySmall = Typography().bodySmall.copy(fontSize = 12.5.sp),
+    labelLarge = Typography().labelLarge.copy(fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+    labelMedium = Typography().labelMedium.copy(fontSize = 12.5.sp),
+    labelSmall = Typography().labelSmall.copy(fontSize = 11.5.sp),
+)
+
+/** ColorOS 的圆角比 Material 默认更收敛。 */
+private val CouiShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(26.dp),
+)
