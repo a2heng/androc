@@ -67,7 +67,7 @@ object Coui {
 
 /* ------------------------------------------------------------------- icons */
 
-enum class CouiIcon { ArrowDown, Check, Close, Back, Terminal, Lock, Delete, CheckCircle, More, Server }
+enum class CouiIcon { ArrowDown, Check, Close, Back, Terminal, Lock, Delete, CheckCircle, More, Server, ChevronRight }
 
 @Composable
 fun CouiGlyph(icon: CouiIcon, tint: Color = Coui.label(), size: Int = 18) {
@@ -131,6 +131,10 @@ fun CouiGlyph(icon: CouiIcon, tint: Color = Coui.label(), size: Int = 18) {
                 drawCircle(tint, radius = w * 0.36f, center = Offset(w * 0.5f, h * 0.5f), style = Stroke(width = stroke.width))
                 drawLine(tint, Offset(w * 0.34f, h * 0.5f), Offset(w * 0.46f, h * 0.64f), stroke.width, StrokeCap.Round)
                 drawLine(tint, Offset(w * 0.46f, h * 0.64f), Offset(w * 0.68f, h * 0.38f), stroke.width, StrokeCap.Round)
+            }
+            CouiIcon.ChevronRight -> {
+                drawLine(tint, Offset(w * 0.4f, h * 0.26f), Offset(w * 0.64f, h * 0.5f), stroke.width, StrokeCap.Round)
+                drawLine(tint, Offset(w * 0.64f, h * 0.5f), Offset(w * 0.4f, h * 0.74f), stroke.width, StrokeCap.Round)
             }
             CouiIcon.Server -> {
                 val barW = w * 0.56f

@@ -85,7 +85,7 @@ fun SettingsScreen(model: AppModel) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text("连接", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("连接")
         Card(
             colors = CardDefaults.cardColors(containerColor = AndrocColor.Medium),
             shape = RoundedCornerShape(12.dp),
@@ -106,7 +106,7 @@ fun SettingsScreen(model: AppModel) {
         }
 
         Spacer(Modifier.height(8.dp))
-        Text("模型与模式", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("模型与模式")
         // 与聊天顶栏同一套卡片、同一份数据；来源就在卡片第一行「模型」后面。
         ModelControlCard(
             model = model,
@@ -127,14 +127,14 @@ fun SettingsScreen(model: AppModel) {
 
         if (!com.a2heng.androc.ui.data.AppBuild.thin) {
             Spacer(Modifier.height(8.dp))
-            Text("本机 OpenCode", style = MaterialTheme.typography.titleSmall)
+            CouiSectionTitle("本机 OpenCode")
             SettingsRow(
                 title = "本机运行",
                 subtitle = "内置 OpenCode 与运行时，地址和密码由 App 注入",
             ) { showLocalRuntime = true }
 
             Spacer(Modifier.height(8.dp))
-            Text("市场", style = MaterialTheme.typography.titleSmall)
+            CouiSectionTitle("市场")
             SettingsRow(
                 title = "组件与工具链",
                 subtitle = if (model.plugins.isEmpty()) "Skill + 工具链，按需安装"
@@ -177,7 +177,7 @@ fun SettingsScreen(model: AppModel) {
         }
 
         Spacer(Modifier.height(8.dp))
-        Text("外观", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("外观")
         Row(
             Modifier.fillMaxWidth().padding(top = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -188,7 +188,7 @@ fun SettingsScreen(model: AppModel) {
         }
 
         Spacer(Modifier.height(10.dp))
-        Text("主题色", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("主题色")
         Row(
             Modifier
                 .fillMaxWidth()
@@ -202,7 +202,7 @@ fun SettingsScreen(model: AppModel) {
         }
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text("运行中发送消息时", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("运行中发送消息时")
         TripleOptionRow(
             titles = listOf("steer", "queue", "中断后发送"),
             subtitles = listOf("下一步前插入", "本轮结束后", "先中断再发"),
@@ -223,7 +223,7 @@ fun SettingsScreen(model: AppModel) {
         )
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text("聊天显示", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("聊天显示")
         TripleOptionRow(
             titles = listOf("精简", "适中", "完整"),
             subtitles = listOf("一行 + 气泡", "预览 + 展开", "全部平铺"),
@@ -244,7 +244,7 @@ fun SettingsScreen(model: AppModel) {
         )
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text("更新", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("更新")
         Row(
             Modifier
                 .fillMaxWidth()
@@ -301,7 +301,7 @@ fun SettingsScreen(model: AppModel) {
         }
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text("关于", style = MaterialTheme.typography.titleSmall)
+        CouiSectionTitle("关于")
         Text(
             "Androc v${model.appVersion}（内置 Androc UI，MIT）\n" +
                 "数据全部来自局域网 opencode 服务，App 只在内存里做聚合。",
@@ -375,32 +375,22 @@ private fun SettingsRow(
     subtitle: String,
     onClick: () -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = AndrocColor.Medium),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    CouiCard(onClick = onClick) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickableNoRipple(onClick)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text(
+                CouiText(title, style = CouiTheme.type.body)
+                CouiText(
                     subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = CouiTheme.type.bodySmall,
+                    color = CouiTheme.colors.onSurfaceVariant,
                 )
             }
-            Icon(
-                Icons.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
+            CouiGlyph(CouiIcon.ChevronRight, tint = CouiTheme.colors.onSurfaceVariant, size = 18)
         }
     }
 }
@@ -808,4 +798,14 @@ private fun ThemeSwatch(
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+@Composable
+private fun CouiSectionTitle(text: String) {
+    CouiText(
+        text,
+        style = CouiTheme.type.labelSmall,
+        color = CouiTheme.colors.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+    )
 }
