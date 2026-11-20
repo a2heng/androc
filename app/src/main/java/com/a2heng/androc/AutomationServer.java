@@ -124,6 +124,10 @@ public final class AutomationServer {
                         params.getOrDefault("password", ""));
             } else if ("/start-local".equals(path) && "POST".equals(method)) {
                 body = AutomationBridge.INSTANCE.startLocal();
+            } else if ("/update/check".equals(path)) {
+                body = AutomationBridge.INSTANCE.updateCheck();
+            } else if ("/update/download".equals(path) && "POST".equals(method)) {
+                body = AutomationBridge.INSTANCE.updateDownload();
             } else if ("/ping".equals(path)) {
                 body = "{\"ok\":true}";
             } else if ("/logs".equals(path)) {

@@ -64,6 +64,8 @@ public class MobileFrontendActivity extends AppCompatActivity {
             c.setAppearanceLightNavigationBars(!dark);
         }
         setContentView(buildLoading());
+        // 自更新要选对发行版：thin 只下 thin.apk，bundle 只下 bundle.apk。
+        com.a2heng.androc.ui.data.AppBuild.INSTANCE.setThin(BuildConfig.THIN);
         // 连接保活是前台服务：Android 13+ 没有通知权限时通知栏不显示，
         // 部分 ROM 会更快回收进程。登录页的独立客户端会主动申请，这里补齐。
         notifPermLauncher = registerForActivityResult(
