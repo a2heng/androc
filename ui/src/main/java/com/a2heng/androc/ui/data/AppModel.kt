@@ -2159,7 +2159,15 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     fun loadDir(path: String?) {
         val c = client ?: return
-        val requested = absoluteFsPath(path)
+        var requested = absoluteFsPath(path)
+        // 路径必须和当前服务端同一类根：Windows 盘符 vs POSIX "/"。
+        // 否则切换服务器后会把 Android 的 /data/... 发给 Windows，得到 404。
+        val base = fsBase()
+        if (requested != null && base.isNotBlank()) {
+            val baseWin = Regex("^[A-Za-z]:").containsMatchIn(base)
+            val pathWin = Regex("^[A-Za-z]:").containsMatchIn(requested)
+            if (baseWin != pathWin) requested = null
+        }
         val target = requested ?: fsRootOverride?.let(::normPath)
         val seq = ++fsLoadSeq
         fsLoading = true
