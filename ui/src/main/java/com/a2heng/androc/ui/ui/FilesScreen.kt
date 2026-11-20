@@ -268,6 +268,13 @@ private fun isUnder(base: String, path: String): Boolean {
     return p == b || p.startsWith("$b/")
 }
 
+private fun sameRoot(a: String, b: String): Boolean? {
+    val ra = Regex("^[A-Za-z]:").find(a)?.value?.lowercase()
+    val rb = Regex("^[A-Za-z]:").find(b)?.value?.lowercase()
+    if (ra != null || rb != null) return ra == rb
+    return true
+}
+
 /** 已经是根（"/" 或 Windows 的 "D:/"）就没有上一级。 */
 private fun isRootPath(p: String): Boolean =
     p.isEmpty() || p == "/" || Regex("^[A-Za-z]:$").matches(p)
@@ -283,7 +290,8 @@ private fun parentDir(current: String, base: String): String? {
         cur = cur.trimEnd('/')
     }
     if (isRootPath(cur) || cur == b) return null
-    if (b.isNotEmpty() && !isUnder(b, cur)) return null
+    // Windows 上可能切到别的盘；不同根时允许向上，不按 HOME 限制。
+    if (b.isNotEmpty() && !isUnder(b, cur) && sameRoot(b, cur) != true) return null
     val rawParent = cur.substringBeforeLast('/', "")
     val parent = when {
         rawParent.isEmpty() -> "/"

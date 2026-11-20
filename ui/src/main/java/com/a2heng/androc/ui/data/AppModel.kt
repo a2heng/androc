@@ -1244,9 +1244,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private val fsDirBySession = mutableMapOf<String, String>()
+
     fun openSession(session: SessionInfo) {
-        current?.let { prev -> if (prev.id != session.id) saveMessageCache(prev.id) }
+        current?.let { prev ->
+            if (prev.id != session.id) {
+                saveMessageCache(prev.id)
+                if (fsDir.isNotBlank()) fsDirBySession[prev.id] = fsDir
+            }
+        }
         current = session
+        // 每个会话保留自己的文件浏览路径，新会话从空路径开始。
+        fsDir = fsDirBySession[session.id] ?: ""
         openSessions = (listOf(session) + openSessions.filterNot { it.id == session.id }).take(20)
         persistOpenSessions()
         val cached = sessionMessageCache[session.id]
@@ -2154,6 +2163,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 if (seq != fsLoadSeq) return@launch
                 fsRoot = fsBase()
                 fsDir = normPath(dir.ifBlank { target.orEmpty() }).trimEnd('/').ifBlank { "/" }
+                current?.let { fsDirBySession[it.id] = fsDir }
                 fsEntries = entries.sortedWith(compareByDescending<FsEntry> { it.isDir }.thenBy { it.name.lowercase() })
             } catch (e: Exception) {
                 if (seq == fsLoadSeq) {
