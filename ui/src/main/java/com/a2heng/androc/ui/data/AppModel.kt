@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -716,6 +717,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     fsEntries = emptyList()
                     fsError = null
                     fsDirBySession.clear()
+                    fsDirCache.clear()
                 }
                 serverUrl = target
                 password = pwd
@@ -2189,10 +2191,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val home = homeDir
         if (!Regex("^[A-Za-z]:").containsMatchIn(home)) return
         viewModelScope.launch {
+            // 并发探测，单个盘 1.2s 超时；慢盘不会拖住整个列表。
             val found = withContext(Dispatchers.IO) {
-                ('C'..'Z').mapNotNull { letter ->
-                    val root = "$letter:/"
-                    runCatching { c.listDir(root); root }.getOrNull()
+                kotlinx.coroutines.coroutineScope {
+                    ('C'..'Z').map { letter ->
+                        async {
+                            val root = "$letter:/"
+                            withTimeoutOrNull(1200) {
+                                runCatching { c.listDir(root); root }.getOrNull()
+                            }
+                        }
+                    }.awaitAll().filterNotNull().sorted()
                 }
             }
             if (found.isNotEmpty()) fsDrives = found
