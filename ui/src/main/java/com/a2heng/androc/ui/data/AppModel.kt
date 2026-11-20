@@ -702,12 +702,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     ).show()
                     retried
                 }
-                // 路径属于某个服务端：换了服务器就清空，避免把上一个系统
-                // （如 Android）的绝对路径发给 Windows 服务端导致 404。
+                // 文件路径跟着服务器走：切走前保存，切回来后恢复。
                 if (serverUrl != target) {
-                    fsDir = ""
-                    fsDirBySession.clear()
+                    if (serverUrl.isNotBlank()) {
+                        fsStateByServer[serverUrl] = FsState(fsRootOverride, fsDir, homeDir)
+                    }
+                    val saved = fsStateByServer[target]
+                    fsRootOverride = saved?.root
+                    fsDir = saved?.dir ?: ""
+                    homeDir = saved?.home ?: ""
                     fsEntries = emptyList()
+                    fsError = null
+                    fsDirBySession.clear()
                 }
                 serverUrl = target
                 password = pwd
@@ -1252,6 +1258,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     private val fsDirBySession = mutableMapOf<String, String>()
+    private data class FsState(val root: String?, val dir: String, val home: String)
+    private val fsStateByServer = mutableMapOf<String, FsState>()
 
     fun openSession(session: SessionInfo) {
         current?.let { prev ->
