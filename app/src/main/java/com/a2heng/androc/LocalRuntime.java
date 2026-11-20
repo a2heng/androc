@@ -895,6 +895,8 @@ public final class LocalRuntime {
     public static void removePluginSkills(Context ctx, java.util.List<String> skills) {
         File home = homeDir(ctx.getApplicationContext());
         for (String skill : skills) {
+            // 只接受纯目录名，防止 ".." 之类把配置目录整个删掉。
+            if (skill == null || skill.isEmpty() || skill.contains("/") || skill.contains("..")) continue;
             deleteTree(new File(home, ".config/opencode/skills/" + skill));
             deleteTree(new File(home, ".config/opencode-android/skills/" + skill));
         }
