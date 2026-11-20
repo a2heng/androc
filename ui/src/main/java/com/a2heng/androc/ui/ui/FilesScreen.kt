@@ -65,6 +65,7 @@ import com.a2heng.androc.ui.data.normPath
 @Composable
 fun FilesScreen(model: AppModel, wide: Boolean = false) {
     LaunchedEffect(Unit) {
+        model.ensureDrives()
         if (model.fsDir.isBlank()) model.loadDir(null)
     }
 
@@ -159,12 +160,21 @@ private fun FsListPane(model: AppModel) {
         // 快速入口：第一个永远是 home，权限/路径迷路时可以一键回来。
         // 只放根入口：Windows 放盘符根，POSIX 放 home。
         // 不再依赖 sessions，避免会话轮询把整个文件页重组一遍。
-        val quickDirs = remember(model.homeDir) {
+        // 第一个「此电脑」列出所有盘；后面跟各会话的目录。
+        val quickDirs = buildList {
+            add("此电脑" to com.a2heng.androc.ui.data.AppModel.DRIVES_PATH)
             val home = model.homeDir.trimEnd('/')
-            val drive = Regex("^[A-Za-z]:").find(home)?.value
-            if (drive != null) listOf(drive to "$drive/") else
-                if (home.isNotBlank()) listOf("home" to home) else emptyList()
-        }
+            if (home.isNotBlank() && !Regex("^[A-Za-z]:").containsMatchIn(home)) {
+                add("home" to home)
+            }
+            model.expandSessionDir(model.current?.directory)?.let { add("当前会话" to it) }
+            model.sessions.forEach { s ->
+                val dir = model.expandSessionDir(s.directory) ?: return@forEach
+                if (none { it.second == dir }) {
+                    add(dir.trimEnd('/').substringAfterLast('/').ifBlank { dir } to dir)
+                }
+            }
+        }.distinctBy { it.second }.take(12)
         androidx.compose.foundation.layout.FlowRow(
             Modifier
                 .fillMaxWidth()
@@ -255,7 +265,9 @@ private fun FsListPane(model: AppModel) {
     }
 }
 
-private fun fullPath(root: String, relative: String): String = joinPath(root, relative)
+private fun fullPath(root: String, relative: String): String =
+    if (root == com.a2heng.androc.ui.data.AppModel.DRIVES_PATH) relative
+    else joinPath(root, relative)
 
 private fun isUnder(base: String, path: String): Boolean {
     val b = normPath(base).trimEnd('/')
@@ -286,8 +298,11 @@ private fun parentDir(current: String, base: String): String? {
         cur = cur.trimEnd('/')
     }
     // 盘符根（D:/）才回到 HOME；POSIX 的 "/" 就是根，不再往上跳。
-    // 允许一直向上到文件系统根；HOME 只是默认起点，不是边界。
-    if (isRootPath(cur)) return null
+    if (cur == com.a2heng.androc.ui.data.AppModel.DRIVES_PATH) return null
+    // 盘符根上一级是「此电脑」；POSIX "/" 就是根。
+    if (isRootPath(cur)) {
+        return if (Regex("^[A-Za-z]:$").matches(cur)) com.a2heng.androc.ui.data.AppModel.DRIVES_PATH else null
+    }
     val rawParent = cur.substringBeforeLast('/', "")
     val parent = when {
         rawParent.isEmpty() -> "/"

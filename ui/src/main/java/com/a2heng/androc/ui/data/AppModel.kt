@@ -506,6 +506,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var fsDir by mutableStateOf("")
         private set
     var fsRoot by mutableStateOf("")
+    /** Windows 服务端探测到的盘符根（C:/、D:/…），POSIX 为空。 */
+    var fsDrives by mutableStateOf<List<String>>(emptyList())
         private set
     var fsEntries by mutableStateOf<List<FsEntry>>(emptyList())
         private set
@@ -722,6 +724,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 serverVersion = info?.str("version") ?: ""
                 runCatching { withContext(Dispatchers.IO) { c.locationRoot() } }
                     .onSuccess { homeDir = it }
+                ensureDrives()
                 connected = true
                 connecting = false
                 hadConnected = true
@@ -2178,7 +2181,39 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         return if (isAbsolutePath(p)) p else joinPath(fsBase(), p)
     }
 
+    fun ensureDrives() {
+        if (fsDrives.isNotEmpty()) return
+        val c = client ?: return
+        val home = homeDir
+        if (!Regex("^[A-Za-z]:").containsMatchIn(home)) return
+        viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                ('C'..'Z').mapNotNull { letter ->
+                    val root = "$letter:/"
+                    runCatching { c.listDir(root); root }.getOrNull()
+                }
+            }
+            if (found.isNotEmpty()) fsDrives = found
+        }
+    }
+
     fun loadDir(path: String?) {
+        // 虚拟「此电脑」：不请求服务端，直接把探测到的盘符当目录列表。
+        if (path == DRIVES_PATH) {
+            fsDir = DRIVES_PATH
+            fsError = null
+            fsLoading = false
+            val drives = fsDrives.ifEmpty {
+                buildSet {
+                    Regex("^[A-Za-z]:").find(homeDir)?.value?.let { add("$it/") }
+                    sessions.forEach { s ->
+                        Regex("^[A-Za-z]:").find(s.directory)?.value?.let { add("$it/") }
+                    }
+                }.sorted()
+            }
+            fsEntries = drives.map { FsEntry(it, "directory") }
+            return
+        }
         val c = client ?: return
         // 远程服务器上，本机 App 的私有路径/根一律无效。
         if (!isLocalServer()) {
@@ -2332,7 +2367,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }.getOrNull()
     }
 
-    private companion object {
+    companion object {
+        const val DRIVES_PATH = "drives:/"
         val VIDEO_EXTS = setOf("mp4", "mkv", "webm", "mov", "avi", "m4v", "3gp", "ts")
         val AUDIO_EXTS = setOf("mp3", "wav", "m4a", "aac", "ogg", "flac", "opus", "oga", "wma")
         val IMAGE_EXTS = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "heif", "svg")
