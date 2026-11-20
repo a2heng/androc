@@ -384,7 +384,7 @@ fun normPath(raw: String): String {
 /** 绝对路径：`/...`、Windows 盘符 `C:/...` 或 UNC（已由 normPath 转成 `//...`）。 */
 fun isAbsolutePath(path: String): Boolean {
     val p = normPath(path)
-    return p.startsWith("/") || Regex("^[A-Za-z]:/").containsMatchIn(p)
+    return p.startsWith("/") || Regex("^[A-Za-z]:($|/)").containsMatchIn(p)
 }
 
 /** 把服务端返回的相对路径补到基准目录上；已经是绝对路径就原样返回。 */

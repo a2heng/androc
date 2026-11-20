@@ -162,7 +162,10 @@ private fun FsListPane(model: AppModel) {
         // 不再依赖 sessions，避免会话轮询把整个文件页重组一遍。
         // 第一个「此电脑」列出所有盘；后面跟各会话的目录。
         val quickDirs = buildList {
-            add("此电脑" to com.a2heng.androc.ui.data.AppModel.DRIVES_PATH)
+            // 只有 Windows 服务端才有「此电脑」。
+            val win = model.fsDrives.isNotEmpty() ||
+                Regex("^[A-Za-z]:").containsMatchIn(model.homeDir)
+            if (win) add("此电脑" to com.a2heng.androc.ui.data.AppModel.DRIVES_PATH)
             val home = model.homeDir.trimEnd('/')
             if (home.isNotBlank() && !Regex("^[A-Za-z]:").containsMatchIn(home)) {
                 add("home" to home)

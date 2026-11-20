@@ -722,6 +722,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     fsEntries = emptyList()
                     fsError = null
                     fsDirBySession.clear()
+                    fsDrives = emptyList()
                 }
                 serverUrl = target
                 password = pwd
