@@ -213,6 +213,20 @@ public final class AppPluginManager implements PluginManager {
     }
 
     private static boolean deleteTree(File file) {
+        boolean ok = deleteTreeJava(file);
+        if (!ok && file.exists()) {
+            // 符号链接/权限导致 Java 递归失败时，退回系统 rm -rf。
+            try {
+                new ProcessBuilder("rm", "-rf", file.getAbsolutePath())
+                        .redirectErrorStream(true).start().waitFor();
+            } catch (Exception ignored) {
+            }
+            ok = !file.exists();
+        }
+        return ok;
+    }
+
+    private static boolean deleteTreeJava(File file) {
         if (file == null || !file.exists()) return true;
         try {
             if (Files.isSymbolicLink(file.toPath())) return file.delete() || !file.exists();
