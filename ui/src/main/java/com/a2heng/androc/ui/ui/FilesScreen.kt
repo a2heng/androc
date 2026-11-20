@@ -299,16 +299,21 @@ private fun parentDir(current: String, base: String): String? {
     }
     // 盘符根（D:/）才回到 HOME；POSIX 的 "/" 就是根，不再往上跳。
     if (cur == com.a2heng.androc.ui.data.AppModel.DRIVES_PATH) return null
-    // 盘符根上一级是「此电脑」；POSIX "/" 就是根。
+    // 盘符根上一级是「此电脑」。
     if (isRootPath(cur)) {
         return if (Regex("^[A-Za-z]:$").matches(cur)) com.a2heng.androc.ui.data.AppModel.DRIVES_PATH else null
     }
+    // POSIX 的顶是 home：不允许再往上。
+    if (b.isNotEmpty() && cur == b) return null
     val rawParent = cur.substringBeforeLast('/', "")
     val parent = when {
         rawParent.isEmpty() -> "/"
         Regex("^[A-Za-z]:$").matches(rawParent) -> "$rawParent/"
         else -> rawParent
     }
+    // POSIX 不允许越过 home；Windows 允许（盘符根会转到此电脑）。
+    if (b.isNotEmpty() && Regex("^[A-Za-z]:").containsMatchIn(b).not() &&
+        !isUnder(b, parent)) return b
     return parent
 }
 

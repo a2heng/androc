@@ -45,24 +45,6 @@ public final class AppPluginManager implements PluginManager {
         SharedPreferences sp = prefs();
         File home = LocalRuntime.homeDir(ctx);
 
-        // opencode 内核
-        boolean opencode = LocalRuntime.prootAvailable(ctx);
-        String opencodeVersion = BuildConfig.OPENCODE_VERSION;
-        String opencodeLatest = firstNonEmpty(latest.get(PluginInfo.OPENCODE),
-                sp.getString(K_OPENCODE_LATEST, ""), opencodeVersion);
-        out.add(plugin(
-                PluginInfo.OPENCODE,
-                "OpenCode 内核",
-                "本机 server、会话、agent",
-                new ArrayList<>(),
-                list("opencode " + opencodeVersion, "proot"),
-                opencodeVersion,
-                opencodeLatest,
-                opencodeBinarySize(),
-                opencode,
-                !BuildConfig.THIN,
-                false));
-
         // android：skills + musl rootfs
         File rootfs = MuslRootfs.dir(ctx);
         List<String> androidSkills = skillsFor(PluginInfo.ANDROID);
@@ -102,10 +84,6 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void checkUpdates(String id, Callback callback) {
-        if (PluginInfo.OPENCODE.equals(id)) {
-            post(id, true, "OpenCode 随 App 一起更新", callback);
-            return;
-        }
         post(id, true, "Android 插件由市场更新；重新安装即可", callback);
     }
 
@@ -128,19 +106,11 @@ public final class AppPluginManager implements PluginManager {
             }, "plugin-install-" + id).start();
             return;
         }
-        if (PluginInfo.OPENCODE.equals(id)) {
-            post(id, false, "OpenCode 请用“更新”检查上游版本", callback);
-            return;
-        }
         post(id, false, "未知插件：" + id, callback);
     }
 
     @Override
     public void update(String id, Callback callback) {
-        if (PluginInfo.OPENCODE.equals(id)) {
-            post(id, true, "OpenCode 随 App 一起更新", callback);
-            return;
-        }
         install(id, callback);
     }
 
