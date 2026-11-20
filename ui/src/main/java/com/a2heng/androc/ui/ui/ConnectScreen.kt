@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,7 +55,12 @@ import com.a2heng.androc.ui.data.AppModel
 
 @Composable
 fun ConnectScreen(model: AppModel) {
-    var url by rememberSaveable { mutableStateOf(model.serverUrl) }
+    val initial = remember { splitServerUrl(model.serverUrl) }
+    var scheme by rememberSaveable { mutableStateOf(initial.first) }
+    var host by rememberSaveable { mutableStateOf(initial.second) }
+    var port by rememberSaveable { mutableStateOf(initial.third) }
+    var schemeMenu by remember { mutableStateOf(false) }
+    val url = composeServerUrl(scheme, host, port)
     var password by rememberSaveable { mutableStateOf(model.password) }
     var showPassword by remember { mutableStateOf(false) }
     var savedMenuOpen by remember { mutableStateOf(false) }
@@ -97,114 +103,179 @@ fun ConnectScreen(model: AppModel) {
             )
             Spacer(Modifier.height(26.dp))
 
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = AndrocColor.Medium,
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            if (!com.a2heng.androc.ui.data.AppBuild.thin) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = AndrocColor.Medium,
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("在这台手机上运行 OpenCode", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "安装组件后自动启动，地址和密码由 App 注入",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("在这台手机上运行 OpenCode", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "内置 OpenCode 与运行时，地址和密码由 App 注入",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(onClick = { showLocalRuntime = true }) { Text("本机") }
                     }
-                    TextButton(onClick = { showLocalRuntime = true }) { Text("本机") }
                 }
+                Spacer(Modifier.height(18.dp))
             }
-            Spacer(Modifier.height(18.dp))
 
-            OutlinedTextField(
-                value = url,
-                onValueChange = {
-                    // 正在连旧地址 / 显示旧错误时改配置：立刻停下，停在当前页面
-                    if (model.connecting || model.connectionError != null) model.cancelConnect()
-                    url = it
-                    // 输入到已保存的地址时，直接把密码带出来
-                    model.savedConnectionFor(it)?.let { saved -> password = saved.password }
-                },
-                label = { Text("服务器地址") },
-                placeholder = { Text("http://192.168.1.100:42000") },
-                leadingIcon = { Icon(Icons.Rounded.Dns, contentDescription = null) },
-                trailingIcon = if (model.savedConnections.isEmpty()) {
-                    null
-                } else {
-                    {
-                        Box {
-                            IconButton(onClick = { savedMenuOpen = true }) {
-                                Icon(
-                                    Icons.Rounded.ArrowDropDown,
-                                    contentDescription = "已保存的服务器",
-                                    tint = MaterialTheme.colorScheme.primary,
+            Text(
+                "服务器地址",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth()) {
+                Box {
+                    OutlinedTextField(
+                        value = scheme,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("协议") },
+                        trailingIcon = {
+                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                        },
+                        singleLine = true,
+                        modifier = Modifier.width(112.dp),
+                        shape = RoundedCornerShape(14.dp),
+                    )
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .clickableNoRipple { schemeMenu = true },
+                    )
+                    DropdownMenu(
+                        expanded = schemeMenu,
+                        onDismissRequest = { schemeMenu = false },
+                    ) {
+                        listOf("http", "https").forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item) },
+                                onClick = {
+                                    scheme = item
+                                    schemeMenu = false
+                                    if (model.connecting || model.connectionError != null) {
+                                        model.cancelConnect()
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = host,
+                    onValueChange = {
+                        if (model.connecting || model.connectionError != null) model.cancelConnect()
+                        host = it
+                        model.savedConnectionFor(composeServerUrl(scheme, it, port))
+                            ?.let { saved -> password = saved.password }
+                    },
+                    label = { Text("主机 / IP") },
+                    placeholder = { Text("192.168.1.100") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                )
+                Text(
+                    ":",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+                OutlinedTextField(
+                    value = port,
+                    onValueChange = {
+                        if (model.connecting || model.connectionError != null) model.cancelConnect()
+                        port = it.filter { ch -> ch.isDigit() }.take(5)
+                    },
+                    label = { Text("端口") },
+                    placeholder = { Text("4096") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.width(96.dp),
+                    shape = RoundedCornerShape(14.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (model.savedConnections.isEmpty()) "协议 + 主机 + 端口，密码在下一行"
+                    else "已保存 ${model.savedConnections.size} 个连接",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (model.savedConnections.isNotEmpty()) {
+                    Box {
+                        TextButton(onClick = { savedMenuOpen = true }) {
+                            Text("选择已保存")
+                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                        }
+                        DropdownMenu(
+                            expanded = savedMenuOpen,
+                            onDismissRequest = { savedMenuOpen = false },
+                        ) {
+                            model.savedConnectionsSorted().forEach { saved ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                prettyServer(saved.url),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.widthIn(max = 210.dp),
+                                            )
+                                            Text(
+                                                if (saved.password.isBlank()) "无密码" else "已保存密码",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    },
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = { model.forgetConnection(saved.url) },
+                                            modifier = Modifier.size(30.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.DeleteOutline,
+                                                contentDescription = "删除",
+                                                modifier = Modifier.size(17.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        val parts = splitServerUrl(saved.url)
+                                        scheme = parts.first
+                                        host = parts.second
+                                        port = parts.third
+                                        password = saved.password
+                                        savedMenuOpen = false
+                                    },
                                 )
-                            }
-                            DropdownMenu(
-                                expanded = savedMenuOpen,
-                                onDismissRequest = { savedMenuOpen = false },
-                            ) {
-                                model.savedConnectionsSorted().forEach { saved ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(
-                                                    prettyServer(saved.url),
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.widthIn(max = 210.dp),
-                                                )
-                                                Text(
-                                                    if (saved.password.isBlank()) "无密码" else "已保存密码",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        },
-                                        trailingIcon = {
-                                            IconButton(
-                                                onClick = { model.forgetConnection(saved.url) },
-                                                modifier = Modifier.size(30.dp),
-                                            ) {
-                                                Icon(
-                                                    Icons.Rounded.DeleteOutline,
-                                                    contentDescription = "删除",
-                                                    modifier = Modifier.size(17.dp),
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        },
-                                        onClick = {
-                                            url = saved.url
-                                            password = saved.password
-                                            savedMenuOpen = false
-                                        },
-                                    )
-                                }
                             }
                         }
                     }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-            )
-            if (model.savedConnections.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "点地址栏右侧箭头可从 ${model.savedConnections.size} 个已保存的连接里选择",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                }
             }
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
@@ -286,3 +357,20 @@ fun ConnectScreen(model: AppModel) {
 /** 保存列表里去掉协议前缀，只显示 host:port，省地方。 */
 private fun prettyServer(url: String): String =
     url.removePrefix("http://").removePrefix("https://").trimEnd('/')
+
+/** "http://host:port" → (scheme, host, port)。 */
+private fun splitServerUrl(raw: String): Triple<String, String, String> {
+    val text = raw.trim()
+    val scheme = if (text.startsWith("https://", ignoreCase = true)) "https" else "http"
+    val rest = text.removePrefix("https://").removePrefix("http://").trimEnd('/')
+    val host = rest.substringBefore(':')
+    val port = rest.substringAfter(':', "").takeWhile { it.isDigit() }
+    return Triple(scheme, host, port)
+}
+
+/** 三个输入合回一个 URL；主机为空时返回空串。 */
+private fun composeServerUrl(scheme: String, host: String, port: String): String {
+    val h = host.trim()
+    if (h.isEmpty()) return ""
+    return if (port.isBlank()) "$scheme://$h" else "$scheme://$h:${port.trim()}"
+}

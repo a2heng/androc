@@ -98,6 +98,10 @@ android {
         thin {
             dimension "distribution"
             buildConfigField "boolean", "THIN", "true"
+            // 本机同时装 thin 与 bundle 做对比时用 -PandrocThinSuffix=.thin。
+            if (findProperty("androcThinSuffix")) {
+                applicationIdSuffix findProperty("androcThinSuffix").toString()
+            }
         }
     }
 

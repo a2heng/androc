@@ -23,7 +23,7 @@
 | `python scripts/fetch-opencode.py` | 按 `opencode.version` 下载官方 linux-arm64-musl 二进制 | `app/src/bundle/jniLibs/arm64-v8a/libopencode2_bin.so`；缓存 `.cache/opencode` |
 | `python scripts/fetch-opencode.py --latest` | 取上游最新稳定版，并改写 `opencode.version` | 同上 |
 | `python scripts/fetch-opencode.py --version X.Y.Z` | 指定版本（不改 `opencode.version`） | 同上 |
-| `python scripts/fetch-runtime.py` | 从市场 `kernel-opencode` 包提取 `rootfs/` | `app/src/bundle/assets/runtime/rootfs.tar.xz`；缓存 `.cache/opencode-pack` |
+| `python scripts/fetch-runtime.py` | 下载 `runtime-rootfs-1` 构建输入 | `app/src/bundle/assets/runtime/rootfs.tar.xz` |
 | `python scripts/check-opencode-latest.py` | 查询上游最新版并与 `opencode.version` 比较 | 退出码 1 表示落后（仅 `--strict`） |
 | `python scripts/check-16kb.py <apk…>` | 检查 APK 内 64 位 ELF 的 16 KB 页对齐 | 退出码 1 表示不合格 |
 | `python scripts/check-elf-align.py <file|dir>…` | 逐个 ELF 打印 `min_align` | 纯报告 |
@@ -33,7 +33,7 @@
 `fetch-runtime.py` 额外支持离线包：
 
 ```sh
-OPENCODE_PACK_FILE=/path/to/kernel-opencode.tar.xz python scripts/fetch-runtime.py
+RUNTIME_ROOTFS_URL=<url> python scripts/fetch-runtime.py
 OPENCODE_PACK_URL=https://… python scripts/fetch-runtime.py
 ```
 
@@ -225,7 +225,7 @@ python scripts/check-elf-align.py app/src/main/jniLibs/arm64-v8a
 node scripts/test-webview-shims.js
 ```
 
-发布前至少确认：两个 APK 都能装、thin 能装 `kernel-opencode`、bundle 能离线
+发布前至少确认：两个 APK 都能装、bundle 能离线
 起本机 server、`android` 包能在设备内完成一次 `assembleDebug`。
 
 ---
@@ -235,8 +235,8 @@ node scripts/test-webview-shims.js
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | `faltan binarios del runtime proot` | `nativeLibraryDir` 缺 proot/loader/musl 库 | 重装 APK；确认 ABI 是 `arm64-v8a` |
-| `Android 插件（musl rootfs）未安装` | 没有任何可用 rootfs | 装 `kernel-opencode`（thin）或确认 bundle 已解压 |
-| `OpenCode 组件未安装` | thin 还没装市场包 | 设置里安装 OpenCode 组件，或 `POST /start-local` 前先安装 |
+| `Android 插件（musl rootfs）未安装` | 没有任何可用 rootfs | 确认 bundle 已解压内置 runtime |
+| `OpenCode 组件未安装` | 当前是 thin | thin 只做远程客户端，本机能力用 bundle |
 | `installed hash mismatch` | 下载不完整或缓存损坏 | 删 `files/market/<包>` 下对应文件后重试 |
 | `HTTP 403/404 …/index.json` | 默认索引不可达 | `POST /market?url=<镜像索引>` |
 | `market index signature rejected` | 索引被改或镜像用了别的密钥 | 换回默认索引 |

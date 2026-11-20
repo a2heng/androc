@@ -1,7 +1,6 @@
 package com.a2heng.androc;
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
@@ -42,6 +41,7 @@ public final class AppPluginManager implements PluginManager {
     @Override
     public List<PluginInfo> list() {
         List<PluginInfo> out = new ArrayList<>();
+        if (BuildConfig.THIN) return out; // thin 没有市场
         SharedPreferences sp = prefs();
         File home = LocalRuntime.homeDir(ctx);
 
@@ -103,32 +103,7 @@ public final class AppPluginManager implements PluginManager {
     @Override
     public void checkUpdates(String id, Callback callback) {
         if (PluginInfo.OPENCODE.equals(id)) {
-            new Thread(() -> {
-                String found = "";
-                try {
-                    com.a2heng.androc.market.MarketPack pack =
-                            PackInstaller.latest(ctx, "kernel-opencode");
-                    if (pack != null) {
-                        found = pack.getUpstreamVersion();
-                        if (found == null || found.isEmpty()) found = pack.getVersion();
-                    }
-                } catch (Throwable t) {
-                    post(id, false, "检查更新失败：" + t.getMessage(), callback);
-                    return;
-                }
-                if (found.isEmpty()) {
-                    post(id, false, "市场里没有 OpenCode 组件", callback);
-                    return;
-                }
-                latest.put(id, found);
-                prefs().edit().putString(K_OPENCODE_LATEST, found).apply();
-                String installed = prefs().getString("opencode_runtime_version",
-                        BuildConfig.OPENCODE_VERSION);
-                boolean newer = UpdateCheck.cmpVer(found, installed) > 0;
-                post(id, true,
-                        newer ? "OpenCode 可更新到 " + found : "OpenCode 已是最新 " + found,
-                        callback);
-            }, "plugin-check-opencode").start();
+            post(id, true, "OpenCode 随 App 一起更新", callback);
             return;
         }
         post(id, true, "Android 插件由市场更新；重新安装即可", callback);
@@ -163,14 +138,7 @@ public final class AppPluginManager implements PluginManager {
     @Override
     public void update(String id, Callback callback) {
         if (PluginInfo.OPENCODE.equals(id)) {
-            Intent i = new Intent(ctx, RuntimeUpdateService.class)
-                    .setAction(RuntimeUpdateService.ACTION_INSTALL);
-            try {
-                ctx.startForegroundService(i);
-                post(id, true, "已开始下载 OpenCode 更新，完成后会自动重启服务", callback);
-            } catch (Throwable t) {
-                post(id, false, "无法启动更新：" + t.getMessage(), callback);
-            }
+            post(id, true, "OpenCode 随 App 一起更新", callback);
             return;
         }
         install(id, callback);

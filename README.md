@@ -12,8 +12,8 @@
 
 | 发行版 | 内容 | 适用 |
 |---|---|---|
-| **thin** | 只有 UI（约 7 MB） | 连电脑/远程 opencode；需要本机时从市场装 OpenCode 组件 |
-| **bundle** | UI + musl runtime + OpenCode（约 164 MB） | 本机开箱即用 |
+| **thin** | 只有 UI（约 7 MB，蓝色图标） | 极简远程客户端：连电脑或远程 opencode，不带市场 |
+| **bundle** | UI + musl runtime + OpenCode（约 164 MB，绿色图标） | 本机开箱即用，带市场（Android 工具链） |
 
 两个包是同一个 App、同一个包名，只是内置资源不同；自更新会下载同发行版的 APK。
 
@@ -24,7 +24,7 @@
 - **会话 / 文件 / 终端**：同一个 UI 里切换远程与本机。
 - **端侧构建 Android**：装 `android` 组件后，手机里直接 `assembleDebug`，
   工具链是 JDK 21 + SDK 36 + Gradle 9.9 + 静态 aarch64 aapt2/adb。
-- **插件（市场）**：OpenCode 与 Android 两个组件，走 Androc 市场，签名索引、全量包。
+- **市场**：bundle 可安装 `android` 组件（JDK/SDK/Gradle/skills）；OpenCode 与 runtime 随 App 更新。
 
 ## 已验证（真机）
 

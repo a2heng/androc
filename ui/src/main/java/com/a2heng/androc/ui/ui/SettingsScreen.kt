@@ -125,20 +125,22 @@ fun SettingsScreen(model: AppModel) {
             },
         )
 
-        Spacer(Modifier.height(8.dp))
-        Text("本机 OpenCode", style = MaterialTheme.typography.titleSmall)
-        SettingsRow(
-            title = "本机运行",
-            subtitle = "安装组件后自动启动，地址和密码由 App 注入",
-        ) { showLocalRuntime = true }
+        if (!com.a2heng.androc.ui.data.AppBuild.thin) {
+            Spacer(Modifier.height(8.dp))
+            Text("本机 OpenCode", style = MaterialTheme.typography.titleSmall)
+            SettingsRow(
+                title = "本机运行",
+                subtitle = "内置 OpenCode 与运行时，地址和密码由 App 注入",
+            ) { showLocalRuntime = true }
 
-        Spacer(Modifier.height(8.dp))
-        Text("插件", style = MaterialTheme.typography.titleSmall)
-        SettingsRow(
-            title = "组件与插件",
-            subtitle = if (model.plugins.isEmpty()) "Skill + 工具链，独立安装/更新"
-            else "${model.plugins.size} 个插件 · Skill + 工具链",
-        ) { showPlugins = true }
+            Spacer(Modifier.height(8.dp))
+            Text("市场", style = MaterialTheme.typography.titleSmall)
+            SettingsRow(
+                title = "组件与工具链",
+                subtitle = if (model.plugins.isEmpty()) "Skill + 工具链，按需安装"
+                else "${model.plugins.size} 个组件 · Skill + 工具链",
+            ) { showPlugins = true }
+        }
 
         Spacer(Modifier.height(8.dp))
         Card(

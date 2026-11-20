@@ -32,7 +32,7 @@ musl rootfs 的组成与实测见 [`android-musl.md`](android-musl.md)。
 
 | 发行版 | 内容 | 体积 | 适用 |
 |---|---|---:|---|
-| **thin** | UI only | 约 7 MB | 连接电脑或远程 opencode；需要本机时从市场装 `kernel-opencode` |
+| **thin** | UI only | 约 7 MB | 远程客户端：连接电脑或远程 opencode，不带市场 |
 | **bundle** | UI + `assets/runtime/rootfs.tar.xz` + opencode | 约 164 MB | 本机开箱即用，不依赖网络装内核 |
 
 同源规则：

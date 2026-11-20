@@ -18,8 +18,8 @@
    新增来源时同步 `MuslRootfs.dir` 与 `docs/paths.md`。
 4. **路径用运行时值：** `$HOME`（`files/home`）、`$PWD`、`nativeLibraryDir` 在运行时
    生成；脚本里写死包名或 JDK/SDK 路径会让 App 换签名后失效。
-5. **市场只有一个来源：** `kernel-opencode` 与 `android` 两个包，
-   `index.json` + `index.json.sig`，全量下载、无增量。
+5. **市场只有一个包：** `android`（工具链 + skills），`index.json` + `index.json.sig`，
+   全量下载、无增量；OpenCode 与 runtime 随 App 更新。
 6. **用固定工具链构建/验证：**
 
    ```sh

@@ -13,8 +13,8 @@ rootfs 内运行。
 | Android | `android` 包：android-* skills + rootfs 增量（JDK 21、SDK 36、Gradle 9.9、静态 aarch64 build-tools） |
 
 `bundle` APK 内置 `assets/runtime/rootfs.tar.xz`，首次启动解压到
-`files/runtime-core/rootfs`；`thin` 从市场安装 `kernel-opencode` 到
-`files/runtime/<ver>/`。Android 包解压到 `files/packs/android/<ver>/`。
+`files/runtime-core/rootfs`；`thin` 不带 runtime，也不下载 OpenCode。
+Android 包解压到 `files/packs/android/<ver>/`。
 
 ## 工具链布局
 

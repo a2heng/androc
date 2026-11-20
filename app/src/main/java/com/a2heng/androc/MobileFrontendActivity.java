@@ -239,7 +239,7 @@ public class MobileFrontendActivity extends AppCompatActivity {
             com.a2heng.androc.ui.OpenCodeMobileHost.setServerModelWriter(
                     new AppServerModelWriter(this));
             com.a2heng.androc.ui.OpenCodeMobileHost.show(
-                    this, URL, pwd, shell,
+                    this, BuildConfig.THIN ? "" : URL, pwd, shell,
                     LocalRuntime.homeDir(this).getAbsolutePath(),
                     true, true,
                     new AppPluginManager(this));

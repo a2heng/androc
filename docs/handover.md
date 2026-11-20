@@ -15,22 +15,22 @@
 | 运行时 | proot + Alpine musl rootfs |
 | opencode | `2.3.2`，唯一来源 `opencode.version` |
 | 市场 | `a2heng/androc-market`：`index.json` + `index.json.sig`（Ed25519） |
-| 市场包 | `kernel-opencode`、`android`，全量 tar.xz，无增量 |
+| 市场包 | 只有 `android`（工具链 + skills），全量 tar.xz，无增量 |
 | 测试机 | OPPO PKB110，Android 17，arm64，4 KB 页 |
 
 | 发行版 | 内容 | 体积 | 用途 |
 |---|---|---:|---|
-| **thin** | 只有 UI | 约 7 MB | 连接远程 opencode；需要本机时从市场安装 `kernel-opencode` |
+| **thin** | 只有 UI | 约 7 MB | 远程客户端：连接电脑或远程 opencode，不带市场 |
 | **bundle** | UI + 内置 musl rootfs + opencode | 约 164 MB | 本机开箱可用，首次启动解压内置 rootfs |
 
 两个包只在内置资源上不同：`bundle` 带 `assets/runtime/rootfs.tar.xz` 和
-opencode 二进制，`thin` 两者都不带。应用内自更新按发行版下载对应的 APK。
+opencode 二进制，`thin` 两者都不带。OpenCode 与 runtime 随 App 更新。
 
 ### 组件
 
 | 组件 | 内容 | 安装位置 |
 |---|---|---|
-| `kernel-opencode` | opencode 二进制 + musl rootfs（Alpine；bash/git/python/node） | `files/runtime/<upstreamVersion>/` |
+| OpenCode | 二进制（jniLibs）+ 内置 rootfs（Alpine；bash/git/python/node） | `nativeLibraryDir`、`files/runtime-core/` |
 | `android` | `android-*` skills + musl rootfs（JDK 21、SDK 36、Gradle 9.9、静态 aarch64 aapt2/adb） | `files/packs/android/<version>/` |
 
 rootfs 选择顺序（`MuslRootfs.dir`）：
@@ -41,14 +41,12 @@ files/runtime/<ver>/rootfs          # 市场安装的 OpenCode 组件
 → files/runtime-core/rootfs         # bundle 首次启动解压
 ```
 
-### 插件层的两个条目
+### 组件
 
-`AppPluginManager` 只列两个：
-
-| id | 名称 | 安装/更新来源 |
+| id | 名称 | 来源 |
 |---|---|---|
-| `opencode` | OpenCode 内核 | `kernel-opencode`；bundle 内置 |
-| `android` | Android 开发 | `android` 包 |
+| `opencode` | OpenCode 内核 | bundle 内置，随 App 更新 |
+| `android` | Android 开发 | 市场 `android` 包 |
 
 ---
 
@@ -82,7 +80,7 @@ kernel/ tools/ plugin-sdk/ runtime-plugin/   预留模块，不参与当前启�
 | `ui/.../SettingsScreen.kt` | 设置、插件、模型、连接 |
 | `ui/.../AppModel.kt` | 连接、会话、模型、路径补全 |
 | `scripts/fetch-opencode.py` | 按 `opencode.version` 拉 opencode 到 jniLibs |
-| `scripts/fetch-runtime.py` | 从市场 `kernel-opencode` 提取 rootfs 给 bundle |
+| `scripts/fetch-runtime.py` | 下载 runtime-rootfs 构建输入给 bundle |
 
 ---
 
@@ -90,14 +88,8 @@ kernel/ tools/ plugin-sdk/ runtime-plugin/   预留模块，不参与当前启�
 
 1. **只进 UI。** `MobileFrontendActivity` 是 launcher；启动时挂载 Compose，
    不启动 opencode、不启动前台服务。
-2. **用户点“本机”。** `LocalRuntimeDialog` 读市场索引：
-   - 未安装：显示“安装组件”，走 `MarketClient.installOpencode`；
-   - 已安装：显示“启动并登录”。
-3. **安装 kernel-opencode。** 索引验签 → 下载 `.tar.xz` 到 `files/market` →
-   校验 `archive` 的 size/sha256 → 解压成 tar → 校验 `installed` 的
-   size/sha256（未压缩 tar）→ 解到 `files/runtime/<upstreamVersion>.tmp` →
-   改名为 `files/runtime/<upstreamVersion>/`。
-4. **启动本机 server。**
+2. **用户点“本机”。** `LocalRuntimeDialog`（只有 bundle 有）显示“启动并登录”。
+3. **启动本机 server。**
    - `bundle`：`LocalServerService` 先 `RuntimeAssets.ensure()`，把
      `assets/runtime/rootfs.tar.xz` 解到 `files/runtime-core/rootfs`；
    - `LocalRuntime.start(port)` 用 `MuslRootfs.dir` 选 rootfs；

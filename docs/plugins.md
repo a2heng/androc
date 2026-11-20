@@ -6,7 +6,7 @@ Androc 用组件承载本机能力：UI 只负责连接、会话和展示，Open
 
 | 发行版 | APK 内容 | 本机能力来源 |
 |---|---|---|
-| thin | 只有 UI | 从市场安装 OpenCode 与 android 组件 |
+| thin | 只有 UI | 无市场，只连远程 |
 | bundle | UI + OpenCode + musl rootfs | 开箱可用；市场有更高版本时仍可更新 |
 
 两个发行版共用同一套代码、路径和配置目录。
@@ -31,14 +31,14 @@ rootfs 里的 Android 工具通过 `/opt/androc/env.sh` 加入 `PATH`。
 
 | 组件 | 已安装 | 版本 | 体积 |
 |---|---|---|---|
-| `opencode` | proot 运行库齐全（`LocalRuntime.prootAvailable`）；thin 还需市场安装的二进制 | `BuildConfig.OPENCODE_VERSION`，市场版本更高时取市场版本 | 当前 opencode 二进制 |
+| `opencode` | bundle 内置二进制 + runtime | `BuildConfig.OPENCODE_VERSION`（随 App） | 当前 opencode 二进制 |
 | `android` | rootfs 目录存在，且 `$HOME/.config/opencode/skills` 至少有一个对应 skill | rootfs 所在版本目录名 | rootfs + skills 合计 |
 
 ## 4. 安装与更新
 
 | 动作 | `opencode` | `android` |
 |---|---|---|
-| 安装 | thin：登录页 → 本机 → 安装组件 | 设置 → 组件与插件 → 安装 |
+| 安装 | bundle：设置 → 市场 → 安装 `android` | 设置 → 组件与工具链 → 安装 |
 | 更新 | 检查更新 → 更新；`RuntimeUpdateService` 从市场下载 | 再次从市场安装同一包 |
 | 卸载 | —（随 APK 或市场更新） | 删除 `files/packs/android` 与两个配置目录里的 skills |
 

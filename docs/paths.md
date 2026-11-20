@@ -13,7 +13,7 @@ Androc 只有一个运行时：**proot + Alpine musl rootfs**。所有目录都�
 
 | 发行版 | APK 内容 | release 体积 | 首次启动 |
 |---|---|---:|---|
-| `thin` | UI + `nativeLibraryDir` 里的 proot / loader / musl loader | 约 7 MB | 需要市场包 `kernel-opencode` 提供 rootfs 与 `opencode` |
+| `thin` | UI + `nativeLibraryDir` 里的 proot / loader / musl loader | 约 7 MB | 只连远程；不带 runtime、不带市场 |
 | `bundle` | thin 的全部 + `assets/runtime/rootfs.tar.xz` + `libopencode2_bin.so` | 约 164 MB | 装完即可离线起本机 OpenCode |
 
 | 项 | 值 |
