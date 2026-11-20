@@ -68,7 +68,6 @@ fun SettingsScreen(model: AppModel) {
     var showAgentPicker by remember { mutableStateOf(false) }
     var showServers by remember { mutableStateOf(false) }
     var showProviderConnect by remember { mutableStateOf(false) }
-    var showLocalRuntime by remember { mutableStateOf(false) }
     var showPlugins by remember { mutableStateOf(false) }
     var removeId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -126,13 +125,6 @@ fun SettingsScreen(model: AppModel) {
         )
 
         if (!com.a2heng.androc.ui.data.AppBuild.thin) {
-            Spacer(Modifier.height(8.dp))
-            CouiSectionTitle("本机 OpenCode")
-            SettingsRow(
-                title = "本机运行",
-                subtitle = "内置 OpenCode 与运行时，地址和密码由 App 注入",
-            ) { showLocalRuntime = true }
-
             Spacer(Modifier.height(8.dp))
             CouiSectionTitle("市场")
             SettingsRow(
@@ -338,9 +330,6 @@ fun SettingsScreen(model: AppModel) {
         }
         if (showProviderConnect) {
             ProviderConnectDialog(model) { showProviderConnect = false }
-        }
-        if (showLocalRuntime) {
-            LocalRuntimeDialog(model) { showLocalRuntime = false }
         }
         if (showPlugins) {
             PluginsDialog(model, onDismiss = { showPlugins = false }) { removeId = it }
