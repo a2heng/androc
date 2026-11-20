@@ -1285,8 +1285,14 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         lastError = null
         // 有缓存就先显示，再静默刷新最新一页（只拉最新 40 条）
         loadMessages(silent = cached != null)
-        loadForms(session.id)
-        loadInbox()
+        // 让首帧先渲染（消息壳），再拉表单和队列，避免一次挤在同一帧。
+        viewModelScope.launch {
+            delay(120)
+            if (current?.id == session.id) {
+                loadForms(session.id)
+                loadInbox()
+            }
+        }
     }
 
     fun closeSession() {
@@ -2192,7 +2198,6 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             requested = null
         }
         var target = requested ?: fsRootOverride?.let(::normPath)
-        android.util.Log.d("AndrocFs", "loadDir path=$path requested=$requested target=$target base=${fsBase()} home=$homeDir")
         val seq = ++fsLoadSeq
         fsLoading = true
         fsError = null
@@ -2205,7 +2210,6 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 current?.let { fsDirBySession[it.id] = fsDir }
                 fsEntries = entries.sortedWith(compareByDescending<FsEntry> { it.isDir }.thenBy { it.name.lowercase() })
             } catch (e: Exception) {
-                android.util.Log.w("AndrocFs", "listDir failed target=$target err=${e.message}")
                 if (seq == fsLoadSeq) {
                     // 跨系统/失效路径：404 时回到服务端根目录，用户不用先点胶囊。
                     if (e.message?.contains("404") == true) {

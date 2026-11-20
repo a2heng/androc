@@ -157,17 +157,13 @@ private fun FsListPane(model: AppModel) {
         }
 
         // 快速入口：第一个永远是 home，权限/路径迷路时可以一键回来。
-        val quickDirs = remember(model.homeDir, model.current?.id, model.sessions, model.fsDir) {
-            buildList {
-                if (model.homeDir.isNotBlank()) add("home" to model.homeDir)
-                model.expandSessionDir(model.current?.directory)?.let { add("当前会话" to it) }
-                model.sessions.forEach { s ->
-                    val dir = model.expandSessionDir(s.directory) ?: return@forEach
-                    if (none { it.second == dir }) {
-                        add(dir.trimEnd('/').substringAfterLast('/').ifBlank { dir } to dir)
-                    }
-                }
-            }.distinctBy { it.second }.take(10)
+        // 只放根入口：Windows 放盘符根，POSIX 放 home。
+        // 不再依赖 sessions，避免会话轮询把整个文件页重组一遍。
+        val quickDirs = remember(model.homeDir) {
+            val home = model.homeDir.trimEnd('/')
+            val drive = Regex("^[A-Za-z]:").find(home)?.value
+            if (drive != null) listOf(drive to "$drive/") else
+                if (home.isNotBlank()) listOf("home" to home) else emptyList()
         }
         androidx.compose.foundation.layout.FlowRow(
             Modifier
