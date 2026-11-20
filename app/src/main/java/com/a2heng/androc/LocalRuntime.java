@@ -454,9 +454,20 @@ public final class LocalRuntime {
         env.put("COLORTERM", "truecolor");
         List<String> cmd = prootCmd(app, home, tmp, etc, rootfs, nd,
                 new File(nd, "libopencode2_bin.so"), proot, env, home.getAbsolutePath());
-        cmd.add("/bin/bash");
-        cmd.add("-i");
-        cmd.add("-l");
+        // 用 script 分配真 PTY，bash 才能正确处理提示符、行编辑和折行。
+        File script = new File(rootfs, "usr/bin/script");
+        if (script.isFile()) {
+            cmd.add(script.getAbsolutePath());
+            cmd.add("-q");
+            cmd.add("-f");
+            cmd.add("-c");
+            cmd.add("exec /bin/bash -l -i");
+            cmd.add("/dev/null");
+        } else {
+            cmd.add("/bin/bash");
+            cmd.add("-i");
+            cmd.add("-l");
+        }
         return startShell(cmd, home, env);
     }
 

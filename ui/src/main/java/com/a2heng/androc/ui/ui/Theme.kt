@@ -204,11 +204,14 @@ fun OcTheme(
         else -> systemDark
     }
     val context = LocalContext.current
-    val colors: ColorScheme = when {
-        themeMode == "dynamic" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> DarkAccents[themeMode]?.let(::darkPreset) ?: MonoDark
-        else -> LightAccents[themeMode]?.let(::lightPreset) ?: MonoLight
+    // 主题色只随模式/预设变化重算，避免每次重组都新建 ColorScheme。
+    val colors: ColorScheme = androidx.compose.runtime.remember(dark, themeMode) {
+        when {
+            themeMode == "dynamic" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            dark -> DarkAccents[themeMode]?.let(::darkPreset) ?: MonoDark
+            else -> LightAccents[themeMode]?.let(::lightPreset) ?: MonoLight
+        }
     }
     val view = LocalView.current
     if (!view.isInEditMode) {

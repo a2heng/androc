@@ -732,9 +732,10 @@ private fun AppearanceSwatch(
                 .background(brush)
                 .border(
                     if (selected) 2.dp else 1.dp,
-                    if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
                     CircleShape,
                 )
+                .padding(if (selected) 3.dp else 0.dp)
                 .clickableNoRipple(onClick),
         )
         Spacer(Modifier.height(4.dp))
@@ -755,7 +756,7 @@ private fun ThemeSwatch(
     onClick: () -> Unit,
 ) {
     val dark = MaterialTheme.colorScheme.background.luminanceIsDark()
-    val brush = when (key) {
+    val brush = remember(key, dark) { when (key) {
         "dynamic" -> Brush.sweepGradient(
             listOf(
                 Color(0xFF7AA2F7),
@@ -767,7 +768,7 @@ private fun ThemeSwatch(
         )
         "mono" -> Brush.linearGradient(listOf(Color.White, Color(0xFF151B23)))
         else -> Brush.linearGradient(listOf(themeAccentColor(key, dark), themeAccentColor(key, dark)))
-    }
+    } }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(50.dp),
@@ -779,9 +780,10 @@ private fun ThemeSwatch(
                 .background(brush)
                 .border(
                     if (selected) 2.dp else 1.dp,
-                    if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
                     CircleShape,
                 )
+                .padding(if (selected) 3.dp else 0.dp)
                 .clickableNoRipple(onClick),
         )
         Spacer(Modifier.height(4.dp))

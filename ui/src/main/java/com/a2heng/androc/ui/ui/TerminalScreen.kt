@@ -86,12 +86,8 @@ fun TerminalScreen(model: AppModel) {
     } else {
         // Ojo: antes había un lambda dentro de otro lambda y el toque no hacía
         // nada (el warning "Lambda expression is never invoked").
-        val openLocal: (() -> Unit)? = if (LocalShellHost.available) {
-            { model.openLocalTerminal() }
-        } else {
-            null
-        }
-        PtyList(model, onOpenLocal = openLocal)
+        // 统一走服务端 PTY（本机服务也是 PTY）：不再提供单独的“本机终端”入口。
+        PtyList(model, onOpenLocal = null)
     }
 }
 
@@ -140,7 +136,7 @@ private fun PtyList(model: AppModel, onOpenLocal: (() -> Unit)? = null) {
                     )
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("本机 Termux", style = MaterialTheme.typography.bodyMedium)
+                        Text("本机终端", style = MaterialTheme.typography.bodyMedium)
                         Text(
                             "内置 proot + bash，直接在这台手机上跑",
                             style = MaterialTheme.typography.labelSmall,
@@ -239,7 +235,7 @@ private fun TerminalView(model: AppModel, pty: PtyInfo) {
 }
 
 /**
- * 终端外壳：服务端 PTY 和本机 Termux 共用。
+ * 终端外壳：服务端 PTY 和本机终端共用。
  *
  * 占位区固定（竖屏底部 46% 高 / 横屏右侧 37% 宽），软键盘不改变它；
  * 按键区始终在占位区顶部。旋转屏幕时 emulator/进程由 ViewModel 持有，

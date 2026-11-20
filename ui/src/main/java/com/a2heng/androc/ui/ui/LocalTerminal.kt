@@ -1,28 +1,43 @@
 package com.a2heng.androc.ui.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.a2heng.androc.ui.data.AppModel
 
 /**
- * 本机 Termux 终端（Androc 内置）。
- *
- * 进程、PTY 输出和 libvterm emulator 都在 [AppModel] 里，所以旋转屏幕、
- * 切到别的页签再回来都不会丢；这里只把共用的 [TerminalPane] 绑到本机会话。
- * 按键区、字号、固定键盘占位与服务端 PTY 完全一致。
+ * 本机终端（proot + bash）。
  */
 @Composable
 fun LocalTerminalView(model: AppModel) {
     LaunchedEffect(Unit) { model.ensureLocalTerminal() }
-    TerminalPane(
-        emulator = model.localTerminalEmulator,
-        fontSize = model.ptyFontSize,
-        onFontSize = model::updatePtyFontSize,
-        onInput = model::sendLocalTerminal,
-        placeholder = when {
-            model.localTerminalStarting -> "正在打开 Termux…"
-            model.localTerminalError != null -> model.localTerminalError ?: ""
-            else -> "正在连接 shell…"
-        },
-    )
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CouiIconButton(CouiIcon.Back) { model.closeLocalTerminalView() }
+            Spacer(Modifier.padding(horizontal = 6.dp))
+            CouiText("本机终端", style = CouiTheme.type.label)
+        }
+        TerminalPane(
+            emulator = model.localTerminalEmulator,
+            fontSize = model.ptyFontSize,
+            onFontSize = model::updatePtyFontSize,
+            onInput = model::sendLocalTerminal,
+            placeholder = when {
+                model.localTerminalStarting -> "正在打开终端…"
+                model.localTerminalError != null -> model.localTerminalError ?: ""
+                else -> "正在连接 shell…"
+            },
+        )
+    }
 }

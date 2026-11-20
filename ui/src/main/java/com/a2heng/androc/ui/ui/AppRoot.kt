@@ -190,6 +190,10 @@ fun MainScreen(model: AppModel, wide: Boolean = false) {
                                 if (index == 0 && tab == 0 && model.current != null) {
                                     model.closeSession()
                                     model.refreshSessions()
+                                } else if (index == 2 && tab == 2) {
+                                    // 终端页再次点击：从 shell 回到会话列表
+                                    if (model.ptyActive != null) model.detachPty()
+                                    if (model.localTerminalOpen) model.closeLocalTerminalView()
                                 } else {
                                     tab = index
                                 }
