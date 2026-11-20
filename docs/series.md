@@ -203,6 +203,6 @@ files/
 | App | `0.6.2` | 一个 `versionCode`，thin/bundle 共用 |
 | opencode | `2.3.2` | 上游稳定版，写在 `opencode.version` |
 | `kernel-opencode` | `2.3.2-2` | `upstreamVersion` + 包修订号 |
-| `android` | `2-2` | 工具链批次 + 包修订号 |
+| `android` | `2-3` | 工具链批次 + 包修订号 |
 
 构建与发布命令见 [`commands.md`](commands.md)，发布说明只保留当前版本。

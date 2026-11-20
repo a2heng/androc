@@ -41,12 +41,12 @@ https://raw.githubusercontent.com/a2heng/androc-market/main/index.json
       "name": "OpenCode",
       "category": "runtime",
       "kind": "tar",
-      "version": "2.3.2-1",
+      "version": "2.3.2-2",
       "upstreamVersion": "2.3.2",
       "abi": "arm64-v8a",
       "installed": { "size": 0, "sha256": "…" },
       "archive": {
-        "url": "https://…/kernel-opencode-2.3.2-1.tar.xz",
+        "url": "https://…/kernel-opencode-2.3.2-2.tar.xz",
         "size": 0,
         "sha256": "…"
       }
