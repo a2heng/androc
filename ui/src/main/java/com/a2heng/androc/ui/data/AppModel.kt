@@ -2075,7 +2075,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     // =========================================================================
 
     fun overrideFsRoot(path: String?) {
-        val next = normPath(path.orEmpty()).trimEnd('/').takeIf { it.isNotBlank() }
+        // 胶囊里是相对名字（home、androc…）时补到服务端 HOME，不能当成绝对根。
+        val raw = normPath(path.orEmpty()).trimEnd('/')
+        val base = homeDir.trimEnd('/').takeIf { it.isNotBlank() }
+        val resolved = if (raw.isBlank() || isAbsolutePath(raw) || base.isNullOrBlank()) raw
+        else joinPath(base, raw)
+        val next = resolved.trimEnd('/').takeIf { it.isNotBlank() }
         if (next != fsRootOverride) {
             fsRootOverride = next
             fsRoot = fsBase()
@@ -2155,7 +2160,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** "/" del explorador de archivos: override del host o la raiz real. */
     fun fsBase(): String =
-        fsRootOverride?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: "/"
+        fsRootOverride?.trimEnd('/')?.takeIf { it.isNotBlank() }
+            ?: homeDir.trimEnd('/').takeIf { it.isNotBlank() }
+            ?: "/"
 
     /** "~" del explorador: HOME real del servidor. */
     fun fsHome(): String = homePath()
@@ -2167,16 +2174,25 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     fun loadDir(path: String?) {
         val c = client ?: return
-        var requested = absoluteFsPath(path)
-        // 路径必须和当前服务端同一类根：Windows 盘符 vs POSIX "/"。
-        // 否则切换服务器后会把 Android 的 /data/... 发给 Windows，得到 404。
-        val base = fsBase()
-        if (requested != null && base.isNotBlank()) {
-            val baseWin = Regex("^[A-Za-z]:").containsMatchIn(base)
-            val pathWin = Regex("^[A-Za-z]:").containsMatchIn(requested)
-            if (baseWin != pathWin) requested = null
+        // 远程服务器上，本机 App 的私有路径/根一律无效。
+        if (!isLocalServer()) {
+            if (fsRootOverride?.startsWith("/data/data/") == true) fsRootOverride = null
+            if (homeDir.startsWith("/data/data/")) homeDir = ""
         }
-        val target = requested ?: fsRootOverride?.let(::normPath)
+        var requested = absoluteFsPath(path)
+        // 用服务端 HOME 判断路径风格，HOME 未知时不拦截。
+        val home = homeDir
+        if (requested != null && home.isNotBlank()) {
+            val homeWin = Regex("^[A-Za-z]:").containsMatchIn(home)
+            val pathWin = Regex("^[A-Za-z]:").containsMatchIn(requested)
+            if (homeWin != pathWin) requested = null
+        }
+        // 本地 App 的私有路径不能发给远程服务端。
+        if (!isLocalServer() && requested != null && requested.startsWith("/data/data/")) {
+            requested = null
+        }
+        var target = requested ?: fsRootOverride?.let(::normPath)
+        android.util.Log.d("AndrocFs", "loadDir path=$path requested=$requested target=$target base=${fsBase()} home=$homeDir")
         val seq = ++fsLoadSeq
         fsLoading = true
         fsError = null
@@ -2189,11 +2205,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 current?.let { fsDirBySession[it.id] = fsDir }
                 fsEntries = entries.sortedWith(compareByDescending<FsEntry> { it.isDir }.thenBy { it.name.lowercase() })
             } catch (e: Exception) {
+                android.util.Log.w("AndrocFs", "listDir failed target=$target err=${e.message}")
                 if (seq == fsLoadSeq) {
                     // 跨系统/失效路径：404 时回到服务端根目录，用户不用先点胶囊。
-                    if (requested != null && e.message?.contains("404") == true) {
-                        loadDir(null)
-                        return@launch
+                    if (e.message?.contains("404") == true) {
+                        // 失效的 root/HOME：清掉再按服务端根目录重试一次。
+                        if (target != null) {
+                            fsRootOverride = null
+                            homeDir = ""
+                            loadDir(null)
+                            return@launch
+                        }
                     }
                     fsError = e.message
                     fsEntries = emptyList()

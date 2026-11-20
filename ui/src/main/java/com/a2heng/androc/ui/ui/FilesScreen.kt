@@ -169,12 +169,12 @@ private fun FsListPane(model: AppModel) {
                 }
             }.distinctBy { it.second }.take(10)
         }
-        Row(
+        androidx.compose.foundation.layout.FlowRow(
             Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 8.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             quickDirs.forEach { (label, dir) ->
                 FsChip(
@@ -290,19 +290,15 @@ private fun parentDir(current: String, base: String): String? {
         cur = cur.trimEnd('/')
     }
     // 盘符根（D:/）才回到 HOME；POSIX 的 "/" 就是根，不再往上跳。
-    if (isRootPath(cur)) {
-        return if (b.isNotEmpty() && b != cur && sameRoot(b, cur) == false) b else null
-    }
-    if (cur == b) return null
-    // Windows 上可能切到别的盘；不同根时允许向上，不按 HOME 限制。
-    if (b.isNotEmpty() && !isUnder(b, cur) && sameRoot(b, cur) != true) return null
+    // 允许一直向上到文件系统根；HOME 只是默认起点，不是边界。
+    if (isRootPath(cur)) return null
     val rawParent = cur.substringBeforeLast('/', "")
     val parent = when {
         rawParent.isEmpty() -> "/"
         Regex("^[A-Za-z]:$").matches(rawParent) -> "$rawParent/"
         else -> rawParent
     }
-    return if (b.isNotEmpty() && b != "/" && !isUnder(b, parent)) b else parent
+    return parent
 }
 
 /** Ruta visible: relativa a HOME; la propia raiz se muestra como "~". */
