@@ -132,7 +132,7 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void install(String id, Callback callback) {
-        if (PluginInfo.ANDROID.equals(id) || "runtime-core".equals(id)) {
+        if (PluginInfo.ANDROID.equals(id)) {
             new Thread(() -> {
                 try {
                     File pack = PackInstaller.install(ctx, id);
@@ -141,9 +141,7 @@ public final class AppPluginManager implements PluginManager {
                             PackInstaller.copySkills(pack, config);
                         }
                     }
-                    boolean ok = PluginInfo.ANDROID.equals(id)
-                            ? anySkill(LocalRuntime.homeDir(ctx), skillsFor(id))
-                            : new File(pack, "rootfs").isDirectory();
+                    boolean ok = anySkill(LocalRuntime.homeDir(ctx), skillsFor(id));
                     post(id, ok, ok ? id + " 已安装" : "安装不完整，请重试", callback);
                 } catch (Throwable t) {
                     post(id, false, "安装失败：" + t.getMessage(), callback);
@@ -176,7 +174,7 @@ public final class AppPluginManager implements PluginManager {
 
     @Override
     public void uninstall(String id, Callback callback) {
-        if (PluginInfo.ANDROID.equals(id) || "runtime-core".equals(id)) {
+        if (PluginInfo.ANDROID.equals(id)) {
             new Thread(() -> {
                 deleteTree(new File(ctx.getFilesDir(), "packs/" + id));
                 if (PluginInfo.ANDROID.equals(id)) {

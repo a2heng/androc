@@ -306,8 +306,8 @@ python scripts/fetch-opencode.py
 # 1) opencode 二进制（仓库不提交）
 python scripts/fetch-opencode.py
 
-# 2) bundle 内置的 musl runtime（38 MB）
-python scripts/fetch-runtime-core.py
+# 2) bundle 内置的 musl runtime（从 OC 包里取 rootfs，约 38 MB）
+python scripts/fetch-runtime.py
 
 # 3) 两个发行版
 ./gradlew :app:assembleThinDebug      # UI only

@@ -84,8 +84,8 @@ jobs:
       - name: Fetch opencode runtime
         run: python3 scripts/fetch-opencode.py
 
-      - name: Fetch bundled runtime-core
-        run: python3 scripts/fetch-runtime-core.py
+      - name: Fetch bundled runtime (from the OC pack)
+        run: python3 scripts/fetch-runtime.py
 
 
 

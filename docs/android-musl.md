@@ -10,11 +10,12 @@
 - Android 插件 = `android-*` skills + musl rootfs（JDK / SDK / Gradle / aapt2 /
   zipalign / apksigner / adb）。
 - 通用运行时、语言插件、写作插件也都用同一套 musl 根。
-- `runtime-core` 是 musl rootfs；不再有 termux-bionic rootfs。
+- musl rootfs 随 `kernel-opencode` 包发布（二进制 + rootfs），市场只有
+  `android` 和 `kernel-opencode` 两个包。
 
 ## 为什么
 
-- 去掉 ~1.1 GB 的 Termux 前缀和重复的 glibc/bionic 库。
+- 省掉 ~1.1 GB 的旧前缀和重复的 glibc/bionic 库。
 - opencode 本身就是 musl，agent、shell、构建工具统一到一个 libc / loader。
 - proot 只挂一套路径，启动更快，少一类库路径不匹配的问题。
 - 包管理只剩 apk/apk-tools，skills 不用区分 `$PREFIX` 和 `/usr`。
