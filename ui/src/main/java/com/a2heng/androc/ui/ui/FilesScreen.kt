@@ -237,7 +237,7 @@ private fun FsListPane(model: AppModel) {
                     OutlinedTextField(
                         value = folderName,
                         onValueChange = { folderName = it },
-                        placeholder = { Text("文件夹名，例如 PureVox") },
+                        placeholder = { Text("新文件夹名称") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -306,17 +306,14 @@ private fun parentDir(current: String, base: String): String? {
     if (isRootPath(cur)) {
         return if (Regex("^[A-Za-z]:$").matches(cur)) com.a2heng.androc.ui.data.AppModel.DRIVES_PATH else null
     }
-    // POSIX 的顶是 home：不允许再往上。
-    if (b.isNotEmpty() && cur == b) return null
+
     val rawParent = cur.substringBeforeLast('/', "")
     val parent = when {
         rawParent.isEmpty() -> "/"
         Regex("^[A-Za-z]:$").matches(rawParent) -> "$rawParent/"
         else -> rawParent
     }
-    // POSIX 不允许越过 home；Windows 允许（盘符根会转到此电脑）。
-    if (b.isNotEmpty() && Regex("^[A-Za-z]:").containsMatchIn(b).not() &&
-        !isUnder(b, parent)) return b
+    // Linux/Android 的顶是 "/"；Windows 盘符根会在上面转成「此电脑」。
     return parent
 }
 
