@@ -1,5 +1,6 @@
 package com.a2heng.androc.ui.ui
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -532,6 +533,39 @@ fun CouiChip(
             text,
             style = CouiTheme.type.label,
             color = if (selected) CouiTheme.colors.onAccent else CouiTheme.colors.onSurface,
+        )
+    }
+}
+
+/** COUI 的细进度条（不确定态，用于首次启动/解压）。 */
+@Composable
+fun CouiProgressBar(modifier: Modifier = Modifier) {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "coui-progress")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(1100),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart,
+        ),
+        label = "coui-progress-phase",
+    )
+    val track = CouiTheme.colors.surfaceVariant
+    val accent = CouiTheme.colors.accent
+    androidx.compose.foundation.Canvas(
+        modifier
+            .fillMaxWidth()
+            .height(3.dp)
+            .clip(RoundedCornerShape(2.dp)),
+    ) {
+        drawRect(track)
+        val w = size.width * 0.36f
+        val x = (size.width + w) * phase - w
+        drawRoundRect(
+            color = accent,
+            topLeft = androidx.compose.ui.geometry.Offset(x, 0f),
+            size = androidx.compose.ui.geometry.Size(w, size.height),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
         )
     }
 }

@@ -91,7 +91,11 @@ fun ConnectScreen(model: AppModel) {
                                 color = colors.onSurfaceVariant,
                             )
                         }
-                        CouiTextButton("本机") { model.startLocalNow() }
+                        if (model.connecting) {
+                            CouiSpinner(size = 16, color = colors.accent)
+                        } else {
+                            CouiTextButton("本机") { model.startLocalNow() }
+                        }
                     }
                 }
                 Spacer(Modifier.height(20.dp))
