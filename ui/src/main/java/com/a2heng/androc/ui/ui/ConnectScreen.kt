@@ -41,7 +41,6 @@ fun ConnectScreen(model: AppModel) {
     var password by rememberSaveable { mutableStateOf(model.password) }
     var showPassword by remember { mutableStateOf(false) }
     var showSavedDialog by remember { mutableStateOf(false) }
-    var showLocalRuntime by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     val url = composeServerUrl(scheme, host, port)
     val colors = CouiTheme.colors
@@ -92,7 +91,7 @@ fun ConnectScreen(model: AppModel) {
                                 color = colors.onSurfaceVariant,
                             )
                         }
-                        CouiTextButton("本机") { showLocalRuntime = true }
+                        CouiTextButton("本机") { model.startLocalNow() }
                     }
                 }
                 Spacer(Modifier.height(20.dp))
@@ -268,9 +267,6 @@ fun ConnectScreen(model: AppModel) {
                 }
             }
         }
-    }
-    if (showLocalRuntime) {
-        LocalRuntimeDialog(model) { showLocalRuntime = false }
     }
 }
 

@@ -811,6 +811,23 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * installed, start it first and connect when healthy; otherwise fall back
      * to a plain HTTP connect (and show the normal error).
      */
+    /** 本机模式：直接启动并连接，不弹安装/校验对话框。 */
+    fun startLocalNow() {
+        val launcher = LocalRuntimeHost.launcher ?: run {
+            connectionError = "当前版本没有本机模式"
+            return
+        }
+        connecting = true
+        connectionError = null
+        launcher.start(
+            { localUrl, localPwd -> connect(localUrl, localPwd, remember = true) },
+            { message ->
+                connecting = false
+                connectionError = message
+            },
+        )
+    }
+
     fun connectSmart(url: String, pwd: String, remember: Boolean = true) {
         if (isLocalUrl(url)) {
             val launcher = LocalRuntimeHost.launcher
