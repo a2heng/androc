@@ -23,6 +23,8 @@ final class RuntimeAssets {
     private static final String TAG = "OpenCodeRuntimeAssets";
     private static final String ASSET = "runtime/rootfs.tar.xz";
     private static final String MARKER = ".installed-v2";
+    /** 同一进程里可能同时有多个启动请求；解压必须串行，否则会互相删掉半成品。 */
+    private static final Object LOCK = new Object();
 
     private RuntimeAssets() {
     }
@@ -55,24 +57,31 @@ final class RuntimeAssets {
 
     /** 解压内置 runtime；已解压时直接返回。 */
     static File ensure(Context ctx) throws IOException {
-        File existing = rootfs(ctx);
-        if (existing != null) return existing;
-        File root = new File(ctx.getFilesDir(), "runtime-core");
-        deleteTree(root);
-        if (!root.mkdirs() && !root.isDirectory()) throw new IOException("cannot create " + root);
-        Log.i(TAG, "extracting bundled runtime...");
-        // The tar already starts with `rootfs/`, so extract into
-        // files/runtime-core and the final path is runtime-core/rootfs.
-        try (TarArchiveInputStream tar = new TarArchiveInputStream(
-                new XZInputStream(new BufferedInputStream(
-                        ctx.getAssets().open(ASSET), 1 << 16)))) {
-            extract(tar, root);
+        synchronized (LOCK) {
+            File existing = rootfs(ctx);
+            if (existing != null) return existing;
+            File root = new File(ctx.getFilesDir(), "runtime-core");
+            // 上一次解压可能被系统杀掉，留下半成品和断掉的 symlink；先清干净再从头解。
+            deleteTree(root);
+            if (!root.mkdirs() && !root.isDirectory()) throw new IOException("cannot create " + root);
+            Log.i(TAG, "extracting bundled runtime...");
+            // The tar already starts with `rootfs/`, so extract into
+            // files/runtime-core and the final path is runtime-core/rootfs.
+            try (TarArchiveInputStream tar = new TarArchiveInputStream(
+                    new XZInputStream(new BufferedInputStream(
+                            ctx.getAssets().open(ASSET), 1 << 16)))) {
+                extract(tar, root);
+            } catch (IOException | RuntimeException e) {
+                // 不留下半个 rootfs，下一次启动可以重新解压。
+                deleteTree(root);
+                throw e;
+            }
+            File marker = new File(root, MARKER);
+            //noinspection ResultOfMethodCallIgnored
+            marker.createNewFile();
+            Log.i(TAG, "bundled runtime ready: " + new File(root, "rootfs"));
+            return new File(root, "rootfs");
         }
-        File marker = new File(root, MARKER);
-        //noinspection ResultOfMethodCallIgnored
-        marker.createNewFile();
-        Log.i(TAG, "bundled runtime ready: " + new File(root, "rootfs"));
-        return new File(root, "rootfs");
     }
 
     private static void extract(TarArchiveInputStream tar, File dest) throws IOException {
@@ -91,12 +100,14 @@ final class RuntimeAssets {
             } else if (entry.isSymbolicLink()) {
                 File parent = out.getParentFile();
                 if (parent != null) parent.mkdirs();
-                if (out.exists()) out.delete();
+                // File.exists() 会跟随断链返回 false，断链本身还在；必须按路径删。
+                java.nio.file.Files.deleteIfExists(out.toPath());
                 java.nio.file.Files.createSymbolicLink(
                         out.toPath(), java.nio.file.Paths.get(entry.getLinkName()));
             } else {
                 File parent = out.getParentFile();
                 if (parent != null) parent.mkdirs();
+                java.nio.file.Files.deleteIfExists(out.toPath());
                 try (BufferedOutputStream os = new BufferedOutputStream(
                         new FileOutputStream(out), 1 << 16)) {
                     byte[] buf = new byte[1 << 16];
@@ -109,9 +120,24 @@ final class RuntimeAssets {
     }
 
     private static boolean deleteTree(File file) {
-        if (file == null || !file.exists()) return true;
-        File[] kids = file.listFiles();
-        if (kids != null) for (File kid : kids) deleteTree(kid);
-        return file.delete() || !file.exists();
+        if (file == null) return true;
+        java.nio.file.Path path = file.toPath();
+        try {
+            // 断掉的 symlink 用 File.exists() 看不见，必须用 NOFOLLOW_LINKS。
+            if (java.nio.file.Files.isSymbolicLink(path) ||
+                    !java.nio.file.Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                java.nio.file.Files.deleteIfExists(path);
+                return !java.nio.file.Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            }
+            try (java.nio.file.DirectoryStream<java.nio.file.Path> kids =
+                         java.nio.file.Files.newDirectoryStream(path)) {
+                for (java.nio.file.Path kid : kids) deleteTree(kid.toFile());
+            }
+            java.nio.file.Files.deleteIfExists(path);
+            return !java.nio.file.Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        } catch (IOException e) {
+            Log.w(TAG, "cannot delete " + path + ": " + e.getMessage());
+            return false;
+        }
     }
 }
