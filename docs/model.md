@@ -45,7 +45,7 @@
 
 本机兜底：服务端没有开放 `experimental/fs.write` 时，直接写 `$HOME/.config/opencode/opencode.json` 和 `$HOME/.config/opencode-android/opencode.json`，再重启本机服务。
 
-### 3.1 OpenCode 2.3.2 的 API 边界
+### 3.1 OpenCode 2.4.0 的 API 边界
 
 | 能力 | 接口 | 说明 |
 |---|---|---|
@@ -82,6 +82,21 @@ UI 按 `methods[].type` 渲染：
 | 已连接 | 显示“已连接”，连接按钮隐藏 |
 
 连接成功后刷新 `/api/integration`、`/api/model`、`/api/model/default`，新模型立即进入选择列表。
+
+## 4.1 OpenCode Go 额度
+
+只有当前模型来自 `opencode-go` 时才显示额度；其它模型不占位置。
+
+| 数据 | 接口 |
+|---|---|
+| 5 小时 / 本周 / 本月百分比 | `GET /api/experimental/usage/limits` 的 `data.go`（`rolling` / `weekly` / `monthly`） |
+| 每日累计曲线 | `GET /api/credential` 找到激活的 `opencode` 凭据，再请求 `{metadata.server}/api/activity/go`（`Authorization: Bearer` + `x-org-id`） |
+
+- 设置页在「模型与模式」两张卡片下面显示额度卡片（三窗口 + 本月累计曲线 + 月底虚线预测）；
+- 对话底部命中率右边的胶囊：Go 会话没有 `session.cost`，改为显示本月额度占用，点开同一个额度卡片；
+- `/usage` 是客户端斜杠命令，打开额度卡片；当前模型不是 Go 时只提示，不显示空卡片；
+- 曲线按官方口径把每日花费折算成百分比：`当月百分比 × 当日累计花费 / 本周期总花费`，月底预测按当前日均线性外推；
+- `/api/credential` 会返回密钥；只在内存里用于读额度，不写 prefs、不打印日志，曲线失败时仍显示三个百分比。
 
 ## 5. 多会话
 

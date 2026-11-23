@@ -46,6 +46,14 @@ class OcClient(rawBase: String, private val password: String) {
         .retryOnConnectionFailure(true)
         .build()
 
+    /** console.opencode.ai 等外部 API 需要正常超时，不能沿用 SSE 的无限 readTimeout。 */
+    private val externalHttp = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+
     private val authHeader: String? =
         if (password.isNotEmpty()) Credentials.basic("opencode", password) else null
 
@@ -443,6 +451,35 @@ class OcClient(rawBase: String, private val password: String) {
     }
 
     suspend fun configEntries(): List<JsonElement> = unwrapArray(get("/api/config"))
+
+    // ---- OpenCode Go 额度 ---------------------------------------------------
+
+    /** 官方的 Go allowance / Console budgets；没登录 Console 时 data 为 null。 */
+    suspend fun usageLimits(directory: String? = null): UsageLimitsInfo? =
+        parseUsageLimits(unwrapObject(get("/api/experimental/usage/limits" + locationQuery(directory))))
+
+    /** 服务端保存的集成凭据（含密钥，只在内存里用于读 Go 用量，不落盘、不打印）。 */
+    suspend fun credentials(): List<JsonElement> = unwrapArray(get("/api/credential"))
+
+    /**
+     * Console 的 Go 每日用量。`/api/experimental/usage/limits` 只给当前百分比，
+     * 官网那条累计曲线来自 Console 的 `/api/activity/go`；这里用同一份数据画图。
+     */
+    suspend fun goActivity(credential: ConsoleCredential): GoActivity? {
+        val req = Request.Builder()
+            .url(credential.server.trimEnd('/') + "/api/activity/go")
+            .header("Authorization", "Bearer ${credential.access}")
+            .header("x-org-id", credential.orgID)
+            .header("Accept", "application/json")
+            .get()
+            .build()
+        val resp = externalHttp.newCall(req).execute()
+        return resp.use { r ->
+            val text = r.body?.string().orEmpty()
+            if (!r.isSuccessful) throw ApiException(r.code, "HTTP ${r.code}: ${text.take(200)}")
+            parseGoActivity(json.parseToJsonElement(text) as? JsonObject)
+        }
+    }
 
     // ---- provider / integration connect ------------------------------------
 

@@ -74,6 +74,11 @@ fun SettingsScreen(model: AppModel) {
         model.loadMeta()
         model.refreshPlugins()
     }
+    // Go 额度只对 opencode-go 模型显示；选到其它模型时不占位置。
+    val goModel = resolvedModel(model)?.providerID == "opencode-go"
+    LaunchedEffect(goModel, model.serverUrl) {
+        if (goModel) model.loadGoUsage()
+    }
     // 选择页必须放在滚动 Column 外面：verticalScroll 给子项无限高度，
     // fillMaxSize 的选择页会被压成 0 高度，表现就是「点默认模型没反应」。
     Box(Modifier.fillMaxSize()) {
@@ -123,6 +128,10 @@ fun SettingsScreen(model: AppModel) {
                 showAgentPicker = true
             },
         )
+        if (goModel) {
+            Spacer(Modifier.height(4.dp))
+            GoUsageCard(model)
+        }
 
         if (!com.a2heng.androc.ui.data.AppBuild.thin) {
             Spacer(Modifier.height(8.dp))

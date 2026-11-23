@@ -534,6 +534,114 @@ fun agentDescription(id: String, desc: String): String = when (id.lowercase()) {
     else -> desc
 }
 
+// ---------------------------------------------------------------------------
+// OpenCode Go 额度（官方 /api/experimental/usage/limits + Console 的每日用量）
+// ---------------------------------------------------------------------------
+
+/** 一个额度窗口：5 小时 / 本周 / 本月。 */
+data class GoMeter(
+    val percent: Double,
+    val limited: Boolean,
+    val resetsAt: Long,
+)
+
+data class GoLimits(
+    val rolling: GoMeter?,
+    val weekly: GoMeter?,
+    val monthly: GoMeter?,
+) {
+    val available: Boolean get() = rolling != null || weekly != null || monthly != null
+}
+
+data class UsageLimitsInfo(
+    val workspaceName: String,
+    val usageURL: String,
+    val go: GoLimits?,
+)
+
+private fun parseGoMeter(e: JsonElement?): GoMeter? {
+    val o = e as? JsonObject ?: return null
+    val percent = o.dbl("percent")
+    return GoMeter(
+        percent = percent.coerceIn(0.0, 100.0),
+        limited = o.bool("limited"),
+        resetsAt = o.long("resetsAt"),
+    )
+}
+
+fun parseUsageLimits(o: JsonObject?): UsageLimitsInfo? {
+    if (o == null) return null
+    val workspace = o.obj("workspace") ?: return null
+    val go = o.obj("go")?.let {
+        GoLimits(
+            rolling = parseGoMeter(it["rolling"]),
+            weekly = parseGoMeter(it["weekly"]),
+            monthly = parseGoMeter(it["monthly"]),
+        )
+    }
+    return UsageLimitsInfo(
+        workspaceName = workspace.str("name") ?: "OpenCode Console",
+        usageURL = workspace.str("usageURL") ?: "",
+        go = go?.takeIf { it.available },
+    )
+}
+
+/** Console 的每日用量：MicroCents（1e-8 美元）和 token/请求数。 */
+data class GoDailyPoint(
+    val date: java.time.LocalDate,
+    val costMicroCents: Long,
+    val tokens: Long,
+    val requests: Long,
+)
+
+data class GoActivity(
+    val start: java.time.LocalDate,
+    val daily: List<GoDailyPoint>,
+)
+
+fun parseGoActivity(o: JsonObject?): GoActivity? {
+    if (o == null) return null
+    val start = runCatching {
+        java.time.Instant.parse(o.str("startsAt") ?: "").atZone(java.time.ZoneOffset.UTC).toLocalDate()
+    }.getOrNull() ?: return null
+    val daily = o.arr("daily").mapNotNull { item ->
+        val p = item as? JsonObject ?: return@mapNotNull null
+        val date = runCatching { java.time.LocalDate.parse(p.str("date") ?: "") }.getOrNull()
+            ?: return@mapNotNull null
+        GoDailyPoint(
+            date = date,
+            costMicroCents = p.str("totalCostMicroCents")?.toLongOrNull() ?: 0L,
+            tokens = p.str("totalTokens")?.toLongOrNull() ?: 0L,
+            requests = p.str("totalRequests")?.toLongOrNull() ?: 0L,
+        )
+    }.sortedBy { it.date }
+    return GoActivity(start, daily)
+}
+
+/** 从 `/api/credential` 里找出当前激活的 OpenCode Console 凭据（只用于读取额度）。 */
+data class ConsoleCredential(
+    val server: String,
+    val access: String,
+    val orgID: String,
+)
+
+fun parseConsoleCredential(entries: List<JsonElement>): ConsoleCredential? {
+    val entry = entries.mapNotNull { it as? JsonObject }
+        .firstOrNull {
+            it.str("integrationID") == "opencode" && it.bool("active")
+        } ?: return null
+    val value = entry.obj("value") ?: return null
+    val metadata = value.obj("metadata")
+    val orgID = metadata?.str("orgID") ?: metadata?.str("orgId") ?: return null
+    val access = when (value.str("type")) {
+        "oauth" -> value.str("access")
+        "key" -> value.str("key")
+        else -> null
+    } ?: return null
+    val server = metadata?.str("server")?.trimEnd('/') ?: "https://opencode.ai/console"
+    return ConsoleCredential(server, access, orgID)
+}
+
 fun formatTokens(n: Long): String = when {
     n >= 1_000_000 -> String.format("%.2fM", n / 1_000_000.0)
     n >= 1_000 -> String.format("%.1fk", n / 1_000.0)

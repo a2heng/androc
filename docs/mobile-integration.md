@@ -52,6 +52,7 @@ include(":ui")
 | PTY | `AppModel.createPty` | 远端终端先让服务端用自己的默认 shell（Windows 上是 Git Bash/cmd），旧服务端再退回 `bash`；**Androc 本机终端不走这里**，由宿主注入本机 proot shell |
 | 文件预览只此一份 | `FilePreview.kt` + `ImageViewer.kt` | 聊天里的文件卡片、文件页、Markdown 里的文件引用都调 `FilePreviewContent`；图片统一 `ClickableBitmap` → `ZoomableImageDialog`（手势用 Telephoto），不要在各页面里再写一份 |
 | Markdown 渲染 | `Markdown.kt` | 表格网格线只有一套 1dp（每格各画 0.5dp 会叠成粗细不齐的接缝）；代码块右上角有复制；独占一行的 `![alt](src)` 渲染成图片卡片，点击全屏缩放 |
+| Go 额度 | `GoUsageCard.kt` + `AppModel.loadGoUsage` | 只在 `providerID == "opencode-go"` 时显示：设置页在模型/模式卡片下、对话 `/usage`、以及命中率右侧的消费胶囊（Go 会话 cost=0 时改用本月额度百分比）；Credential 只在内存里用于读 Console 每日用量，不持久化 |
 
 ## 构建
 

@@ -203,6 +203,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     }
 
     var showCommands by remember { mutableStateOf(false) }
+    var showUsage by remember { mutableStateOf(false) }
     var showFilePicker by remember { mutableStateOf(false) }
     var openMenu by remember { mutableStateOf(false) }
     var confirmStop by remember { mutableStateOf(false) }
@@ -292,6 +293,11 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     val pendingForms = model.forms.filter { it.sessionID == session.id }
     // 通过 API 新建的会话在服务端没有 model 字段，从最后一条 assistant 消息里补
     val effectiveModel = session.model ?: model.messages.lastOrNull { it.model != null }?.model
+    val isGoModel = effectiveModel?.providerID == "opencode-go"
+    val goMonthly = if (isGoModel) model.goLimits?.go?.monthly else null
+    LaunchedEffect(isGoModel, session.id) {
+        if (isGoModel) model.loadGoUsage(session.directory)
+    }
     val lastTokens = model.messages.lastOrNull { it.isAssistant && it.tokens != null }?.tokens
     // 命中率用整个会话的累计口径（服务端 session.tokens 就是全会话汇总），
     // 上下文占用仍然只看最近一步（context 是单次请求的窗口占用）。
@@ -454,6 +460,18 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                 "model" -> pickModel = true
                                 "agent" -> pickAgent = true
                                 "reload" -> model.reloadConfig()
+                                "usage" -> {
+                                    if (resolvedModel(model, session)?.providerID == "opencode-go") {
+                                        model.loadGoUsage(session.directory, force = true)
+                                        showUsage = true
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "当前模型不是 OpenCode Go，没有 Go 额度",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                }
                                 else -> model.runCommand(
                                     cmd.name,
                                     text.removePrefix("/" + cmd.name).trim(),
@@ -476,6 +494,11 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                         rateColor(it.hitRate, MaterialTheme.colorScheme.background.luminanceIsDark())
                     } ?: MaterialTheme.colorScheme.onSurfaceVariant,
                     costLabel = session.cost.takeIf { it > 0 }?.let { formatCost(it) },
+                    goLabel = goMonthly?.let { goQuotaPercent(it.percent) },
+                    goColor = goMonthly?.let {
+                        goQuotaColor(it.percent, MaterialTheme.colorScheme.background.luminanceIsDark())
+                    } ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                    onUsage = { showUsage = true },
                     contextPct = contextPct,
                     contextColor = contextColor,
                     onToggleDetail = {
@@ -806,6 +829,10 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
             },
             onDismiss = { pickAgent = false },
         )
+    }
+
+    if (showUsage) {
+        GoUsageSheet(model = model, onDismiss = { showUsage = false })
     }
 
     pendingForms.firstOrNull()?.let { form ->
@@ -1319,6 +1346,9 @@ private fun ChatStatusBar(
     hitLabel: String,
     hitColor: Color,
     costLabel: String?,
+    goLabel: String? = null,
+    goColor: Color = Color.Unspecified,
+    onUsage: () -> Unit = {},
     contextPct: Double?,
     contextColor: Color,
     onToggleDetail: () -> Unit,
@@ -1358,10 +1388,14 @@ private fun ChatStatusBar(
                 valueColor = hitColor,
                 onClick = onCache,
             )
-            StatusChip(
-                "",
-                costLabel ?: "—",
-            )
+            // Go 订阅没有会话花费（服务端 cost 为 0），改用本月额度占用当消费显示。
+            if (costLabel != null) {
+                StatusChip("", costLabel)
+            } else if (goLabel != null) {
+                StatusChip("Go", goLabel, valueColor = goColor, onClick = onUsage)
+            } else {
+                StatusChip("", "—")
+            }
             Spacer(Modifier.weight(1f))
             // ↑/↓ 放最末尾：这里位置最宽裕，顶栏就不用再挤一行
             TokenStack(tokens)
@@ -2625,6 +2659,7 @@ private fun builtinClientCommands(): List<CommandInfo> = listOf(
     CommandInfo("interrupt", "中断当前回答"),
     CommandInfo("model", "切换模型"),
     CommandInfo("agent", "切换 Agent"),
+    CommandInfo("usage", "查看 OpenCode Go 额度"),
     CommandInfo("reload", "重新加载服务端配置"),
 )
 

@@ -431,6 +431,56 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var integrationBusy by mutableStateOf<String?>(null)
         private set
 
+    // ---- OpenCode Go 额度 ---------------------------------------------------
+    var goLimits by mutableStateOf<UsageLimitsInfo?>(null)
+        private set
+    var goActivity by mutableStateOf<GoActivity?>(null)
+        private set
+    var goUsageLoading by mutableStateOf(false)
+        private set
+    var goUsageError by mutableStateOf<String?>(null)
+        private set
+    var goUsageFetchedAt by mutableStateOf(0L)
+        private set
+    private var goUsageJob: Job? = null
+
+    /**
+     * 读取 Go 额度：`/api/experimental/usage/limits` 给三个窗口的百分比，
+     * Console 的 `/api/activity/go` 给每日累计曲线。曲线失败不影响百分比。
+     */
+    fun loadGoUsage(directory: String? = current?.directory, force: Boolean = false) {
+        val c = client ?: return
+        if (!force && goUsageFetchedAt > 0 && System.currentTimeMillis() - goUsageFetchedAt < 60_000) return
+        goUsageJob?.cancel()
+        goUsageLoading = true
+        goUsageError = null
+        goUsageJob = viewModelScope.launch {
+            try {
+                val limits = withContext(Dispatchers.IO) { c.usageLimits(directory) }
+                goLimits = limits
+                if (limits?.go == null) {
+                    goActivity = null
+                    goUsageError = "这个 OpenCode Console 没有 Go 额度"
+                    return@launch
+                }
+                // usage/limits 会顺手刷新过期的 Console 凭据；刷新后再读凭据拿每日用量。
+                goActivity = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val credential = parseConsoleCredential(c.credentials()) ?: return@runCatching null
+                        c.goActivity(credential)
+                    }.getOrNull()
+                }
+                goUsageFetchedAt = System.currentTimeMillis()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                goUsageError = e.message ?: "读取 Go 额度失败"
+            } finally {
+                goUsageLoading = false
+            }
+        }
+    }
+
     // ---- 缓存看板 -----------------------------------------------------------
     var caches by mutableStateOf<List<SessionCache>>(emptyList())
         private set
@@ -728,6 +778,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 password = pwd
                 recentModel = loadRecentFor(target)
                 client = c
+                goLimits = null
+                goActivity = null
+                goUsageFetchedAt = 0L
+                goUsageError = null
                 serverVersion = info?.str("version") ?: ""
                 runCatching { withContext(Dispatchers.IO) { c.locationRoot() } }
                     .onSuccess { homeDir = it }
