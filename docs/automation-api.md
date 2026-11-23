@@ -39,7 +39,7 @@ curl -s -H "$TOKEN" http://127.0.0.1:42100/state
   "serverUrl": "http://127.0.0.1:4096",
   "updateMessage": "已是最新版本 v0.6.2",
   "updateProgress": 0,
-  "local": {"available": true, "installed": true, "version": "2.3.2", "running": true},
+  "local": {"available": true, "installed": true, "version": "2.4.0", "running": true},
   "saved": [
     {"url": "http://127.0.0.1:4096", "password": "***"},
     {"url": "http://192.168.0.105:42000", "password": "***"}

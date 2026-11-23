@@ -21,7 +21,7 @@ Androc 只有一个运行时：**proot + Alpine musl rootfs**。所有目录都�
 | applicationId | `com.a2heng.androc`（debug `.debug`，beta `.beta`） |
 | minSdk / targetSdk / compileSdk | 26 / 34 / 37 |
 | ABI | `arm64-v8a` |
-| 内置 OpenCode 版本 | 由 `opencode.version` 决定（当前 `2.3.2`），Gradle 写入 `BuildConfig.OPENCODE_VERSION` |
+| 内置 OpenCode 版本 | 由 `opencode.version` 决定（当前 `2.4.0`），Gradle 写入 `BuildConfig.OPENCODE_VERSION` |
 
 ---
 

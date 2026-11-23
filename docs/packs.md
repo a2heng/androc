@@ -34,19 +34,19 @@ https://raw.githubusercontent.com/a2heng/androc-market/main/index.json
 ```json
 {
   "generated": "2026-11-20T00:00:00Z",
-  "upstream": { "opencode": "2.3.2" },
+  "upstream": { "opencode": "2.4.0" },
   "packs": [
     {
       "id": "kernel-opencode",
       "name": "OpenCode",
       "category": "runtime",
       "kind": "tar",
-      "version": "2.3.2-2",
-      "upstreamVersion": "2.3.2",
+      "version": "2.4.0-1",
+      "upstreamVersion": "2.4.0",
       "abi": "arm64-v8a",
       "installed": { "size": 0, "sha256": "…" },
       "archive": {
-        "url": "https://…/kernel-opencode-2.3.2-2.tar.xz",
+        "url": "https://…/kernel-opencode-2.4.0-1.tar.xz",
         "size": 0,
         "sha256": "…"
       }

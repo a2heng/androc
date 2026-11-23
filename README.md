@@ -6,7 +6,7 @@
 - 应用名：**Androc**
 - 包名：`com.a2heng.androc`
 - 运行时：**proot + Alpine musl**，自带用户态，不需要 root
-- opencode：**2.3.2**（musl arm64）
+- opencode：**2.4.0**（musl arm64）
 
 ## 两个发行版
 

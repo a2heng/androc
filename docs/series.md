@@ -129,8 +129,8 @@ androc-market/
   "name": "OpenCode",
   "category": "kernel",
   "kind": "tar",
-  "version": "2.3.2-2",
-  "upstreamVersion": "2.3.2",
+  "version": "2.4.0-1",
+  "upstreamVersion": "2.4.0",
   "abi": "arm64-v8a",
   "minAppVersionCode": 9,
   "summary": "opencode binary + musl runtime (bash/git/python/node)",
@@ -139,7 +139,7 @@ androc-market/
     "sha256": "…"
   },
   "archive": {
-    "url": "https://…/kernel-opencode-2.3.2-2.tar.xz",
+    "url": "https://…/kernel-opencode-2.4.0-1.tar.xz",
     "size": 128788404,
     "sha256": "…",
     "format": "xz"
@@ -201,8 +201,8 @@ files/
 | 对象 | 例子 | 规则 |
 |---|---|---|
 | App | `0.6.2` | 一个 `versionCode`，thin/bundle 共用 |
-| opencode | `2.3.2` | 上游稳定版，写在 `opencode.version` |
-| `kernel-opencode` | `2.3.2-2` | `upstreamVersion` + 包修订号 |
+| opencode | `2.4.0` | 上游稳定版，写在 `opencode.version` |
+| `kernel-opencode` | `2.4.0-1` | `upstreamVersion` + 包修订号 |
 | `android` | `2-3` | 工具链批次 + 包修订号 |
 
 构建与发布命令见 [`commands.md`](commands.md)，发布说明只保留当前版本。

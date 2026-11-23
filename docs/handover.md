@@ -13,7 +13,7 @@
 | 应用 | Androc，`com.a2heng.androc`（debug `.debug`，beta `.beta`） |
 | 发行版 | `thin` / `bundle`，同一份代码、同一个 `applicationId` |
 | 运行时 | proot + Alpine musl rootfs |
-| opencode | `2.3.2`，唯一来源 `opencode.version` |
+| opencode | `2.4.0`，唯一来源 `opencode.version` |
 | 市场 | `a2heng/androc-market`：`index.json` + `index.json.sig`（Ed25519） |
 | 市场包 | 只有 `android`（工具链 + skills），全量 tar.xz，无增量 |
 | 测试机 | OPPO PKB110，Android 17，arm64，4 KB 页 |
