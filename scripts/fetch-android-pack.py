@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Fetch the pinned Android toolchain pack into app/src/apk/assets/android/pack.tar.zst.
 
-Pinned version lives in android-pack.version; sha256 in android-pack.sha256.
-Assets are hosted on the androc repository (tag assets-1), not a market repo.
+Pinned version lives in android-pack.version; sha256 (of the upstream tar.xz)
+in android-pack.sha256. The xz is repacked to zstd for faster on-device
+extraction. The asset host is the androc-market repository (asset-only).
 """
-import hashlib, os, shutil, sys, urllib.request
+import hashlib, os, shutil, subprocess, sys, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VER_FILE = os.path.join(ROOT, "android-pack.version")
 SHA_FILE = os.path.join(ROOT, "android-pack.sha256")
 DEST = os.path.join(ROOT, "app", "src", "apk", "assets", "android", "pack.tar.zst")
-URL = ("https://github.com/a2heng/androc/releases/download/assets-1/"
-       "android-{ver}.tar.zst")
+URL = ("https://github.com/a2heng/androc-market/releases/download/android-{ver}/"
+       "android-{ver}.tar.xz")
 
 def read(path):
     with open(path, encoding="utf-8") as f:
@@ -39,23 +40,36 @@ def download(url, dest):
         shutil.copyfileobj(src, out, 1 << 20)
     os.replace(part, dest)
 
+def repack(src_xz, dest_zst):
+    tmp = dest_zst + ".tmp"
+    p1 = subprocess.Popen(["xz", "-dc", src_xz], stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(["zstd", "-19", "-T0", "-o", tmp], stdin=p1.stdout)
+    if p1.stdout:
+        p1.stdout.close()
+    p2.wait(); p1.wait()
+    if p1.returncode != 0 or p2.returncode != 0:
+        raise SystemExit("repack failed")
+    os.replace(tmp, dest_zst)
+
 def main():
     ver = read(VER_FILE)
     want = read(SHA_FILE).lower()
-    if os.path.isfile(DEST) and sha256(DEST) == want:
-        print("cached", DEST)
-        return 0
-    cache = os.path.join(ROOT, ".cache", f"android-{ver}.tar.zst")
+    cache = os.path.join(ROOT, ".cache", f"android-{ver}.tar.xz")
+    if os.path.isfile(DEST) and os.path.getsize(DEST) > 100 * 1024 * 1024:
+        # The zst is a local derivative; accept it when the cached xz matches.
+        if os.path.isfile(cache) and sha256(cache) == want:
+            print("cached", DEST)
+            return 0
     for cand in (cache, cache + ".part"):
         if os.path.isfile(cand) and sha256(cand) == want:
-            shutil.copy2(cand, DEST)
-            print("copied", cand, "->", DEST)
+            repack(cand, DEST)
+            print("wrote", DEST, os.path.getsize(DEST), "bytes")
             return 0
     download(URL.format(ver=ver), cache)
     got = sha256(cache)
     if got != want:
         raise SystemExit(f"sha256 mismatch: got {got}, want {want}")
-    shutil.copy2(cache, DEST)
+    repack(cache, DEST)
     print("wrote", DEST, os.path.getsize(DEST), "bytes")
     return 0
 
