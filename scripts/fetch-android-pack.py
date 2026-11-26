@@ -41,6 +41,7 @@ def download(url, dest):
     os.replace(part, dest)
 
 def repack(src_xz, dest_zst):
+    os.makedirs(os.path.dirname(dest_zst), exist_ok=True)
     tmp = dest_zst + ".tmp"
     p1 = subprocess.Popen(["xz", "-dc", src_xz], stdout=subprocess.PIPE)
     p2 = subprocess.Popen(["zstd", "-19", "-T0", "-o", tmp], stdin=p1.stdout)
