@@ -13,7 +13,6 @@ import com.a2heng.androc.ui.data.AutomationBridge
 import com.a2heng.androc.ui.data.SharedPayload
 import com.a2heng.androc.ui.ui.AppRoot
 import com.a2heng.androc.ui.ui.OcTheme
-import com.a2heng.androc.contracts.PluginManager
 import java.lang.Process
 
 /** 宿主（Androc）提供的本机 shell 进程（Termux/proot 里的 bash）。 */
@@ -62,7 +61,6 @@ fun OpenCodeMobileRoot(
     fsRoot: String? = null,
     kernelBundled: Boolean = false,
     toolsBundled: Boolean = false,
-    plugins: PluginManager? = null,
     onSharedConsumed: () -> Unit = {},
 ) {
     val model: AppModel = viewModel()
@@ -74,7 +72,6 @@ fun OpenCodeMobileRoot(
     }
     model.overrideFsRoot(fsRoot)
     model.setBundled(kernelBundled, toolsBundled)
-    model.setPluginManager(plugins)
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         // 启动时的 connect 可能早于应用可见，保活服务会启动失败；回到前台补一次。
         model.ensureKeepAlive()
@@ -144,10 +141,6 @@ object OpenCodeMobileHost {
         show(activity, url, password, shell, fsRoot, false, false)
     }
 
-    /**
-     * @param kernelBundled full 构建为 true；standalone UI 为 false
-     * @param toolsBundled  full 构建为 true；thin 构建为 false
-     */
     @JvmStatic
     fun show(
         activity: ComponentActivity,
@@ -157,23 +150,6 @@ object OpenCodeMobileHost {
         fsRoot: String?,
         kernelBundled: Boolean,
         toolsBundled: Boolean,
-    ) {
-        show(activity, url, password, shell, fsRoot, kernelBundled, toolsBundled, null)
-    }
-
-    /**
-     * @param plugins optional plugin manager; Androc passes AppPluginManager
-     */
-    @JvmStatic
-    fun show(
-        activity: ComponentActivity,
-        url: String,
-        password: String,
-        shell: LocalShellSpawner?,
-        fsRoot: String?,
-        kernelBundled: Boolean,
-        toolsBundled: Boolean,
-        plugins: PluginManager?,
     ) {
         LocalShellHost.spawner = shell
         activity.setContent {
@@ -183,7 +159,6 @@ object OpenCodeMobileHost {
                 fsRoot = fsRoot,
                 kernelBundled = kernelBundled,
                 toolsBundled = toolsBundled,
-                plugins = plugins,
             )
         }
     }

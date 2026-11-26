@@ -4,6 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream;
 import org.tukaani.xz.XZInputStream;
 
 import java.io.BufferedInputStream;
@@ -21,7 +22,7 @@ import java.io.IOException;
  */
 final class RuntimeAssets {
     private static final String TAG = "OpenCodeRuntimeAssets";
-    private static final String ASSET = "runtime/rootfs.tar.xz";
+    private static final String[] ASSETS = {"runtime/rootfs.tar.zst", "runtime/rootfs.tar.xz"};
     private static final String MARKER = ".installed-v2";
     /** 同一进程里可能同时有多个启动请求；解压必须串行，否则会互相删掉半成品。 */
     private static final Object LOCK = new Object();
@@ -47,12 +48,12 @@ final class RuntimeAssets {
     }
 
     private static boolean hasBundled(Context ctx) {
-        try {
-            ctx.getAssets().open(ASSET).close();
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        for (String a : ASSETS) { try { ctx.getAssets().open(a).close(); return true; } catch (Exception ignored) {} }
+        return false;
+    }
+    private static String bundledAsset(Context ctx) {
+        for (String a : ASSETS) { try { ctx.getAssets().open(a).close(); return a; } catch (Exception ignored) {} }
+        return null;
     }
 
     /** 解压内置 runtime；已解压时直接返回。 */
@@ -64,12 +65,14 @@ final class RuntimeAssets {
             // 上一次解压可能被系统杀掉，留下半成品和断掉的 symlink；先清干净再从头解。
             deleteTree(root);
             if (!root.mkdirs() && !root.isDirectory()) throw new IOException("cannot create " + root);
-            Log.i(TAG, "extracting bundled runtime...");
-            // The tar already starts with `rootfs/`, so extract into
-            // files/runtime-core and the final path is runtime-core/rootfs.
-            try (TarArchiveInputStream tar = new TarArchiveInputStream(
-                    new XZInputStream(new BufferedInputStream(
-                            ctx.getAssets().open(ASSET), 1 << 16)))) {
+            String asset = bundledAsset(ctx);
+            if (asset == null) throw new IOException("no bundled runtime asset");
+            Log.i(TAG, "extracting bundled runtime: " + asset);
+            try (java.io.InputStream raw = new BufferedInputStream(ctx.getAssets().open(asset), 1 << 16);
+                 java.io.InputStream dec = asset.endsWith(".zst")
+                         ? new ZstdCompressorInputStream(raw)
+                         : new XZInputStream(raw);
+                 TarArchiveInputStream tar = new TarArchiveInputStream(dec)) {
                 extract(tar, root);
             } catch (IOException | RuntimeException e) {
                 // 不留下半个 rootfs，下一次启动可以重新解压。

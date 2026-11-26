@@ -12,25 +12,28 @@
    [`docs/android-musl.md`](docs/android-musl.md)。
 2. **运行时只有一套：** proot + Alpine musl rootfs。Android 工具在同一个
    rootfs 里通过 `/opt/androc/env.sh` 使用。
-3. **rootfs 优先级唯一：** `files/packs/android/<ver>/rootfs`（装了 Android 组件时
-   优先，自带工具链）→ `files/runtime/<ver>/rootfs`（市场 OC 包）→
-   `files/runtime-core/rootfs`（bundle 内置）。
+3. **rootfs 优先级唯一：** `files/packs/android/<ver>/rootfs`（apk 内置或兼容旧安装，
+   自带工具链）→ `files/runtime/<ver>/rootfs`（兼容旧运行时）→
+   `files/runtime-core/rootfs`（oc/apk 内置）。
    新增来源时同步 `MuslRootfs.dir` 与 `docs/paths.md`。
 4. **路径用运行时值：** `$HOME`（`files/home`）、`$PWD`、`nativeLibraryDir` 在运行时
    生成；脚本里写死包名或 JDK/SDK 路径会让 App 换签名后失效。
-5. **市场只有一个包：** `android`（工具链 + skills），`index.json` + `index.json.sig`，
-   全量下载、无增量；OpenCode 与 runtime 随 App 更新。
+5. **不再使用市场：** 组件内化到 APK flavor。`ui` = 纯 UI；`oc` = UI + OpenCode + 工具；
+   `apk` = `oc` + Android 工具链（JDK/SDK/Gradle/aapt2/adb + android skills）。
 6. **用固定工具链构建/验证：**
 
    ```sh
    python scripts/fetch-opencode.py
    python scripts/fetch-runtime.py
-   ./gradlew :app:assembleThinDebug :app:assembleBundleDebug
+   python scripts/fetch-android-pack.py
+   ./gradlew :app:assembleUiDebug :app:assembleOcDebug :app:assembleApkDebug
    python scripts/check-opencode-latest.py --strict
    ```
 
+   版本固定文件：`opencode.version`、`android-pack.version`、`android-pack.sha256`。
+
 7. **发版前：** `check-opencode-latest.py --strict` 通过，`opencode.version` 是最新
-   上游版本，thin/bundle 两个 APK 都能装能启动。
+   上游版本，ui/oc/apk 三个 APK 都能装能启动。
 8. **改行为时同步文档和技能。** 文档给仓库评审；技能和
    `$HOME/.config/*/AGENTS.md` 才是代理启动时加载的内容。
 9. **`ui/` 是唯一的 UI 来源。** 不引入第二份 UI 拷贝；保持

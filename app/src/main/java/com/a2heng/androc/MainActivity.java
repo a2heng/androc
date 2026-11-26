@@ -996,24 +996,10 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    /** Updater oficial del runtime: descarga, verifica SHA-256, instala y reinicia. */
+    /** OpenCode 运行时随 APK 内置；需要更新时请安装新版本 App。 */
     private void startRuntimeUpdate() {
-        if (updLatest.isEmpty()) return;
-        if (!hasAllFilesAccess()) {
-            snack(T("Activa 'todos los archivos' y repite", "Enable 'All files' and retry"));
-            openAllFilesSettings();
-            return;
-        }
-        try {
-            Intent i = new Intent(this, RuntimeUpdateService.class)
-                    .setAction(RuntimeUpdateService.ACTION_INSTALL)
-                    .putExtra(RuntimeUpdateService.EXTRA_VERSION, updLatest);
-            startForegroundService(i);
-            snack(T("Actualizando opencode…", "Updating opencode…"));
-        } catch (Exception e) {
-            log("No se pudo iniciar la actualización: " + e.getMessage());
-            snack(T("No se pudo iniciar la actualización", "Could not start the update"));
-        }
+        snack(T("OpenCode va integrado en esta app; actualiza la app para obtener la nueva versión.",
+                "OpenCode is bundled in this app; update the app to get the new version."));
     }
 
     /** Descarga e instala la nueva version del launcher. */
@@ -2269,7 +2255,7 @@ public class MainActivity extends AppCompatActivity {
                 com.a2heng.androc.ui.OpenCodeMobileHost.setServerModelWriter(
                         new AppServerModelWriter(this));
                 com.a2heng.androc.ui.OpenCodeMobileHost.show(this, URL, pwd, null, null,
-                        true, true, new AppPluginManager(this));
+                        true, true);
             } catch (Throwable t) {
                 Log.w("OpenCodeLocal", "frontend Compose fallo; se usa el WebView: " + t, t);
                 mobileUiShown = false;
@@ -3819,30 +3805,12 @@ private void refreshUpdateBtn() {
         refreshAppUpdateBtn();
     }
 
-    /** Notificacion de opencode nuevo (una vez por version). Vale en abierto
-     *  y la alarma diaria la reutiliza con la app cerrada. */
+    /** OpenCode 现在随 APK 内置；运行时更新不再走市场。 */
     private void maybeNotifyOpencode(boolean pending, String installed, String latest) {
         try {
             android.app.NotificationManager nm = (android.app.NotificationManager)
                     getSystemService(Context.NOTIFICATION_SERVICE);
-            if (!pending || latest == null || latest.isEmpty()) {
-                // Sin datos (red caida) no significa "no hay update": no borrar el aviso.
-                if (!pending && latest != null && !latest.isEmpty() && nm != null)
-                    nm.cancel(ServerWatch.NID_OC);
-                return;
-            }
-            android.content.SharedPreferences p = getSharedPreferences("app", MODE_PRIVATE);
-            if (latest.equals(p.getString("upd_notified", ""))) return;
-            String text = installed + " → " + latest + (LocalRuntime.available(this)
-                    ? T(": toca para descargar e instalar",
-                            ": tap to download and install")
-                    : T(": abre la app para instalarla", ": open the app to install it"));
-            if (ServerWatch.notifyOpenCodeUpdate(this,
-                    T("Actualización de opencode", "opencode update"), text, latest)) {
-                p.edit().putString("upd_notified", latest).apply();
-            } else {
-                askNotifPermission();
-            }
+            if (nm != null) nm.cancel(ServerWatch.NID_OC);
         } catch (Exception ignored) {
         }
     }

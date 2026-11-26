@@ -12,9 +12,9 @@ if (!opencodeVersion) {
 // CI passes -PandrocVersionName / -PandrocVersionCode / -PandrocRequireSigning.
 // The old -Padia* names are still accepted so an existing release job keeps working.
 def androcVersionCode = (findProperty("androcVersionCode")
-        ?: findProperty("adiaVersionCode") ?: "9").toInteger()
+        ?: findProperty("adiaVersionCode") ?: "10").toInteger()
 def androcVersionName = findProperty("androcVersionName")
-        ?: findProperty("adiaVersionName") ?: "0.6.4-androc"
+        ?: findProperty("adiaVersionName") ?: "0.7.0-androc"
 def androcRequireSigning = (findProperty("androcRequireSigning")
         ?: findProperty("adiaRequireSigning")) == "1"
 
@@ -43,8 +43,7 @@ android {
         ndk {
             abiFilters 'arm64-v8a'
         }
-        // 插件签名权限的包名。debug 用自己的名字，避免和已安装的正式版
-        // （签名不同）声明同一个 signature 权限导致 INSTALL_FAILED_DUPLICATE_PERMISSION。
+        // 插件签名权限的包名；实际值在 androidComponents 中按 applicationId 设置。
         manifestPlaceholders["pluginPermission"] = "com.a2heng.androc.permission.PLUGIN"
     }
 
@@ -86,22 +85,28 @@ android {
         buildConfig true
     }
 
-    // Distribution flavors: the only two products.
-    //   bundle = UI + bundled OpenCode runtime/assets (offline, heavy)
-    //   thin   = UI only; OpenCode and plugins are downloaded from the market
+    // Distribution flavors: three products.
+    //   ui  = UI only, remote connections only
+    //   oc  = UI + bundled OpenCode runtime/assets
+    //   apk = oc + bundled Android tools (JDK/SDK/Gradle/adb/aapt2 + skills)
     flavorDimensions "distribution"
     productFlavors {
-        bundle {
-            dimension "distribution"
-            buildConfigField "boolean", "THIN", "false"
-        }
-        thin {
+        ui {
             dimension "distribution"
             buildConfigField "boolean", "THIN", "true"
-            // 本机同时装 thin 与 bundle 做对比时用 -PandrocThinSuffix=.thin。
-            if (findProperty("androcThinSuffix")) {
-                applicationIdSuffix findProperty("androcThinSuffix").toString()
-            }
+            buildConfigField "boolean", "HAS_ANDROID_TOOLS", "false"
+            applicationIdSuffix (findProperty("androcUiSuffix") ?: ".ui").toString()
+        }
+        oc {
+            dimension "distribution"
+            buildConfigField "boolean", "THIN", "false"
+            buildConfigField "boolean", "HAS_ANDROID_TOOLS", "false"
+        }
+        apk {
+            dimension "distribution"
+            buildConfigField "boolean", "THIN", "false"
+            buildConfigField "boolean", "HAS_ANDROID_TOOLS", "true"
+            applicationIdSuffix (findProperty("androcApkSuffix") ?: ".apk").toString()
         }
     }
 
@@ -128,8 +133,6 @@ android {
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
             buildConfigField "int", "SERVER_PORT", "4098"
-            // 只有自己的签名才配得上这个权限，正式版插件不会误连到 debug 壳。
-            manifestPlaceholders["pluginPermission"] = "com.a2heng.androc.debug.permission.PLUGIN"
         }
     }
 
@@ -144,11 +147,29 @@ android {
             keepDebugSymbols += ['**/*.so']
         }
     }
+
+    // 大型内置包已是 xz/tar.xz，APK 不要再二次压缩。
+    androidResources {
+        noCompress += ['tar.xz', 'xz', 'tar.zst', 'zst']
+    }
+
+    // apk 复用 oc 的运行时资产和 so，只额外叠加 Android 工具链资产。
+    sourceSets {
+        apk {
+            assets.srcDirs += ['src/oc/assets']
+            jniLibs.srcDirs += ['src/oc/jniLibs']
+        }
+    }
+
+    androidComponents {
+        onVariants(selector().all()) { variant ->
+            variant.manifestPlaceholders.put("pluginPermission", variant.applicationId.map { "${it}.permission.PLUGIN" })
+        }
+    }
 }
 
 dependencies {
     implementation project(':ui')
-    implementation project(':market')
     // El tema del cliente usa Theme.SplashScreen; sus attrs deben entrar en el APK.
     implementation 'androidx.core:core-splashscreen:1.0.1'
     implementation 'androidx.appcompat:appcompat:1.8.0'
@@ -157,4 +178,5 @@ dependencies {
     // Toybox lo necesita para los .deb de Termux.
     implementation 'org.tukaani:xz:1.10'
     implementation 'org.apache.commons:commons-compress:1.26.2'
+    implementation 'com.github.luben:zstd-jni:1.5.6-8@aar'
 }

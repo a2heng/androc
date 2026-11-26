@@ -461,6 +461,10 @@ class OcClient(rawBase: String, private val password: String) {
     /** 服务端保存的集成凭据（含密钥，只在内存里用于读 Go 用量，不落盘、不打印）。 */
     suspend fun credentials(): List<JsonElement> = unwrapArray(get("/api/credential"))
 
+    suspend fun deleteCredential(credentialID: String) {
+        delete("/api/credential/${urlEncode(credentialID)}")
+    }
+
     /**
      * Console 的 Go 每日用量。`/api/experimental/usage/limits` 只给当前百分比，
      * 官网那条累计曲线来自 Console 的 `/api/activity/go`；这里用同一份数据画图。

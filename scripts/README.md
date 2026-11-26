@@ -4,7 +4,7 @@
 
 ```text
 app/src/main/jniLibs/arm64-v8a/libopencode2_bin.so   # fetch-opencode.py
-app/src/bundle/assets/runtime/rootfs.tar.xz          # fetch-runtime.py
+app/src/oc/assets/runtime/rootfs.tar.xz          # fetch-runtime.py
 ```
 
 在仓库根目录执行：

@@ -91,10 +91,7 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="local_ai_server" />
         </service>
-        <service
-            android:name=".RuntimeUpdateService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".AppUpdateService"
             android:exported="false"

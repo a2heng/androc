@@ -81,11 +81,17 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/check-opencode-latest.py --strict
 
+      - name: Install zstd
+        run: sudo apt-get update -qq && sudo apt-get install -y zstd
+
       - name: Fetch opencode runtime
         run: python3 scripts/fetch-opencode.py
 
-      - name: Fetch bundled runtime (from the OC pack)
+      - name: Fetch bundled runtime (OC flavor)
         run: python3 scripts/fetch-runtime.py
+
+      - name: Fetch Android toolchain (apk flavor)
+        run: python3 scripts/fetch-android-pack.py
 
 
 
@@ -108,7 +114,7 @@ jobs:
             -PandrocVersionCode="${{ steps.version.outputs.code }}" \
             -PandrocRequireSigning=1
 
-      - name: 16 KB check (thin + bundle)
+      - name: 16 KB check (ui + oc + apk)
         env:
           ANDROC_16KB_STRICT: "1"
         run: |
@@ -126,7 +132,7 @@ jobs:
       - name: Rename and checksum
         run: |
           mkdir -p out
-          for FLAVOR in thin bundle; do
+          for FLAVOR in ui oc apk; do
             SRC=$(ls app/build/outputs/apk/$FLAVOR/release/*.apk | head -1)
             NAME="androc-${{ steps.version.outputs.name }}-$FLAVOR.apk"
             cp "$SRC" "out/$NAME"

@@ -19,11 +19,10 @@ curl -s -H "$TOKEN" http://127.0.0.1:42100/state
 | GET | `/state` | UI、连接、本机组件、已保存连接、更新进度 |
 | POST | `/connect?url=&password=` | 连接并记住一个服务器 |
 | POST | `/start-local` | 启动已安装的 OpenCode 组件并连接 |
-| GET | `/plugins` | 插件列表（opencode / android） |
-| POST | `/plugin/install?id=` | 安装组件 |
-| POST | `/plugin/uninstall?id=` | 卸载组件 |
-| GET | `/market` | 当前市场索引地址 |
-| POST | `/market?url=` | 设置市场索引（本地镜像/调试） |
+| GET | `/plugins` | 内置组件状态（full 包含 android） |
+| POST | `/plugin/install?id=` | 兼容接口：内置组件无需安装 |
+| POST | `/plugin/uninstall?id=` | 兼容接口：内置组件不能卸载 |
+| GET/POST | `/market` | 已废弃；返回 market removed |
 | GET | `/musl?cmd=` | 在 proot rootfs 里执行命令，返回输出 |
 | GET | `/proxy?path=` | 代理到本机 opencode |
 | GET | `/logs` | 读取本机运行时日志 |

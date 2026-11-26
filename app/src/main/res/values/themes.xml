@@ -7,7 +7,7 @@
         <item name="android:windowBackground">@color/splash_bg</item>
         <!-- Splash del sistema (Android 12+): mismo fondo + icono, enlaza con el splash interno. -->
         <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
         <item name="android:windowSplashScreenAnimationDuration">600</item>
 
         <!-- Paleta un poco mas viva que el morado por defecto de Material3. -->

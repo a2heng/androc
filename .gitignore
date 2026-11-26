@@ -33,6 +33,7 @@ Thumbs.db
 # See README ("Build from source") for how to restore it.
 app/src/main/jniLibs/arm64-v8a/libopencode2_bin.so
 app/src/bundle/jniLibs/arm64-v8a/libopencode2_bin.so
+app/src/oc/jniLibs/arm64-v8a/libopencode2_bin.so
 app/src/main/runtime-v1-backup/
 
 # Termux packages bundled as assets (~170 MB of .deb). They ship inside the
@@ -49,3 +50,5 @@ app/src/bundle/assets/toolchain/
 __pycache__/
 *.pyc
 app/src/bundle/assets/runtime/
+app/src/oc/assets/runtime/
+app/src/apk/assets/android/

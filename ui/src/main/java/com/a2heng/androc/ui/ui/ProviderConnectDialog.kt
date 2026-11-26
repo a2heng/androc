@@ -84,25 +84,37 @@ fun ProviderConnectDialog(model: AppModel, onDismiss: () -> Unit) {
                     if (connected.isNotEmpty()) {
                         item(key = "header-connected") { ProviderSection("已连接") }
                         items(connected, key = { it.id }) { info ->
-                            ProviderRow(info, onKey = { keyFor = info }, onOAuth = {
-                                startProviderOAuth(model, info) { oauth = it }
-                            })
+                            ProviderRow(
+                                info,
+                                busy = model.integrationBusy == info.id,
+                                onKey = { keyFor = info },
+                                onOAuth = { startProviderOAuth(model, info) { oauth = it } },
+                                onDisconnect = { model.disconnectIntegration(info) },
+                            )
                         }
                     }
                     if (recommended.isNotEmpty()) {
                         item(key = "header-popular") { ProviderSection("常用") }
                         items(recommended, key = { it.id }) { info ->
-                            ProviderRow(info, onKey = { keyFor = info }, onOAuth = {
-                                startProviderOAuth(model, info) { oauth = it }
-                            })
+                            ProviderRow(
+                                info,
+                                busy = model.integrationBusy == info.id,
+                                onKey = { keyFor = info },
+                                onOAuth = { startProviderOAuth(model, info) { oauth = it } },
+                                onDisconnect = { model.disconnectIntegration(info) },
+                            )
                         }
                     }
                     if (rest.isNotEmpty()) {
                         item(key = "header-all") { ProviderSection("全部") }
                         items(rest, key = { it.id }) { info ->
-                            ProviderRow(info, onKey = { keyFor = info }, onOAuth = {
-                                startProviderOAuth(model, info) { oauth = it }
-                            })
+                            ProviderRow(
+                                info,
+                                busy = model.integrationBusy == info.id,
+                                onKey = { keyFor = info },
+                                onOAuth = { startProviderOAuth(model, info) { oauth = it } },
+                                onDisconnect = { model.disconnectIntegration(info) },
+                            )
                         }
                     }
                 }
@@ -240,8 +252,10 @@ private fun ProviderSection(title: String) {
 @Composable
 private fun ProviderRow(
     info: IntegrationInfo,
+    busy: Boolean,
     onKey: () -> Unit,
     onOAuth: () -> Unit,
+    onDisconnect: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -257,11 +271,11 @@ private fun ProviderRow(
             )
         }
         when {
-            info.connected -> Text(
-                "已连接",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+            busy -> CircularProgressIndicator(
+                Modifier.height(16.dp).width(16.dp),
+                strokeWidth = 2.dp,
             )
+            info.connected -> TextButton(onClick = onDisconnect) { Text("断开") }
             info.keyMethod != null -> TextButton(onClick = onKey) { Text("API Key") }
             info.oauthMethod != null -> TextButton(onClick = onOAuth) { Text("OAuth") }
             info.envMethod != null -> Text(

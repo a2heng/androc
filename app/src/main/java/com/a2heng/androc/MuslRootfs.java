@@ -11,11 +11,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Runs commands inside the musl/Alpine rootfs shipped by the android pack.
+ * Runs commands inside the musl/Alpine rootfs.
  *
- * The rootfs is `files/packs/android/<version>/rootfs`. The app home is bound
- * at its real absolute path, so sessions/projects keep the same paths the UI
- * already uses.
+ * Rootfs priority: bundled android (full flavor) → runtime/<ver>/rootfs →
+ * bundled runtime-core (bundle/full) → legacy packs.
  */
 final class MuslRootfs {
     private static final String TAG = "OpenCodeMusl";
@@ -24,11 +23,13 @@ final class MuslRootfs {
     }
 
     static File dir(Context ctx) {
-        // 1) android 包：完整的 musl rootfs + JDK/SDK/Gradle，装了就优先用它，
-        //    本机 OpenCode 和端侧构建共用这一套。
-        File android = packRootfs(ctx, "android");
+        // 1) full flavor 内置的 Android 工具链 rootfs（JDK/SDK/Gradle）
+        File android = AndroidAssets.rootfs(ctx);
         if (android != null) return android;
-        // 2) OC 组件自带的 runtime：files/runtime/<ver>/rootfs
+        // 2) 已安装的 Android 包（兼容旧安装）
+        File androidPack = packRootfs(ctx, "android");
+        if (androidPack != null) return androidPack;
+        // 3) OC 运行时：files/runtime/<ver>/rootfs
         File runtime = new File(ctx.getFilesDir(), "runtime");
         File[] versions = runtime.listFiles(File::isDirectory);
         if (versions != null) {
@@ -39,17 +40,22 @@ final class MuslRootfs {
             }
             if (best != null) return new File(best, "rootfs");
         }
-        // 3) bundle 内置的 runtime
+        // 4) bundle/full 内置的 runtime
         File bundled = RuntimeAssets.rootfs(ctx);
         if (bundled != null) return bundled;
-        // 4) 兼容：旧版 runtime-core 包
+        // 5) 兼容：旧版 runtime-core 包
         return packRootfs(ctx, "runtime-core");
     }
 
     private static File packRootfs(Context ctx, String id) {
-        File pack = PackInstaller.installedDir(ctx, id);
-        if (pack == null) return null;
-        File rootfs = new File(pack, "rootfs");
+        File parent = new File(ctx.getFilesDir(), "packs/" + id);
+        File[] dirs = parent.listFiles(File::isDirectory);
+        if (dirs == null || dirs.length == 0) return null;
+        File best = dirs[0];
+        for (File dir : dirs) {
+            if (dir.getName().compareTo(best.getName()) > 0) best = dir;
+        }
+        File rootfs = new File(best, "rootfs");
         return rootfs.isDirectory() ? rootfs : null;
     }
 

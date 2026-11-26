@@ -3,8 +3,6 @@ package com.a2heng.androc;
 import android.content.Context;
 import android.util.Log;
 
-import com.a2heng.androc.contracts.PluginInfo;
-import com.a2heng.androc.contracts.PluginManager;
 import com.a2heng.androc.ui.data.AutomationBridge;
 
 import java.io.BufferedInputStream;
@@ -137,12 +135,9 @@ public final class AutomationServer {
             } else if ("/proxy".equals(path)) {
                 body = proxy(params.getOrDefault("path", "/api/info"), method, requestBody);
             } else if ("/market".equals(path)) {
-                if ("POST".equals(method)) {
-                    MarketConfig.setIndexUrl(AutomationServerHolder.context(),
-                            params.getOrDefault("url", ""));
-                }
                 body = new org.json.JSONObject()
-                        .put("url", MarketConfig.indexUrl(AutomationServerHolder.context()))
+                        .put("removed", true)
+                        .put("message", "market removed; components are bundled in APK flavors")
                         .toString();
             } else if ("/musl".equals(path)) {
                 body = new org.json.JSONObject()
@@ -151,11 +146,9 @@ public final class AutomationServer {
                                 params.getOrDefault("cmd", "echo ok")))
                         .toString();
             } else if ("/plugins".equals(path)) {
-                body = pluginsJson();
-            } else if ("/plugin/install".equals(path) && "POST".equals(method)) {
-                body = pluginAction(params.getOrDefault("id", ""), true);
-            } else if ("/plugin/uninstall".equals(path) && "POST".equals(method)) {
-                body = pluginAction(params.getOrDefault("id", ""), false);
+                body = new org.json.JSONObject().put("plugins", new org.json.JSONArray()).put("note", "plugins removed; components bundled in APK flavors").toString();
+            } else if ("/plugin/install".equals(path) || "/plugin/uninstall".equals(path)) {
+                body = new org.json.JSONObject().put("ok", false).put("message", "插件已移除；组件随 APK flavor 内置").toString();
             } else if ("/local".equals(path)) {
                 body = new org.json.JSONObject()
                         .put("installed", ThinRuntime.installed(AutomationServerHolder.context()))
@@ -173,44 +166,6 @@ public final class AutomationServer {
         }
     }
 
-    /** GET /plugins — debug-only view of the plugin layer. */
-    private static String pluginsJson() throws Exception {
-        AppPluginManager manager = new AppPluginManager(AutomationServerHolder.context());
-        org.json.JSONArray arr = new org.json.JSONArray();
-        for (PluginInfo p : manager.list()) {
-            arr.put(new org.json.JSONObject()
-                    .put("id", p.id())
-                    .put("name", p.name())
-                    .put("installed", p.installed())
-                    .put("version", p.version())
-                    .put("latest", p.latestVersion())
-                    .put("bundled", p.bundled())
-                    .put("skills", new org.json.JSONArray(p.skills())));
-        }
-        return new org.json.JSONObject().put("plugins", arr).toString();
-    }
-
-    /** POST /plugin/install|uninstall?id= */
-    private static String pluginAction(String id, boolean install) throws Exception {
-        if (id == null || id.isEmpty()) {
-            return new org.json.JSONObject().put("ok", false).put("message", "missing id").toString();
-        }
-        AppPluginManager manager = new AppPluginManager(AutomationServerHolder.context());
-        CountDownLatch latch = new CountDownLatch(1);
-        String[] message = {""};
-        boolean[] ok = {false};
-        PluginManager.Callback callback = (pid, success, msg) -> {
-            ok[0] = success;
-            message[0] = msg;
-            latch.countDown();
-        };
-        if (install) manager.install(id, callback);
-        else manager.uninstall(id, callback);
-        if (!latch.await(240, TimeUnit.SECONDS)) {
-            return new org.json.JSONObject().put("ok", false).put("message", "timeout").toString();
-        }
-        return new org.json.JSONObject().put("ok", ok[0]).put("message", message[0]).toString();
-    }
 
     private static String proxy(String apiPath, String method, String requestBody) throws Exception {
         Context ctx = AutomationServerHolder.context();

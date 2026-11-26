@@ -58,7 +58,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.a2heng.androc.contracts.PluginInfo
 import com.a2heng.androc.ui.data.AppModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,11 +67,8 @@ fun SettingsScreen(model: AppModel) {
     var showAgentPicker by remember { mutableStateOf(false) }
     var showServers by remember { mutableStateOf(false) }
     var showProviderConnect by remember { mutableStateOf(false) }
-    var showPlugins by remember { mutableStateOf(false) }
-    var removeId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         model.loadMeta()
-        model.refreshPlugins()
     }
     // Go 额度只对 opencode-go 模型显示；选到其它模型时不占位置。
     val goModel = resolvedModel(model)?.providerID == "opencode-go"
@@ -133,15 +129,6 @@ fun SettingsScreen(model: AppModel) {
             GoUsageCard(model)
         }
 
-        if (!com.a2heng.androc.ui.data.AppBuild.thin) {
-            Spacer(Modifier.height(8.dp))
-            CouiSectionTitle("市场")
-            SettingsRow(
-                title = "组件与工具链",
-                subtitle = if (model.plugins.isEmpty()) "Skill + 工具链，按需安装"
-                else "${model.plugins.size} 个组件 · Skill + 工具链",
-            ) { showPlugins = true }
-        }
 
         Spacer(Modifier.height(8.dp))
         Card(
@@ -340,30 +327,6 @@ fun SettingsScreen(model: AppModel) {
         if (showProviderConnect) {
             ProviderConnectDialog(model) { showProviderConnect = false }
         }
-        if (showPlugins) {
-            PluginsDialog(model, onDismiss = { showPlugins = false }) { removeId = it }
-        }
-        removeId?.let { id ->
-            val plugin = model.plugins.firstOrNull { it.id() == id }
-            AlertDialog(
-                onDismissRequest = { removeId = null },
-                title = { Text("卸载${plugin?.name() ?: "插件"}？") },
-                text = {
-                    Text("会删除这个插件的 skills 和工具链；项目、会话和内核不受影响。")
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        removeId = null
-                        model.uninstallPlugin(id)
-                    }) {
-                        Text("卸载", color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { removeId = null }) { Text("取消") }
-                },
-            )
-        }
     }
 }
 
@@ -392,202 +355,6 @@ private fun SettingsRow(
         }
     }
 }
-
-@Composable
-private fun PluginsDialog(
-    model: AppModel,
-    onDismiss: () -> Unit,
-    onUninstall: (String) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("组件与插件") },
-        text = {
-            if (!model.isLocalServer()) {
-                Text(
-                    "当前连接的是远程服务器。插件只装在本机，切回 127.0.0.1 后才能安装、更新或卸载。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                LazyColumn(
-                    Modifier.fillMaxWidth().heightIn(max = 440.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (model.plugins.isEmpty()) {
-                        item {
-                            Text(
-                                "还没有插件信息。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        items(model.plugins, key = { it.id() }) { plugin ->
-                            PluginCard(model, plugin, onUninstall)
-                        }
-                    }
-                    item {
-                        Text(
-                            "插件 = Skill + 它需要的工具链。卸载只删插件本身，不动项目、会话和内核。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { model.refreshPlugins() }) { Text("刷新") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        },
-    )
-}
-
-@Composable
-private fun PluginCard(
-    model: AppModel,
-    plugin: PluginInfo,
-    onUninstall: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(8.dp)
-                    .background(
-                        if (plugin.installed()) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline,
-                        CircleShape,
-                    ),
-            )
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    plugin.name(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    plugin.summary(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                when {
-                    plugin.updateAvailable() -> "可更新"
-                    !plugin.installed() -> "未安装"
-                    else -> "已安装"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = if (plugin.installed()) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        val meta = buildList {
-            if (plugin.version().isNotBlank()) add("v${plugin.version()}")
-            if (plugin.sizeText().isNotBlank()) add(plugin.sizeText())
-            if (plugin.bundled()) add("内置") else if (!plugin.installed()) add("需下载")
-            if (plugin.updateAvailable() && plugin.latestVersion().isNotBlank()) {
-                add("→ ${plugin.latestVersion()}")
-            }
-        }.joinToString(" · ")
-        if (meta.isNotBlank()) {
-            Text(
-                meta,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (plugin.skills().isNotEmpty()) {
-            Text(
-                "技能: " + plugin.skills().joinToString(", "),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (plugin.toolchain().isNotEmpty()) {
-            Text(
-                "工具链: " + plugin.toolchain().joinToString(", "),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            when {
-                model.pluginBusy == plugin.id() -> {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                }
-                !plugin.installed() -> {
-                    TextButton(onClick = { model.installPlugin(plugin.id()) }) {
-                        Text("安装")
-                    }
-                }
-                else -> {
-                    TextButton(onClick = { model.checkPluginUpdates(plugin.id()) }) {
-                        Text("检查更新")
-                    }
-                    if (plugin.updateAvailable()) {
-                        TextButton(onClick = { model.updatePlugin(plugin.id()) }) {
-                            Text("更新")
-                        }
-                    }
-                    if (plugin.removable()) {
-                        TextButton(onClick = { onUninstall(plugin.id()) }) {
-                            Text("卸载", color = MaterialTheme.colorScheme.error)
-                        }
-                    } else if (plugin.id() != PluginInfo.OPENCODE) {
-                        Text(
-                            "随内核",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PluginRow(name: String, status: String, ok: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .background(
-                    if (ok) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outline,
-                    CircleShape,
-                ),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            name,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            status,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (ok) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
 
 
 @Composable

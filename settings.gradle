@@ -1,4 +1,4 @@
-// Androc：一个 App，两个发行版（thin / bundle）。
+// Androc：三个发行版（thin / bundle / full）。
 pluginManagement {
     repositories {
         google()
@@ -18,12 +18,10 @@ rootProject.name = "Androc"
 // 分层见 docs/series.md：
 //   :contracts  各层共用的稳定 API
 //   :ui         Compose 客户端
-//   :app        thin / bundle 两个发行版
-//   :market     市场客户端（签名索引、下载、解压）
+//   :app        thin / bundle / full 三个发行版
 //   :plugin-sdk / :runtime-plugin  插件与运行时扩展
 include(":app")
 include(":contracts")
 include(":ui")
-include(":market")
 include(":plugin-sdk")
 include(":runtime-plugin")

@@ -241,8 +241,7 @@ public class MobileFrontendActivity extends AppCompatActivity {
             com.a2heng.androc.ui.OpenCodeMobileHost.show(
                     this, BuildConfig.THIN ? "" : URL, pwd, shell,
                     LocalRuntime.homeDir(this).getAbsolutePath(),
-                    true, true,
-                    new AppPluginManager(this));
+                    true, true);
         } catch (Throwable t) {
             Log.w(TAG, "frontend Compose fallo; se abre el WebView", t);
             mounted = false;

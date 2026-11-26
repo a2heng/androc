@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
-"""下载 bundle 内置的 musl rootfs 到 assets/runtime/rootfs.tar.xz。
+"""下载 bundle 内置的 musl rootfs 到 assets/runtime/rootfs.tar.zst。
 
-rootfs 由 androc-market 的 runtime-rootfs 工作流构建并作为构建输入发布，
-不进市场索引。内容只有 `rootfs/`（Alpine musl + bash/git/python/node）。
+上游发布通常是 tar.xz；本地统一转成 tar.zst（解压快，Android 兼容）。
 """
-import os
-import shutil
-import sys
-import tarfile
-import urllib.request
+import os, shutil, subprocess, sys, tarfile, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEST = os.path.join(ROOT, "app", "src", "bundle", "assets", "runtime", "rootfs.tar.xz")
+DEST = os.path.join(ROOT, "app", "src", "oc", "assets", "runtime", "rootfs.tar.zst")
+CACHE_XZ = os.path.join(ROOT, ".cache", "runtime-rootfs.tar.xz")
 DEFAULT_URL = ("https://github.com/a2heng/androc-market/releases/download/"
                "runtime-rootfs-1/runtime-rootfs.tar.xz")
 
-
 def download(url, dest):
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
     part = dest + ".part"
     last = None
     for attempt in range(5):
@@ -26,30 +22,54 @@ def download(url, dest):
                 shutil.copyfileobj(src, out, 1 << 20)
             os.replace(part, dest)
             return
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last = exc
             print(f"attempt {attempt + 1} failed: {exc}", file=sys.stderr)
     raise SystemExit(f"download failed: {url}: {last}")
 
-
-def main():
-    if os.path.isfile(DEST) and os.path.getsize(DEST) > 20 * 1024 * 1024:
-        print("cached", DEST)
-        return 0
-
-    os.makedirs(os.path.dirname(DEST), exist_ok=True)
-    url = os.environ.get("RUNTIME_ROOTFS_URL") or DEFAULT_URL
-    print("GET", url)
-    download(url, DEST)
-
-    with tarfile.open(DEST, "r:xz") as tar:
-        names = set(tar.getnames())
+def validate(path):
+    # Python tarfile zst support varies; use tar CLI for robust check.
+    import subprocess
+    if path.endswith('.zst'):
+        p1 = subprocess.Popen(['zstd','-dc',path], stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(['tar','-tf','-'], stdin=p1.stdout, stdout=subprocess.PIPE, text=True)
+        if p1.stdout: p1.stdout.close()
+        out,_ = p2.communicate(); p1.wait()
+        names = set(out.splitlines())
+    else:
+        with tarfile.open(path, 'r:xz') as tar:
+            names = set(tar.getnames())
     for probe in ("rootfs/bin/sh", "rootfs/usr/bin/python3", "rootfs/usr/bin/node"):
         if probe not in names:
             raise SystemExit(f"rootfs missing {probe}")
+
+def repack_xz_to_zst(src_xz, dest_zst):
+    tmp = dest_zst + ".tmp"
+    subprocess.run(["xz", "-dc", src_xz], check=True, stdout=subprocess.PIPE)
+    # stream xz->zstd
+    p1 = subprocess.Popen(["xz", "-dc", src_xz], stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(["zstd", "-19", "-T0", "-o", tmp], stdin=p1.stdout)
+    if p1.stdout: p1.stdout.close()
+    p2.wait(); p1.wait()
+    if p1.returncode != 0 or p2.returncode != 0:
+        raise SystemExit("repack failed")
+    os.replace(tmp, dest_zst)
+
+def main():
+    os.makedirs(os.path.dirname(DEST), exist_ok=True)
+    if os.path.isfile(DEST) and os.path.getsize(DEST) > 20 * 1024 * 1024:
+        validate(DEST)
+        print("cached", DEST)
+        return 0
+    url = os.environ.get("RUNTIME_ROOTFS_URL") or DEFAULT_URL
+    # download to cache xz
+    if not (os.path.isfile(CACHE_XZ) and os.path.getsize(CACHE_XZ) > 20 * 1024 * 1024):
+        print("GET", url)
+        download(url, CACHE_XZ)
+    repack_xz_to_zst(CACHE_XZ, DEST)
+    validate(DEST)
     print("wrote", DEST, os.path.getsize(DEST), "bytes")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

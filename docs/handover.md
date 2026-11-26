@@ -1,7 +1,7 @@
 # Androc 交接
 
 > 给接手的人/agent：这一页说明现在是什么、怎么启动、怎么验收、哪里还欠。
-> 产品分层与市场格式见 [`series.md`](series.md)，设计约束见 [`design.md`](design.md)，
+> 产品分层与内置组件格式见 [`series.md`](series.md)，设计约束见 [`design.md`](design.md)，
 > 路径与挂载见 [`paths.md`](paths.md)。
 
 ---
@@ -14,13 +14,13 @@
 | 发行版 | `thin` / `bundle`，同一份代码、同一个 `applicationId` |
 | 运行时 | proot + Alpine musl rootfs |
 | opencode | `2.4.0`，唯一来源 `opencode.version` |
-| 市场 | `a2heng/androc-market`：`index.json` + `index.json.sig`（Ed25519） |
-| 市场包 | 只有 `android`（工具链 + skills），全量 tar.xz，无增量 |
+| 内置组件 | `a2heng/androc-market`：`index.json` + `index.json.sig`（Ed25519） |
+| 内置包 | 只有 `android`（工具链 + skills），全量 tar.xz，无增量 |
 | 测试机 | OPPO PKB110，Android 17，arm64，4 KB 页 |
 
 | 发行版 | 内容 | 体积 | 用途 |
 |---|---|---:|---|
-| **thin** | 只有 UI | 约 7 MB | 远程客户端：连接电脑或远程 opencode，不带市场 |
+| **thin** | 只有 UI | 约 7 MB | 远程客户端：连接电脑或远程 opencode，不带内置组件 |
 | **bundle** | UI + 内置 musl rootfs + opencode | 约 164 MB | 本机开箱可用，首次启动解压内置 rootfs |
 
 两个包只在内置资源上不同：`bundle` 带 `assets/runtime/rootfs.tar.xz` 和
@@ -36,7 +36,7 @@ opencode 二进制，`thin` 两者都不带。OpenCode 与 runtime 随 App 更�
 rootfs 选择顺序（`MuslRootfs.dir`）：
 
 ```text
-files/runtime/<ver>/rootfs          # 市场安装的 OpenCode 组件
+files/runtime/<ver>/rootfs          # 内置组件安装的 OpenCode 组件
 → files/packs/android/<ver>/rootfs  # 装了 android 组件时优先
 → files/runtime-core/rootfs         # bundle 首次启动解压
 ```
@@ -46,16 +46,16 @@ files/runtime/<ver>/rootfs          # 市场安装的 OpenCode 组件
 | id | 名称 | 来源 |
 |---|---|---|
 | `opencode` | OpenCode 内核 | bundle 内置，随 App 更新 |
-| `android` | Android 开发 | 市场 `android` 包 |
+| `android` | Android 开发 | 内置组件 `android` 包 |
 
 ---
 
 ## 2. 仓库与代码地图
 
 ```text
-app/         宿主：启动、运行时、市场安装、自动化 API
+app/         宿主：启动、运行时、内置组件安装、自动化 API
 ui/          Compose 前端：连接/设置、会话、聊天、文件、终端
-market/      市场客户端：签名校验、下载、xz/tar 解压
+（market 已移除；组件内置到 APK flavor）
 contracts/   共享契约：PluginInfo/PluginManager、RuntimeConnection、Pairing
 scripts/     fetch-opencode / fetch-runtime / check-opencode-latest / check-16kb
 docs/        文档
@@ -70,12 +70,12 @@ kernel/ tools/ plugin-sdk/ runtime-plugin/   预留模块，不参与当前启�
 | `app/.../LocalRuntime.java` | proot 启动、bind、server、终端、密码 |
 | `app/.../MuslRootfs.java` | rootfs 选择与 proot 命令 |
 | `app/.../RuntimeAssets.java` | 解压 bundle 内置 `assets/runtime/rootfs.tar.xz` |
-| `app/.../PackInstaller.java` | 市场目录包安装、skills 复制 |
+| `app/.../AndroidAssets.java` | 内置组件目录包安装、skills 复制 |
 | `app/.../AppPluginManager.java` | `opencode` / `android` 两个插件条目 |
-| `app/.../MarketConfig.java` | 市场索引地址覆盖（调试/镜像） |
-| `app/.../RuntimeUpdateService.java` | 前台更新 OpenCode 组件 |
+| `app/.../MarketConfig.java` | 内置组件索引地址覆盖（调试/镜像） |
+| `app/.../RuntimeAssets.java` | 前台更新 OpenCode 组件 |
 | `app/.../AutomationServer.java` | 回环自动化 API（`:42100`） |
-| `market/.../MarketClient.kt` | 索引签名、下载、`installed` 校验、解压 |
+| `app/.../AndroidAssets.java` | full 内置 Android 包解压与 skills 复制 |
 | `ui/.../LocalRuntimeDialog.kt` | “本机 OpenCode”：安装 / 更新 / 启动并登录 |
 | `ui/.../SettingsScreen.kt` | 设置、插件、模型、连接 |
 | `ui/.../AppModel.kt` | 连接、会话、模型、路径补全 |
@@ -115,7 +115,7 @@ kernel/ tools/ plugin-sdk/ runtime-plugin/   预留模块，不参与当前启�
 
 ```sh
 python scripts/fetch-opencode.py     # 按 opencode.version 取二进制
-python scripts/fetch-runtime.py      # 从市场 OC 包取 rootfs 给 bundle
+python scripts/fetch-runtime.py      # 从内置组件 OC 包取 rootfs 给 bundle
 ./gradlew :app:assembleThinDebug :app:assembleBundleDebug
 python scripts/check-opencode-latest.py --strict
 ```
@@ -177,5 +177,5 @@ curl -s -H 'X-Androc-Token: androc-local-dev' http://127.0.0.1:42100/state
 - [ ] 读完本页、[`series.md`](series.md)、[`design.md`](design.md)、[`paths.md`](paths.md)
 - [ ] 配好 JDK/SDK，`assembleThinDebug` 与 `assembleBundleDebug` 都成功
 - [ ] 真机跑完 §5 六步
-- [ ] 确认 `opencode.version` 与市场 `kernel-opencode` 对得上
+- [ ] 确认 `opencode.version` 与内置组件 `kernel-opencode` 对得上
 - [ ] 改行为时同步 docs、skills 与 `RELEASE_NOTES.md`

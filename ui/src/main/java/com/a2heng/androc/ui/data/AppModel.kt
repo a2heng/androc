@@ -2,6 +2,7 @@ package com.a2heng.androc.ui.data
 
 import android.app.Application
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.ui.graphics.Color
 import org.connectbot.terminal.TerminalDimensions
@@ -10,8 +11,6 @@ import org.connectbot.terminal.TerminalEmulatorFactory
 import com.a2heng.androc.ui.ConnectionService
 import com.a2heng.androc.ui.ServerModelHost
 import com.a2heng.androc.ui.ServerModelWriter
-import com.a2heng.androc.contracts.PluginInfo
-import com.a2heng.androc.contracts.PluginManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -180,62 +179,6 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         toolsBundled = tools
     }
 
-    // ---- 能力层（插件） ----------------------------------------------------
-    var plugins by mutableStateOf<List<PluginInfo>>(emptyList())
-        private set
-    var pluginBusy by mutableStateOf<String?>(null)
-        private set
-    private var pluginManager: PluginManager? = null
-
-    fun setPluginManager(manager: PluginManager?) {
-        pluginManager = manager
-        refreshPlugins()
-    }
-
-    fun refreshPlugins() {
-        // 插件列表会统计磁盘占用（rootfs 很大），放到 IO 线程，别卡 UI。
-        viewModelScope.launch {
-            val list = withContext(Dispatchers.IO) {
-                runCatching { pluginManager?.list() ?: emptyList() }
-                    .getOrDefault(emptyList())
-            }
-            plugins = list
-        }
-    }
-
-    fun installPlugin(id: String) = runPlugin(id) { manager, callback ->
-        manager.install(id, callback)
-    }
-
-    fun updatePlugin(id: String) = runPlugin(id) { manager, callback ->
-        manager.update(id, callback)
-    }
-
-    fun uninstallPlugin(id: String) = runPlugin(id) { manager, callback ->
-        manager.uninstall(id, callback)
-    }
-
-    fun checkPluginUpdates(id: String) = runPlugin(id) { manager, callback ->
-        manager.checkUpdates(id, callback)
-    }
-
-    private fun runPlugin(
-        id: String,
-        action: (PluginManager, PluginManager.Callback) -> Unit,
-    ) {
-        val manager = pluginManager ?: return
-        pluginBusy = id
-        val callback = PluginManager.Callback { _, ok, message ->
-            pluginBusy = null
-            refreshPlugins()
-            Toast.makeText(
-                getApplication(),
-                message,
-                if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
-            ).show()
-        }
-        action(manager, callback)
-    }
 
     /**
      * 切换到另一个已保存的服务器。先断开（取消流、清空当前会话），
@@ -1038,26 +981,49 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun loadIntegrations() {
         val c = client ?: return
         viewModelScope.launch {
-            integrations = withContext(Dispatchers.IO) {
-                runCatching { c.integrations() }.getOrDefault(emptyList()).mapNotNull { o ->
-                    val id = o.str("id") ?: return@mapNotNull null
-                    val methods = (o["methods"] as? JsonArray)?.mapNotNull { raw ->
-                        val m = raw as? JsonObject ?: return@mapNotNull null
-                        val type = m.str("type") ?: return@mapNotNull null
-                        val envs = (m["names"] as? JsonArray)?.mapNotNull {
-                            (it as? JsonPrimitive)?.content?.takeIf { s -> s.isNotBlank() }
+            val prev = integrations
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching {
+                    c.integrations().mapNotNull { o ->
+                        val id = o.str("id") ?: return@mapNotNull null
+                        val methods = (o["methods"] as? JsonArray)?.mapNotNull { raw ->
+                            val m = raw as? JsonObject ?: return@mapNotNull null
+                            val type = m.str("type") ?: return@mapNotNull null
+                            val envs = (m["names"] as? JsonArray)?.mapNotNull {
+                                (it as? JsonPrimitive)?.content?.takeIf { s -> s.isNotBlank() }
+                            } ?: emptyList()
+                            IntegrationMethod(
+                                id = m.str("id") ?: "",
+                                type = type,
+                                label = m.str("label") ?: type,
+                                envNames = envs,
+                            )
                         } ?: emptyList()
-                        IntegrationMethod(
-                            id = m.str("id") ?: "",
-                            type = type,
-                            label = m.str("label") ?: type,
-                            envNames = envs,
+                        val conns = (o["connections"] as? JsonArray) ?: JsonArray(emptyList())
+                        val credentialIDs = conns.mapNotNull { raw ->
+                            val c = raw as? JsonObject ?: return@mapNotNull null
+                            if (c.str("type") == "credential") c.str("id") else null
+                        }
+                        IntegrationInfo(
+                            id = id,
+                            name = o.str("name") ?: id,
+                            connections = conns.size,
+                            methods = methods,
+                            credentialIDs = credentialIDs,
                         )
-                    } ?: emptyList()
-                    val connections = (o["connections"] as? JsonArray)?.size ?: 0
-                    IntegrationInfo(id, o.str("name") ?: id, connections, methods)
+                    }
                 }
             }
+            loaded.onSuccess { integrations = it }
+                .onFailure { e ->
+                    if (prev.isEmpty()) {
+                        Toast.makeText(
+                            getApplication(),
+                            "读取 Provider 失败：${e.message ?: e.javaClass.simpleName}",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
         }
     }
 
@@ -1065,13 +1031,41 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val c = client ?: return
         integrationBusy = info.id
         viewModelScope.launch {
-            val ok = runCatching {
+            val result = runCatching {
                 withContext(Dispatchers.IO) { c.connectIntegrationKey(info.id, key, label) }
-            }.isSuccess
+            }
             integrationBusy = null
+            val ok = result.isSuccess
+            val err = result.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
             Toast.makeText(
                 getApplication(),
-                if (ok) "${info.name} 已连接" else "连接失败，请检查 API key",
+                if (ok) "${info.name} 已连接" else "连接失败：${err ?: "请检查 API key"}",
+                if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
+            ).show()
+            if (ok) {
+                loadIntegrations()
+                loadMeta()
+            }
+        }
+    }
+
+    fun disconnectIntegration(info: IntegrationInfo) {
+        val c = client ?: return
+        integrationBusy = info.id
+        viewModelScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    if (info.credentialIDs.isEmpty()) return@withContext false
+                    info.credentialIDs.forEach { cred -> c.deleteCredential(cred) }
+                    true
+                }
+            }
+            integrationBusy = null
+            val ok = result.getOrDefault(false)
+            val err = result.exceptionOrNull()?.message
+            Toast.makeText(
+                getApplication(),
+                if (ok) "${info.name} 已断开" else "断开失败：${err ?: "未知错误"}",
                 if (ok) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
             ).show()
             if (ok) {
@@ -2012,10 +2006,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val c = client ?: return
         viewModelScope.launch {
             try {
-                val (a, m) = withContext(Dispatchers.IO) { c.agents() to c.models() }
-                // 只保留可选择的可见 primary agent：subagent 不进模式列表，
-                // hidden 的 compaction / title / summary 是内部维护 Agent，不能选。
+                val a = withContext(Dispatchers.IO) { c.agents() }
                 agents = a.filter { it.str("mode") != "subagent" && !it.bool("hidden") }
+            } catch (e: Exception) {
+                Log.w("AppModel", "loadMeta agents failed", e)
+            }
+            try {
+                val m = withContext(Dispatchers.IO) { c.models() }
                 contextLimits = m.mapNotNull { item ->
                     val id = item.str("id") ?: return@mapNotNull null
                     val limit = item.obj("limit")?.long("context") ?: 0L
@@ -2041,9 +2038,16 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     val status = it.str("status")
                     (enabled != false) && (status == null || status == "active")
                 }
-                serverDefaultModel = withContext(Dispatchers.IO) {
-                    runCatching { c.defaultModel() }.getOrNull()
-                }
+            } catch (e: Exception) {
+                Log.w("AppModel", "loadMeta models failed", e)
+                if (models.isEmpty()) Toast.makeText(getApplication(), "读取模型失败：${e.message ?: e.javaClass.simpleName}", Toast.LENGTH_SHORT).show()
+            }
+            try {
+                serverDefaultModel = withContext(Dispatchers.IO) { c.defaultModel() }
+            } catch (e: Exception) {
+                Log.w("AppModel", "loadMeta defaultModel failed", e)
+            }
+            try {
                 val cmds = withContext(Dispatchers.IO) {
                     val local = if (directory.isNullOrBlank()) emptyList() else {
                         runCatching { c.commands(directory) }.getOrDefault(emptyList())
@@ -2052,7 +2056,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     (local + global).distinctBy { it.name }
                 }
                 commands = cmds
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w("AppModel", "loadMeta commands failed", e)
             }
         }
     }

@@ -179,40 +179,7 @@ public class ServerWatch {
         }
     }
 
-    public static boolean notifyOpenCodeUpdate(Context ctx, String title, String text,
-            String version) {
-        try {
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(ctx,
-                    android.Manifest.permission.POST_NOTIFICATIONS)
-                    != android.content.pm.PackageManager.PERMISSION_GRANTED) return false;
-            NotificationManager nm =
-                    (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm == null || !nm.areNotificationsEnabled()) return false;
-            NotificationChannel ch = new NotificationChannel(CH_UPD, "Actualizaciones",
-                    NotificationManager.IMPORTANCE_DEFAULT);
-            nm.createNotificationChannel(ch);
-            NotificationChannel cur = nm.getNotificationChannel(CH_UPD);
-            if (cur != null && cur.getImportance() == NotificationManager.IMPORTANCE_NONE)
-                return false;
-            Intent install = new Intent(ctx, RuntimeUpdateService.class)
-                    .setAction(RuntimeUpdateService.ACTION_INSTALL)
-                    .putExtra(RuntimeUpdateService.EXTRA_VERSION, version);
-            int fl = PendingIntent.FLAG_UPDATE_CURRENT;
-            if (Build.VERSION.SDK_INT >= 31) fl |= PendingIntent.FLAG_IMMUTABLE;
-            PendingIntent pi = PendingIntent.getForegroundService(ctx, NID_OC, install, fl);
-            nm.notify(NID_OC, new NotificationCompat.Builder(ctx, CH_UPD)
-                    .setContentTitle(title)
-                    .setContentText(text)
-                    .setSmallIcon(android.R.drawable.stat_sys_download)
-                    .setContentIntent(pi)
-                    .addAction(0, t(ctx, "Descargar", "Download"), pi)
-                    .setAutoCancel(true)
-                    .build());
-            return true;
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
+
 
     public static void notify(Context ctx, String title, String text) {
         try {

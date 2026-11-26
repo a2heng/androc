@@ -1,151 +1,127 @@
-# 市场包与发布
+# 内置包规范
 
-Androc 只从市场取两个包：`kernel-opencode` 和 `android`。包体积大、更新节奏独立，因此与 APK 分开发布。
+Androc 不再使用市场。运行时和 Android 工具链随 APK flavor 内置。本文定义内置包的格式、放置、解压和版本固定规则，供未来新增 bundle 复用。
 
-## 1. 市场结构
+## 1. 总原则
 
-| 文件 | 内容 |
-|---|---|
-| `index.json` | 当前包清单与版本 |
-| `index.json.sig` | 对 `index.json` 原始字节的 Ed25519 签名（base64） |
-| 包文件 | `<id>-<version>.tar.xz` |
+- **大包单文件**：大型工具链/rootfs 打成一个包放进 `assets/`，不要把成千上万小文件直接散在 assets。
+- **已压缩不再二次压缩**：``*.tar.zst`/`*.zst`/`*.tar.xz`/`*.xz` 在 `app/build.gradle` 的 `androidResources.noCompress` 中声明，避免 APK 再压一遍。
+- **小文件交给 APK**：小型配置、文本、少量脚本可以直接放 assets/res，由 APK 正常打包。
+- **版本固定**：每个外部输入包在仓库根有固定版本/校验文件，构建前由脚本拉取并校验。
+- **首次使用解压**：安装 APK 不解压大包；首次启动/首次使用时解压到 `files/`，写 marker，幂等。
 
-默认索引：
+## 2. 当前包
+
+| 组件 | flavor | APK 内位置 | 解压位置 | 版本固定 | 运行时入口 |
+|---|---|---|---|---|---|
+| OpenCode musl rootfs | `oc`,`apk` | `assets/runtime/rootfs.tar.xz` | `files/runtime-core/rootfs` | `opencode.version` + `scripts/fetch-runtime.py` | `RuntimeAssets.ensure()` |
+| Android 工具链 | `apk` | `assets/android/pack.tar.xz` | `files/packs/android/bundled/` | `android-pack.version` + `android-pack.sha256` + `scripts/fetch-android-pack.py` | `AndroidAssets.ensure()` |
+
+## 3. 包格式
+
+### 3.1 推荐格式
+
+| 场景 | 格式 | 原因 |
+|---|---|---|
+| rootfs/工具链（含 symlink、权限、可执行位） | `tar.zst`（优先）/`tar.xz`（兼容） | 保留 Unix 权限/symlink；zstd 解压快，适合手机端首次安装 |
+| 纯数据、无需 symlink/权限 | `zip` 或直接 assets | Android/APK 工具链原生支持；但不要用于 rootfs |
+| 单个原生二进制 | 直接放 `jniLibs/` 或已签名可执行位置 | 由 APK 安装管理；不要再包一层 |
+
+当前统一优先使用 **`tar.zst`**，解压代码兼容 `.tar.xz`。
+
+### 3.2 tar.xz 规范
+
+- 压缩：`tar -cJf <name>.tar.xz -C <dir> <entries...>`
+- 顶层结构固定，解压目标明确：
+  - runtime：顶层 `rootfs/...`
+  - android：顶层 `skills/` + `rootfs/...`
+- 必须保留：普通文件、目录、相对 symlink、可执行位。
+- 不要包含：绝对路径、`..` 越界路径、设备文件、硬链接到包外。
+- 包内路径使用 `/`，解压时必须做 canonical path 安全检查。
+
+### 3.3 何时不要压缩
+
+| 内容 | 处理 | 原因 |
+|---|---|---|
+| `*.so`/native libs | `jniLibs/` | 安装器/加载器管理，16K 对齐检查 |
+| 很小的文本、JSON、脚本 | 普通 assets | APK zip 已处理，额外 xz 无收益 |
+| 已经是压缩格式且不需要解包 | 视情况直接 assets + `noCompress` | 避免双重压缩 |
+| 需要随机读取的单文件大资源 | 优先不包进 tar.xz | tar.xz 不利于随机读取 |
+
+## 4. APK 内放置
 
 ```text
-https://raw.githubusercontent.com/a2heng/androc-market/main/index.json
+app/src/oc/assets/runtime/rootfs.tar.xz      # oc/apk 共用
+app/src/apk/assets/android/pack.tar.xz       # apk 专用
 ```
 
-默认索引：App 只内置 Ed25519 公钥，验签通过后才解析；自定义镜像索引见 §5。
+规则：
 
-## 2. 包清单
+- 包文件名稳定，不带动态版本号；版本由仓库根版本文件和 marker 管理。
+- flavor 专属包放 flavor 的 `assets/`；共用包放 `oc` 并由 `apk` sourceSet 复用。
+- `build.gradle` 必须声明：
 
-| id | 内容 | 安装位置 | 使用方 |
-|---|---|---|---|
-| `kernel-opencode` | `opencode` 二进制 + `rootfs/` | `files/runtime/<upstreamVersion>/` | 本机 OpenCode（proot） |
-| `android` | `skills/` + `rootfs/`（JDK 21、Android SDK 36、Gradle 9.9、静态 aarch64 aapt2/adb） | `files/packs/android/<version>/`；skills 复制到两个配置目录 | Android 构建与调试 |
-
-`kernel-opencode` 解压后必须包含可执行的 `opencode`；`rootfs/` 提供 `opencode serve` 与 shell 的 musl 用户态。
-
-## 3. index.json
-
-示例（`size` 为占位）：
-
-```json
-{
-  "generated": "2026-11-20T00:00:00Z",
-  "upstream": { "opencode": "2.4.0" },
-  "packs": [
-    {
-      "id": "kernel-opencode",
-      "name": "OpenCode",
-      "category": "runtime",
-      "kind": "tar",
-      "version": "2.4.0-1",
-      "upstreamVersion": "2.4.0",
-      "abi": "arm64-v8a",
-      "installed": { "size": 0, "sha256": "…" },
-      "archive": {
-        "url": "https://…/kernel-opencode-2.4.0-1.tar.xz",
-        "size": 0,
-        "sha256": "…"
-      }
-    },
-    {
-      "id": "android",
-      "name": "Android 开发",
-      "category": "android",
-      "kind": "tar",
-      "version": "36.0-1",
-      "upstreamVersion": "36.0",
-      "abi": "arm64-v8a",
-      "installed": { "size": 0, "sha256": "…" },
-      "archive": {
-        "url": "https://…/android-36.0-1.tar.xz",
-        "size": 0,
-        "sha256": "…"
-      }
-    }
-  ]
+```gradle
+androidResources {
+    noCompress += ['tar.xz', 'xz']
 }
 ```
 
-| 字段 | 含义 |
-|---|---|
-| `generated` | 生成时间 |
-| `upstream.opencode` | 上游 opencode 版本 |
-| `packs[].id` | 包 id，App 按 id 查找 |
-| `packs[].kind` | 目前只有 `tar` |
-| `packs[].version` | 包版本 |
-| `packs[].upstreamVersion` | 包内组件版本；kernel 为 opencode 版本 |
-| `packs[].abi` | 仅接受 `arm64-v8a` |
-| `packs[].installed.size/sha256` | 未压缩 tar 流的大小与哈希 |
-| `packs[].archive.url/size/sha256` | 下载文件（tar.xz）的地址、大小与哈希 |
+## 5. 解压与安装
 
-只做全量包：每次更新下载完整 `archive`。
+### 5.1 目录
 
-## 4. 安装流程
-
-| 步骤 | 行为 |
-|---|---|
-| 1 | 拉取 `index.json` 与 `.sig`，验签后解析 |
-| 2 | 按 id 取包，检查 `kind=tar`、`abi=arm64-v8a` |
-| 3 | 下载到 `files/market/` 下的临时文件（`.part`），边下边算 SHA-256 |
-| 4 | 校验 archive 的 `size` + `sha256`，失败删除临时文件 |
-| 5 | XZ 解压为 tar，校验 `installed.size` + `sha256` |
-| 6 | 解压到 `<id>-<version>.tmp`，拒绝越界路径，保留符号链接与可执行位 |
-| 7 | 替换目标版本目录，删除压缩包与临时文件 |
-
-失败时旧版本保持不变；`kernel-opencode` 额外走健康检查与回滚（见 [`plugins.md`](plugins.md)）。
-
-## 5. 签名与信任
-
-| 项 | 做法 |
-|---|---|
-| 索引签名 | Ed25519，覆盖 `index.json` 原始字节；`.sig` 为 base64 |
-| 公钥 | 编译进 App（`MarketClient.DEFAULT_PUBLIC_KEY`） |
-| 下载校验 | 独立校验包的 `sha256` 与 `size` |
-| 索引覆盖 | 默认索引强制验签；自定义索引用于镜像/调试，可关闭验签 |
-| 信任边界 | 包内是可执行文件，安全等级等同 APK |
-
-## 6. 发布流程
-
-| 步骤 | 产物 |
-|---|---|
-| 1 | 组装 `kernel-opencode`：opencode 二进制 + rootfs，打成 tar |
-| 2 | 组装 `android`：`skills/` + rootfs，打成 tar |
-| 3 | 压缩为 `.tar.xz`，计算 archive 的 `size`/`sha256` |
-| 4 | 计算未压缩 tar 的 `size`/`sha256`，写入 `installed` |
-| 5 | 生成 `index.json` |
-| 6 | 用 Ed25519 私钥签 `index.json`，上传包、索引和 `.sig` |
-
-版本规则：
-
-| 变化 | 更新 |
-|---|---|
-| opencode 升级 | `kernel-opencode` 的 `version` 与 `upstreamVersion` |
-| Android 工具或 skills 升级 | `android` 的 `version` |
-| 仅索引变化 | `generated`，包文件不变 |
-
-## 7. 排查
-
-| 现象 | 原因 | 处理 |
+| 组件 | 目标目录 | marker |
 |---|---|---|
-| `HTTP 404` | 索引或包地址失效 | 检查市场发布与 `archive.url` |
-| `market index signature rejected` | 索引被改或公钥不匹配 | 重新签名并发布 `.sig` |
-| `download hash mismatch` | 下载中断或被替换 | 删除 `files/market` 缓存后重试 |
-| `installed hash mismatch` | 压缩包与索引不一致 | 重新生成索引 |
-| `unsafe tar entry` | 包内含越界路径 | 重新打包 |
-| `unsupported abi` | 设备不是 arm64-v8a | 使用支持该 ABI 的包 |
-| `opencode binary missing in pack` | kernel 包缺二进制 | 检查打包根目录 |
+| runtime | `files/runtime-core/`，rootfs 在 `files/runtime-core/rootfs/` | `files/runtime-core/.installed-v2` |
+| android | `files/packs/android/bundled/` | `files/packs/android/bundled/.installed-v1` |
 
-## 8. 代码位置
+### 5.2 时机
 
-| 责任 | 文件 |
+- App 启动/进入本机运行时前，由 `LocalServerService` 调用 `RuntimeAssets.ensure()` / `AndroidAssets.ensure()`。
+- 解压必须在后台线程，不阻塞 UI 主线程。
+- 有 `LOCK` 串行化，防止并发解压互相删除半成品。
+
+### 5.3 流程
+
+1. 检查 marker + 目标目录是否完整；完整则直接返回。
+2. 检查 asset 是否存在；不存在则返回 null/不可用。
+3. 删除旧的半成品目标目录。
+4. 流式解压 `assets/...tar.xz` 到目标目录：`BufferedInputStream -> XZInputStream -> TarArchiveInputStream`。
+5. 对每个 entry 做 canonical path 校验；支持 dir/file/symlink；恢复可执行位。
+6. 成功后写 marker；失败删除半成品并抛错。
+
+### 5.4 失败策略
+
+- 解压失败不留半成品：删除目标目录。
+- 下次启动可重试。
+- 日志标签：`OpenCodeRuntimeAssets`、`OpenCodeAndroidAssets`。
+
+## 6. 版本固定
+
+| 文件 | 作用 |
 |---|---|
-| 索引解析 | `market/src/main/kotlin/com/a2heng/androc/market/MarketIndex.kt` |
-| 验签、下载、解压、安装 | `market/src/main/kotlin/com/a2heng/androc/market/MarketClient.kt` |
-| android 包安装与 skills 复制 | `app/src/main/java/com/a2heng/androc/PackInstaller.java` |
-| opencode 更新、健康检查、回滚 | `app/src/main/java/com/a2heng/androc/RuntimeUpdateService.java` |
-| rootfs 定位 | `app/src/main/java/com/a2heng/androc/MuslRootfs.java` |
-| 索引地址覆盖 | `app/src/main/java/com/a2heng/androc/MarketConfig.java` |
+| `opencode.version` | OpenCode 上游版本 |
+| `android-pack.version` | Android 工具链包版本 |
+| `android-pack.sha256` | Android 工具链包 sha256 |
+| `scripts/fetch-opencode.py` | 拉取 OpenCode 二进制 |
+| `scripts/fetch-runtime.py` | 拉取 runtime rootfs |
+| `scripts/fetch-android-pack.py` | 拉取 Android 工具链包并校验 sha256 |
+
+规则：
+
+- 仓库不提交大型 tar.xz 产物，只提交版本/校验文件和 fetch 脚本。
+- CI/发版前先 fetch，再 assemble。
+- 更新包时同时更新版本文件、marker 版本（如格式变化）、文档和 RELEASE_NOTES。
+
+## 7. 未来新增 bundle 清单
+
+新增一个内置包时，至少补齐：
+
+1. 版本固定文件（版本 + sha256/签名）。
+2. `scripts/fetch-*.py`，支持缓存、校验、幂等。
+3. `app/src/<flavor>/assets/<component>/...tar.xz` 放置约定。
+4. `*Assets.java`：`ensure()/rootfs()/hasBundled()/marker/LOCK/安全解压`。
+5. `build.gradle` 的 `noCompress` 覆盖后缀。
+6. `docs/packs.md`、`docs/paths.md`、`docs/commands.md`、`AGENTS.md`。
+7. 如需用户可见，更新设置页/README/RELEASE_NOTES。

@@ -866,7 +866,6 @@ public final class LocalRuntime {
             String[] children = app.getAssets().list("skills");
             if (children == null) return;
             for (String child : children) {
-                if (!PluginCatalog.skillEnabled(app, child)) continue;
                 copyAssetDir(app, "skills/" + child, new File(dest, child));
             }
         } catch (Exception e) {

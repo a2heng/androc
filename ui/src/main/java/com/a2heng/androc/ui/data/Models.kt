@@ -444,6 +444,7 @@ data class IntegrationInfo(
     val name: String,
     val connections: Int,
     val methods: List<IntegrationMethod>,
+    val credentialIDs: List<String> = emptyList(),
 ) {
     val connected: Boolean get() = connections > 0
     val keyMethod: IntegrationMethod? get() = methods.firstOrNull { it.type == "key" }

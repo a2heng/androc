@@ -1,6 +1,6 @@
-# 产品分层与市场
+# 产品分层与内置组件
 
-本文说明 Androc 的产品分层、两个发行版、安装更新流程和市场包格式。
+本文说明 Androc 的产品分层、三个发行版、安装更新流程和内置组件包格式。
 运行时与路径见 [`paths.md`](paths.md)，插件条目见 [`plugins.md`](plugins.md)，
 musl rootfs 的组成与实测见 [`android-musl.md`](android-musl.md)。
 
@@ -12,7 +12,7 @@ musl rootfs 的组成与实测见 [`android-musl.md`](android-musl.md)。
 ┌────────────────────────────────────────────┐
 │ :ui        Compose：连接/设置、会话、聊天、文件、终端 │
 ├────────────────────────────────────────────┤
-│ :app       宿主：启动链路、proot、市场安装、自更新     │
+│ :app       宿主：启动链路、proot、内置组件安装、自更新     │
 ├────────────────────────────────────────────┤
 │ proot + Alpine musl rootfs                 │
 │   ├─ kernel-opencode：opencode + 基础用户态  │
@@ -22,17 +22,17 @@ musl rootfs 的组成与实测见 [`android-musl.md`](android-musl.md)。
 
 - `:ui` 只依赖 `:contracts`，不启动进程；本机 server、终端、文件根都由宿主注入。
 - `:app` 是唯一应用，负责 proot、端口、密码、组件安装和前台服务。
-- `:market` 只做签名索引、下载、校验和解压，被 `:app` 与 `:ui` 共用。
+- `:bundled` 只做签名索引、下载、校验和解压，被 `:app` 与 `:ui` 共用。
 - rootfs 只有一套用户态：Alpine musl；Android 工具链装在自己的 Alpine rootfs 里，
   通过 `/opt/androc/env.sh` 暴露 `JAVA_HOME`、`ANDROID_HOME` 和 `PATH`。
 
 ---
 
-## 2. 两个发行版
+## 2. 三个发行版
 
 | 发行版 | 内容 | 体积 | 适用 |
 |---|---|---:|---|
-| **thin** | UI only | 约 7 MB | 远程客户端：连接电脑或远程 opencode，不带市场 |
+| **thin** | UI only | 约 7 MB | 远程客户端：连接电脑或远程 opencode，不带内置组件 |
 | **bundle** | UI + `assets/runtime/rootfs.tar.xz` + opencode | 约 164 MB | 本机开箱即用，不依赖网络装内核 |
 
 同源规则：
@@ -40,7 +40,7 @@ musl rootfs 的组成与实测见 [`android-musl.md`](android-musl.md)。
 - 同一个 `applicationId`、同一套 `versionCode` / `versionName`；
 - 只有资源和 `BuildConfig.THIN` 不同，行为代码不复制；
 - 自更新按当前发行版取包：thin 只下 thin APK，bundle 只下 bundle APK；
-- bundle 内置的 rootfs 解压一次后，后续以市场组件为准。
+- bundle 内置的 rootfs 解压一次后，后续以内置组件组件为准。
 
 ---
 
@@ -71,11 +71,11 @@ files/runtime/<ver>/rootfs
 
 入口：连接页/设置里的“本机 OpenCode”对话框。
 
-1. 拉取市场 `index.json`，用内置公钥验证 `index.json.sig`；
-2. 取 `kernel-opencode`，下载 `archive.url` 到 `files/market`；
+1. 拉取内置组件 `index.json`，用内置公钥验证 `index.json.sig`；
+2. 取 `kernel-opencode`，下载 `archive.url` 到 `files/bundled`；
 3. 校验压缩包 size/sha256，解压成 tar，再校验 `installed` 的 size/sha256；
 4. 解到 `files/runtime/<upstreamVersion>.tmp`，成功后改名为正式目录；
-5. 已经安装时可直接“启动并登录”；市场版本更新时对话框显示“更新”。
+5. 已经安装时可直接“启动并登录”；内置组件版本更新时对话框显示“更新”。
 
 bundle 第一次启动本机时走 `RuntimeAssets.ensure()`：把内置 rootfs 解到
 `files/runtime-core/rootfs`，写 `.installed-v2` 标记；已经解压则跳过。
@@ -104,12 +104,12 @@ bundle 第一次启动本机时走 `RuntimeAssets.ensure()`：把内置 rootfs �
 
 ---
 
-## 5. 市场包格式
+## 5. 内置组件包格式
 
-市场仓库只放索引、签名、构建脚本和发布产物：
+内置组件仓库只放索引、签名、构建脚本和发布产物：
 
 ```text
-androc-market/
+androc-bundled/
 ├─ index.json
 ├─ index.json.sig
 ├─ keys/
@@ -163,14 +163,14 @@ androc-market/
 签名规则：
 
 - `index.json.sig` 是 Ed25519 对 `index.json` **原始字节**的签名；
-- 公钥编译进 App（`MarketClient.DEFAULT_PUBLIC_KEY`）；
+- 公钥编译进 App（`（已移除市场；组件内置）`）；
 - 默认索引强制验签；调试/镜像地址可经 `MarketConfig` 覆盖，覆盖时按调试路径处理。
 
 安装布局：
 
 ```text
 files/
-├─ market/                      # 下载缓存
+├─ bundled/                      # 下载缓存
 ├─ runtime/<upstreamVersion>/   # kernel-opencode：opencode + rootfs
 ├─ runtime-core/rootfs/         # bundle 内置解压
 └─ packs/android/<version>/     # android：skills + rootfs
@@ -190,7 +190,7 @@ files/
 - 卸载 `android`：删 `files/packs/android` 和对应 skills；OpenCode、会话、
   项目文件保留。
 - `opencode` 是运行中的内核，卸载按钮不可用；停止本机 server 后由更新流程替换。
-- 下载缓存 `files/market` 可随时清理；已安装版本不受影响。
+- 下载缓存 `files/bundled` 可随时清理；已安装版本不受影响。
 - 旧版本目录按版本号保留，排查回滚时可直接看 `files/runtime` 与
   `files/packs/android`。
 
@@ -200,7 +200,7 @@ files/
 
 | 对象 | 例子 | 规则 |
 |---|---|---|
-| App | `0.6.2` | 一个 `versionCode`，thin/bundle 共用 |
+| App | `0.6.2` | 一个 `versionCode`，thin/bundle/full 共用 |
 | opencode | `2.4.0` | 上游稳定版，写在 `opencode.version` |
 | `kernel-opencode` | `2.4.0-1` | `upstreamVersion` + 包修订号 |
 | `android` | `2-3` | 工具链批次 + 包修订号 |
