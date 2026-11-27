@@ -1454,10 +1454,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 if (current?.id != s.id) return@launch
                 val fresh = collapseMessages(page.messages).asReversed()
                 val freshIds = fresh.map { it.id }.toHashSet()
-                // 错误卡片始终跟在正文后面：把末尾的 error 消息挪到新消息之后。
-                val trailingErrors = messages.takeLastWhile { it.isError }
-                val base = messages.dropLast(trailingErrors.size)
-                val merged = base.filterNot { it.id in freshIds } + fresh + trailingErrors
+                // 服务端顺序是权威的；错误消息保持在它发生的轮次，不再挪到末尾。
+                val merged = messages.filterNot { it.id in freshIds } + fresh
                 messages = merged
                 autoBackgroundIfPending()
                 if (olderCursor == null || merged.size == fresh.size) {

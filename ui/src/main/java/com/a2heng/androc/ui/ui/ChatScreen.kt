@@ -630,20 +630,6 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                     }
                                 }
                             }
-                            (model.lastError ?: model.connectionError)?.let { error ->
-                                item(key = "error-notice") {
-                                    SelectionContainer {
-                                    ConversationCard(
-                                        title = "错误",
-                                        body = error,
-                                        detail = model.detailLevel,
-                                        icon = Icons.Rounded.ErrorOutline,
-                                        isError = true,
-                                        onClose = { model.clearError() },
-                                    )
-                                    }
-                                }
-                            }
                             items(model.messages.asReversed(), key = { it.id }) { msg ->
                                 // 卡片出现/消失统一用 CardMotion（淡入淡出，不位移）
                                 Box(
@@ -1569,14 +1555,20 @@ private fun ConversationCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isError: Boolean = false,
     markdown: Boolean = false,
+    status: String? = null,
     onClose: (() -> Unit)? = null,
 ) {
     if (body.isBlank()) return
     val context = LocalContext.current
     val previewLimit = if (detail == "compact") 120 else 220
     val long = body.length > previewLimit
-    var expanded by rememberSaveable(body) { mutableStateOf(!long) }
-    val collapsed = long && !expanded
+    var expanded by rememberSaveable(body) { mutableStateOf(false) }
+    val statusText = status ?: if (isError) "失败" else "完成"
+    val statusColor = when {
+        isError -> MaterialTheme.colorScheme.error
+        statusText.contains("重试") -> Sky
+        else -> Accent
+    }
     Surface(
         color = AndrocColor.Medium,
         shape = RoundedCornerShape(10.dp),
@@ -1584,16 +1576,8 @@ private fun ConversationCard(
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
-        Column(
-            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickableNoRipple { if (long) expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     icon,
                     contentDescription = null,
@@ -1604,34 +1588,49 @@ private fun ConversationCard(
                 Spacer(Modifier.width(6.dp))
                 Text(
                     title,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
-                    color = if (isError) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    statusText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor,
                 )
                 Spacer(Modifier.weight(1f))
-                if (long) {
-                    Text(
-                        if (expanded) "收起" else "展开",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else if (onClose != null) {
+                Text(
+                    "${body.length} 字",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (onClose != null) {
                     TextButton(onClick = onClose) {
                         Text("关闭", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
-            if (markdown && !collapsed) {
-                AssistantText(body, null)
-            } else {
-                Text(
-                    if (collapsed) body.take(previewLimit) + "…" else body,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isError) MaterialTheme.colorScheme.error
-                    else AndrocColor.OnMedium,
-                )
+            LeftAccent(
+                accent = if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                if (expanded) {
+                    if (markdown) AssistantText(body, null)
+                    else Text(
+                        body,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isError) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurface,
+                    )
+                } else {
+                    ClampedText(
+                        body,
+                        maxLines = 16,
+                        onExpand = { expanded = true },
+                        maskColor = AndrocColor.Medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
@@ -1723,6 +1722,7 @@ private fun MessageItem(
                 },
                 detail = detail,
                 icon = Icons.Rounded.Sync,
+                status = "重试中",
             )
             Spacer(Modifier.height(4.dp))
         }
