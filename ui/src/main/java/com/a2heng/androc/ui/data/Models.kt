@@ -224,13 +224,47 @@ private fun toolInputText(state: JsonObject): String {
     }
 }
 
+private val IMAGE_PATH = Regex(
+    """(?:^|\s)((?:/|file://)[^\s"'<>]+\.(?:png|jpe?g|webp|gif))""",
+    RegexOption.IGNORE_CASE,
+)
+
+private fun fileToDataUri(raw: String): String? {
+    val path = raw.removePrefix("file://")
+    val f = java.io.File(path)
+    if (!f.isFile || f.length() > 8L * 1024 * 1024) return null
+    val mime = when (f.extension.lowercase()) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "webp" -> "image/webp"
+        "gif" -> "image/gif"
+        else -> "image/png"
+    }
+    return "data:$mime;base64," +
+        android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)
+}
+
 private fun parseToolImages(state: JsonObject): List<String> =
     state.arr("content").mapNotNull { item ->
         val o = item as? JsonObject ?: return@mapNotNull null
-        val uri = o.str("uri") ?: return@mapNotNull null
-        val mime = o.str("mime") ?: ""
-        if (o.str("type") == "file" && (mime.startsWith("image/") || uri.startsWith("data:image"))) uri else null
-    }.take(2)
+        val type = o.str("type") ?: ""
+        val mime = o.str("mime") ?: o.str("mimeType") ?: o.str("mediaType") ?: ""
+        val uri = o.str("uri") ?: o.str("url") ?: o.str("image") ?: ""
+        val data = o.str("data") ?: o.str("base64") ?: ""
+        when {
+            // file / image with a data: URI (built-in read tool)
+            uri.startsWith("data:image") -> uri
+            // MCP image: { type: "image", data: "...", mimeType: "image/png" }
+            data.isNotBlank() -> "data:${mime.ifBlank { "image/png" }};base64,$data"
+            // local image path returned as file:// URI
+            (uri.startsWith("file://") || type == "file") &&
+                (mime.startsWith("image/") || uri.matches(Regex(".*\\.(png|jpe?g|webp|gif)$", RegexOption.IGNORE_CASE))) ->
+                fileToDataUri(uri)
+            // MCP text result: "saved to /path/image.png"
+            type == "text" -> o.str("text")?.let { IMAGE_PATH.find(it)?.groupValues?.get(1) }
+                ?.let(::fileToDataUri)
+            else -> null
+        }
+    }.filterNotNull().take(4)
 
 private fun parseToolDiff(state: JsonObject): String {
     val files = state.obj("metadata")?.arr("files") ?: return ""
@@ -265,6 +299,29 @@ private fun parsePart(e: JsonElement): Part? {
     }
 }
 
+/** 把常见的服务端/网络错误转成中文；未知错误保留原文并加前缀。 */
+fun localizeError(raw: String?): String {
+    val m = raw?.trim().orEmpty()
+    if (m.isEmpty()) return "请求失败"
+    val l = m.lowercase()
+    return when {
+        l.contains("region") || l.contains("country") || l.contains("not available in your") ->
+            "当前地区不可用"
+        l.contains("rate limit") || l.contains("too many requests") ||
+            l.contains("quota") || l.contains("usage limit") || l.contains("usage cap") ->
+            "使用上限/请求过于频繁，请稍后重试"
+        l.contains("unauthorized") || l.contains("401") || l.contains("invalid api key") ||
+            l.contains("invalid key") -> "认证失败，请检查 API key"
+        l.contains("forbidden") || l.contains("403") -> "没有权限访问该模型"
+        l.contains("timeout") || l.contains("timed out") -> "请求超时"
+        l.contains("network") || l.contains("unable to resolve") ||
+            l.contains("failed to connect") || l.contains("connection") -> "网络连接失败"
+        l.contains("internal server") || l.contains("502") || l.contains("503") ||
+            l.contains("504") || l.contains("500") -> "服务器错误，请稍后重试"
+        else -> "服务器错误：$m"
+    }
+}
+
 fun parseMessage(o: JsonObject): Msg {
     val type = o.str("type") ?: "unknown"
     val time = o.obj("time")
@@ -292,12 +349,12 @@ fun parseMessage(o: JsonObject): Msg {
             model = ModelRef.from(o["model"]),
             agent = o.str("agent") ?: "",
             finish = o.str("finish"),
-            error = o.obj("error")?.str("message"),
+            error = localizeError(o.obj("error")?.str("message")),
             retryAttempt = o.obj("retry")?.let { r ->
                 (r["attempt"] as? JsonPrimitive)?.content?.toIntOrNull()
             },
             retryAt = o.obj("retry")?.long("at"),
-            retryError = o.obj("retry")?.obj("error")?.str("message"),
+            retryError = localizeError(o.obj("retry")?.obj("error")?.str("message")),
         )
         "compaction" -> Msg(
             id = o.str("id") ?: "",

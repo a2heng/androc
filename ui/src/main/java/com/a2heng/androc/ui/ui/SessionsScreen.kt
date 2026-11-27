@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -219,40 +220,40 @@ fun SessionsScreen(
                     }
                 }
                 list.isEmpty() -> EmptyState("还没有会话", "点右上角 + 新建一个，或在电脑上先跑起来")
-                else -> LazyColumn(Modifier.fillMaxSize()) {
-                    if (running.isNotEmpty()) {
-                        stickyHeader(key = "running") {
-                            RunningHeader(running.size)
-                        }
-                        items(running, key = { "run:${it.id}" }) { session ->
-                            SessionRow(model, session, onOpenCache)
-                        }
-                    } else if (recent.isNotEmpty()) {
-                        stickyHeader(key = "recent") {
-                            RecentHeader()
-                        }
-                        items(recent, key = { "recent:${it.id}" }) { session ->
-                            SessionRow(model, session, onOpenCache)
-                        }
+                else -> {
+                    // 瀑布流：旧的在上面，最新/最近的沉到下面。
+                    val ordered = remember(list) { list.sortedBy { it.updated } }
+                    val orderedGroups = remember(list) {
+                        ordered.groupBy { it.directory.ifBlank { "（默认目录）" } }
+                            .entries
+                            .sortedBy { entry -> entry.value.maxOf { it.updated } }
                     }
-                    if (grouped) {
-                        groups.forEach { (dir, items) ->
-                            stickyHeader(key = "folder:$dir") {
-                                FolderHeader(dir, items.size, model.homeDir)
+                    val listState = rememberLazyListState()
+                    val totalRows = if (grouped) {
+                        orderedGroups.sumOf { it.value.size + 1 } // +1 folder header
+                    } else {
+                        ordered.size
+                    }
+                    LaunchedEffect(totalRows, grouped) {
+                        if (totalRows > 0) listState.scrollToItem(totalRows - 1)
+                    }
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                        if (grouped) {
+                            orderedGroups.forEach { (dir, groupItems) ->
+                                stickyHeader(key = "folder:$dir") {
+                                    FolderHeader(dir, groupItems.size, model.homeDir)
+                                }
+                                items(groupItems, key = { it.id }) { session ->
+                                    SessionRow(model, session, onOpenCache)
+                                }
                             }
-                            items(items, key = { it.id }) { session ->
+                        } else {
+                            items(ordered, key = { it.id }) { session ->
                                 SessionRow(model, session, onOpenCache)
                             }
                         }
-                    } else {
-                        // recent 已经从 rest 里取走了前几条；这里必须用
-                        // groupedRest，否则同一会话会出现两次（数量显示 1，
-                        // 列表却有两行）。
-                        items(groupedRest, key = { it.id }) { session ->
-                            SessionRow(model, session, onOpenCache)
-                        }
+                        item { Spacer(Modifier.height(16.dp)) }
                     }
-                    item { Spacer(Modifier.height(16.dp)) }
                 }
             }
         }

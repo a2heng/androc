@@ -1454,8 +1454,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 if (current?.id != s.id) return@launch
                 val fresh = collapseMessages(page.messages).asReversed()
                 val freshIds = fresh.map { it.id }.toHashSet()
-                // 服务端顺序是权威的：老的在前，最新一页接在后面；不要按 created 重排
-                val merged = messages.filterNot { it.id in freshIds } + fresh
+                // 错误卡片始终跟在正文后面：把末尾的 error 消息挪到新消息之后。
+                val trailingErrors = messages.takeLastWhile { it.isError }
+                val base = messages.dropLast(trailingErrors.size)
+                val merged = base.filterNot { it.id in freshIds } + fresh + trailingErrors
                 messages = merged
                 autoBackgroundIfPending()
                 if (olderCursor == null || merged.size == fresh.size) {
@@ -1530,7 +1532,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     private fun appendErrorMessage(sessionID: String, message: String) {
         if (current?.id != sessionID) return
-        val text = message.ifBlank { "请求失败" }
+        val text = localizeError(message)
         val last = messages.lastOrNull()
         if (last?.isError == true && last.error == text) return
         messages = messages + Msg(

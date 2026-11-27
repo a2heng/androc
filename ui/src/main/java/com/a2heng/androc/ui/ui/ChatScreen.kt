@@ -57,6 +57,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
@@ -618,6 +619,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             }
                             model.statusNotice?.let { notice ->
                                 item(key = "status-notice") {
+                                    SelectionContainer {
                                     ConversationCard(
                                         title = if (notice.contains("重试")) "重试中" else "状态",
                                         body = notice,
@@ -625,10 +627,12 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                         icon = Icons.Rounded.Sync,
                                         onClose = { model.clearNotice() },
                                     )
+                                    }
                                 }
                             }
                             (model.lastError ?: model.connectionError)?.let { error ->
                                 item(key = "error-notice") {
+                                    SelectionContainer {
                                     ConversationCard(
                                         title = "错误",
                                         body = error,
@@ -637,6 +641,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                         isError = true,
                                         onClose = { model.clearError() },
                                     )
+                                    }
                                 }
                             }
                             items(model.messages.asReversed(), key = { it.id }) { msg ->
@@ -1567,6 +1572,7 @@ private fun ConversationCard(
     onClose: (() -> Unit)? = null,
 ) {
     if (body.isBlank()) return
+    val context = LocalContext.current
     val previewLimit = if (detail == "compact") 120 else 220
     val long = body.length > previewLimit
     var expanded by rememberSaveable(body) { mutableStateOf(!long) }
@@ -1828,6 +1834,7 @@ private fun ClampedText(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ReasoningBlock(
     text: String,
@@ -1836,6 +1843,7 @@ private fun ReasoningBlock(
     onOpenReasoning: (String) -> Unit = {},
 ) {
     if (text.isBlank()) return
+    val context = LocalContext.current
     if (detail == "compact") {
         // 精简模式也给一行思考，点开看完整内容
         Row(
@@ -2005,6 +2013,7 @@ private fun ShellBlock(text: String, command: Boolean, maxLines: Int) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ToolBlock(
     part: Part.Tool,
@@ -2015,6 +2024,7 @@ private fun ToolBlock(
     onBackground: () -> Unit = {},
     onOpenFile: ((String) -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     val hasDiff = part.diff.isNotBlank()
     val cleanPatch = if (hasDiff) cleanDiff(part.diff) else ""
     val hasOutput = part.output.isNotBlank()

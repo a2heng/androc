@@ -1,5 +1,22 @@
 package com.a2heng.androc.ui.ui
 
+import android.content.Context
+import android.content.Intent
+import android.webkit.MimeTypeMap
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -210,10 +227,19 @@ private fun FsListPane(model: AppModel) {
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(model.fsEntries, key = { it.path }) { entry ->
-                    FsRow(entry) {
-                        val full = fullPath(model.fsDir.ifBlank { rootBase }, entry.path)
-                        if (entry.isDir) model.loadDir(full) else model.openFile(full)
-                    }
+                    val context = LocalContext.current
+                    val scope = rememberCoroutineScope()
+                    FsRow(
+                        entry = entry,
+                        onClick = {
+                            val full = fullPath(model.fsDir.ifBlank { rootBase }, entry.path)
+                            if (entry.isDir) model.loadDir(full) else model.openFile(full)
+                        },
+                        onLongClick = {
+                            val full = fullPath(model.fsDir.ifBlank { rootBase }, entry.path)
+                            scope.launch { shareEntry(context, full, entry.isDir) }
+                        },
+                    )
                 }
                 item { Spacer(Modifier.height(20.dp)) }
             }
@@ -330,12 +356,60 @@ private fun FsChip(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+private fun zipDir(src: File, dest: File) {
+    ZipOutputStream(BufferedOutputStream(FileOutputStream(dest))).use { zos ->
+        src.walkTopDown().forEach { f ->
+            if (f == src) return@forEach
+            val rel = f.relativeTo(src).path.replace('\\', '/')
+            if (rel.isBlank()) return@forEach
+            val name = if (f.isDirectory) "$rel/" else rel
+            zos.putNextEntry(ZipEntry(name))
+            if (f.isFile) f.inputStream().use { it.copyTo(zos) }
+            zos.closeEntry()
+        }
+    }
+}
+
+private suspend fun shareEntry(context: Context, path: String, isDir: Boolean) {
+    val file = File(path)
+    if (!file.exists()) return
+    val shareFile = if (isDir) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "正在打包文件夹…", Toast.LENGTH_SHORT).show()
+        }
+        withContext(Dispatchers.IO) {
+            val dir = File(context.cacheDir, "share")
+            dir.mkdirs()
+            val safe = file.name.ifBlank { "folder" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            val zip = File(dir, "$safe-${System.currentTimeMillis()}.zip")
+            zipDir(file, zip)
+            zip
+        }
+    } else file
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", shareFile)
+    val mime = if (isDir) "application/zip" else {
+        context.contentResolver.getType(uri)
+            ?: MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(shareFile.extension.lowercase())
+            ?: "*/*"
+    }
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = mime
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    withContext(Dispatchers.Main) {
+        context.startActivity(Intent.createChooser(intent, "共享"))
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FsRow(entry: FsEntry, onClick: () -> Unit) {
+private fun FsRow(entry: FsEntry, onClick: () -> Unit, onLongClick: () -> Unit = {}) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickableNoRipple(onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
