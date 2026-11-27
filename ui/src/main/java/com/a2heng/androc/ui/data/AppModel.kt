@@ -1522,9 +1522,23 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 it.isUser -> true
                 it.isAssistant -> it.parts.isNotEmpty() || it.text.isNotBlank()
                 it.isCompaction -> it.text.isNotBlank() || it.error != null
+                it.isError -> true
                 else -> false
             }
         }
+    }
+
+    private fun appendErrorMessage(sessionID: String, message: String) {
+        if (current?.id != sessionID) return
+        val text = message.ifBlank { "请求失败" }
+        val last = messages.lastOrNull()
+        if (last?.isError == true && last.error == text) return
+        messages = messages + Msg(
+            id = "err_${System.currentTimeMillis()}_${messages.size}",
+            role = "error",
+            created = System.currentTimeMillis(),
+            error = text,
+        )
     }
 
     fun sendPrompt(text: String, attachments: List<Attachment> = emptyList()) {
@@ -1568,7 +1582,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
                 refreshSessions()
             } catch (e: Exception) {
-                lastError = e.message
+                appendErrorMessage(s.id, e.message ?: "请求失败")
                 if (mode != "queue" && mode != "steer") sending = false
             }
         }
@@ -1611,7 +1625,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
                 refreshSessions()
             } catch (e: Exception) {
-                lastError = e.message
+                appendErrorMessage(s.id, e.message ?: "请求失败")
                 if (mode != "queue" && mode != "steer") sending = false
             }
         }
@@ -1944,7 +1958,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             "session.tool.success", "session.tool.failed" -> {
                 scheduleReload()
             }
-            "session.execution.succeeded", "session.execution.failed",
+            "session.execution.failed" -> {
+                sending = false
+                activeIds = activeIds - sid
+                statusLine = ""
+                val msg = data.obj("error")?.str("message") ?: "服务器错误"
+                appendErrorMessage(sid, msg)
+                scheduleReload(immediate = true)
+                refreshSessions()
+            }
+            "session.retry.scheduled" -> scheduleReload(immediate = true)
+            "session.execution.succeeded",
             "session.execution.interrupted", "session.idle" -> {
                 sending = false
                 activeIds = activeIds - sid
@@ -1957,7 +1981,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 val msg = data.str("message")
                     ?: data.obj("error")?.str("message")
                     ?: data.obj("info")?.obj("error")?.str("message")
-                lastError = msg
+                appendErrorMessage(sid, msg ?: "服务器错误")
                 scheduleReload(immediate = true)
             }
             "session.message.content.updated", "session.message" -> scheduleReload()

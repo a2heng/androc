@@ -91,6 +91,9 @@ import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.NoteAdd
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Compress
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -615,12 +618,25 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             }
                             model.statusNotice?.let { notice ->
                                 item(key = "status-notice") {
-                                    InlineNotice(notice) { model.clearNotice() }
+                                    ConversationCard(
+                                        title = if (notice.contains("重试")) "重试中" else "状态",
+                                        body = notice,
+                                        detail = model.detailLevel,
+                                        icon = Icons.Rounded.Sync,
+                                        onClose = { model.clearNotice() },
+                                    )
                                 }
                             }
                             (model.lastError ?: model.connectionError)?.let { error ->
                                 item(key = "error-notice") {
-                                    InlineNotice(error, isError = true) { model.clearError() }
+                                    ConversationCard(
+                                        title = "错误",
+                                        body = error,
+                                        detail = model.detailLevel,
+                                        icon = Icons.Rounded.ErrorOutline,
+                                        isError = true,
+                                        onClose = { model.clearError() },
+                                    )
                                 }
                             }
                             items(model.messages.asReversed(), key = { it.id }) { msg ->
@@ -1541,32 +1557,80 @@ private fun ComposerAction(
 private data class ReasoningView(val text: String, val live: Boolean)
 
 @Composable
-private fun InlineNotice(text: String, isError: Boolean = false, onClose: (() -> Unit)? = null) {
+private fun ConversationCard(
+    title: String,
+    body: String,
+    detail: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isError: Boolean = false,
+    markdown: Boolean = false,
+    onClose: (() -> Unit)? = null,
+) {
+    if (body.isBlank()) return
+    val previewLimit = if (detail == "compact") 120 else 220
+    val long = body.length > previewLimit
+    var expanded by rememberSaveable(body) { mutableStateOf(!long) }
+    val collapsed = long && !expanded
     Surface(
-        color = if (isError) MaterialTheme.colorScheme.errorContainer
-        else AndrocColor.Medium,
-        contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer
-        else AndrocColor.OnMedium,
+        color = AndrocColor.Medium,
         shape = RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
-        Row(
+        Column(
             Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(
-                text,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(1f),
-            )
-            if (onClose != null) {
-                TextButton(onClick = onClose) { Text("关闭", style = MaterialTheme.typography.labelSmall) }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickableNoRipple { if (long) expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = if (isError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = if (isError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                if (long) {
+                    Text(
+                        if (expanded) "收起" else "展开",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else if (onClose != null) {
+                    TextButton(onClick = onClose) {
+                        Text("关闭", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            if (markdown && !collapsed) {
+                AssistantText(body, null)
+            } else {
+                Text(
+                    if (collapsed) body.take(previewLimit) + "…" else body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isError) MaterialTheme.colorScheme.error
+                    else AndrocColor.OnMedium,
+                )
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageItem(
     msg: Msg,
@@ -1579,22 +1643,33 @@ private fun MessageItem(
     onOpenPath: ((String) -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
+    if (msg.isError) {
+        ConversationCard(
+            title = "错误",
+            body = msg.error ?: msg.text.ifBlank { "请求失败" },
+            detail = detail,
+            icon = Icons.Rounded.ErrorOutline,
+            isError = true,
+        )
+        return
+    }
     if (msg.isCompaction) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Text(
-                if (msg.finish == "failed") "上下文压缩失败" else "上下文压缩",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (msg.error != null) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+        if (msg.error != null) {
+            ConversationCard(
+                title = "上下文压缩失败",
+                body = msg.error,
+                detail = detail,
+                icon = Icons.Rounded.Compress,
+                isError = true,
             )
-            if (msg.text.isNotBlank()) AssistantText(msg.text, onOpenPath)
-            msg.error?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+        } else {
+            ConversationCard(
+                title = "上下文压缩",
+                body = msg.text,
+                detail = detail,
+                icon = Icons.Rounded.Compress,
+                markdown = true,
+            )
         }
         return
     }
@@ -1627,6 +1702,24 @@ private fun MessageItem(
     }
 
     Column(Modifier.fillMaxWidth()) {
+        if (msg.retryAttempt != null) {
+            val wait = msg.retryAt?.let {
+                ((it - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+            }
+            ConversationCard(
+                title = "重试中 ${msg.retryAttempt}",
+                body = buildString {
+                    msg.retryError?.let { append(it) }
+                    if (wait != null) {
+                        if (isNotEmpty()) append("\n")
+                        append("约 ${wait}s 后重试")
+                    }
+                },
+                detail = detail,
+                icon = Icons.Rounded.Sync,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
         msg.parts.forEach { part ->
             when (part) {
                 is Part.Reasoning -> ReasoningBlock(part.text, detail, onOpenReasoning = onOpenReasoning)
@@ -1636,7 +1729,13 @@ private fun MessageItem(
         }
         if (msg.parts.isEmpty() && msg.text.isNotBlank()) AssistantText(msg.text, onOpenPath)
         msg.error?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            ConversationCard(
+                title = "错误",
+                body = it,
+                detail = detail,
+                icon = Icons.Rounded.ErrorOutline,
+                isError = true,
+            )
         }
         if (detail != "compact") Footer(msg)
     }

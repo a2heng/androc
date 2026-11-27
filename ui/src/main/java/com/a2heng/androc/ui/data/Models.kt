@@ -174,10 +174,14 @@ data class Msg(
     val agent: String = "",
     val finish: String? = null,
     val error: String? = null,
+    val retryAttempt: Int? = null,
+    val retryAt: Long? = null,
+    val retryError: String? = null,
 ) {
     val isUser get() = role == "user"
     val isAssistant get() = role == "assistant"
     val isCompaction get() = role == "compaction"
+    val isError get() = role == "error"
 }
 
 private fun toolContentText(state: JsonObject): String {
@@ -289,6 +293,11 @@ fun parseMessage(o: JsonObject): Msg {
             agent = o.str("agent") ?: "",
             finish = o.str("finish"),
             error = o.obj("error")?.str("message"),
+            retryAttempt = o.obj("retry")?.let { r ->
+                (r["attempt"] as? JsonPrimitive)?.content?.toIntOrNull()
+            },
+            retryAt = o.obj("retry")?.long("at"),
+            retryError = o.obj("retry")?.obj("error")?.str("message"),
         )
         "compaction" -> Msg(
             id = o.str("id") ?: "",
