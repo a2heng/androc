@@ -513,6 +513,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
+            NoticeBanner(model)
             ErrorBanner(model)
 
             if (pendingPermissions.isNotEmpty()) {

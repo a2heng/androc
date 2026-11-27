@@ -36,6 +36,8 @@ class OcClient(
     private val password: String,
     /** 网络/限流/5xx 重试时回调：attempt 从 1 开始，code 为 null 表示 IO 异常。 */
     private val onRetry: ((attempt: Int, code: Int?, reason: String) -> Unit)? = null,
+    /** 一次请求最终成功/失败（重试结束后）回调，用来清掉界面上的重试提示。 */
+    private val onRetryEnd: (() -> Unit)? = null,
 ) {
 
     val base: String = normalize(rawBase)
@@ -85,9 +87,13 @@ class OcClient(
                     attempt++
                     continue
                 }
+                if (attempt > 0) onRetryEnd?.invoke()
                 return resp
             } catch (e: IOException) {
-                if (attempt >= MAX_RETRIES) throw e
+                if (attempt >= MAX_RETRIES) {
+                    onRetryEnd?.invoke()
+                    throw e
+                }
                 val wait = backoff(attempt)
                 onRetry?.invoke(attempt + 1, null, e.message ?: e.javaClass.simpleName)
                 delay(wait)

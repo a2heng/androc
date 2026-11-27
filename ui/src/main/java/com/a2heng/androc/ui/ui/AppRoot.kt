@@ -315,6 +315,25 @@ private fun EmptyChatHint() {
 }
 
 @Composable
+fun NoticeBanner(model: AppModel) {
+    val notice = model.statusNotice ?: return
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            notice,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = { model.clearNotice() }) { Text("关闭") }
+    }
+}
+
+@Composable
 fun ErrorBanner(model: AppModel) {
     val error = model.lastError ?: model.connectionError
     if (error != null) {

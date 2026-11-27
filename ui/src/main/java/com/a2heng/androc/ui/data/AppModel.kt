@@ -674,14 +674,26 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private var hadConnected = false
     private val mainHandler = android.os.Handler(Looper.getMainLooper())
 
-    private fun postToast(message: String, long: Boolean = false) {
-        mainHandler.post {
-            Toast.makeText(
-                getApplication(),
-                message,
-                if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT,
-            ).show()
+    /** 界面内的临时状态条：重试、压缩结果等。 */
+    var statusNotice by mutableStateOf<String?>(null)
+        private set
+    private var statusNoticeJob: Job? = null
+
+    fun showNotice(message: String, autoClearMs: Long = 5000) {
+        statusNotice = message
+        statusNoticeJob?.cancel()
+        if (autoClearMs > 0) {
+            statusNoticeJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(autoClearMs)
+                if (statusNotice == message) statusNotice = null
+            }
         }
+    }
+
+    fun clearNotice() {
+        statusNotice = null
+        statusNoticeJob?.cancel()
+        statusNoticeJob = null
     }
 
     // =========================================================================
@@ -701,10 +713,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                         code != null -> "服务器错误 $code"
                         else -> "网络错误"
                     }
-                    postToast("$what，重试 $attempt/3（$reason）")
+                    showNotice("$what，重试 $attempt/3（$reason）", autoClearMs = 0)
                 }
+                val retryEnd: () -> Unit = { clearNotice() }
                 var target = normalized
-                var c = OcClient(target, pwd, retryNotice)
+                var c = OcClient(target, pwd, retryNotice, retryEnd)
                 val info = try {
                     withContext(Dispatchers.IO) { c.ping() } as? JsonObject
                 } catch (e: Exception) {
@@ -713,7 +726,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     val fallback = OcClient.plainHttpFallback(target, e)
                     if (fallback == null) throw e
                     target = fallback
-                    c = OcClient(target, pwd, retryNotice)
+                    c = OcClient(target, pwd, retryNotice, retryEnd)
                     val retried = withContext(Dispatchers.IO) { c.ping() } as? JsonObject
                     Toast.makeText(
                         getApplication(),
@@ -1844,7 +1857,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     private fun handleEvent(event: JsonObject) {
         val type = event.str("type") ?: return
-        if (type == "__error") return
+        if (type == "__error") {
+            showNotice("事件流断开，正在重连…", autoClearMs = 0)
+            return
+        }
         val data = event.obj("data") ?: JsonObject(emptyMap())
         var sessionID = data.str("sessionID")
         if (sessionID == null) {
@@ -1852,6 +1868,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
 
         if (type == "server.connected") {
+            clearNotice()
             refreshSessions()
             loadPermissions()
             return
@@ -1936,7 +1953,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             }
             "session.error" -> {
                 sending = false
-                lastError = data.str("message")
+                val msg = data.str("message")
+                    ?: data.obj("error")?.str("message")
+                    ?: data.obj("info")?.obj("error")?.str("message")
+                lastError = msg
                 scheduleReload(immediate = true)
             }
             "session.message.content.updated", "session.message" -> scheduleReload()
@@ -2084,7 +2104,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun compactSession() {
         val c = client ?: return
         val s = current ?: return
-        Toast.makeText(getApplication(), "正在压缩上下文…", Toast.LENGTH_SHORT).show()
+        showNotice("正在压缩上下文…", autoClearMs = 0)
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { c.compact(s.id) }
@@ -2094,11 +2114,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     "failed" -> "压缩失败：${result.error ?: "未知错误"}"
                     else -> "压缩状态：${result.status}"
                 }
-                postToast(msg, long = true)
+                showNotice(msg, autoClearMs = 6000)
                 loadMessages(silent = true)
             } catch (e: Exception) {
                 lastError = e.message
-                postToast("压缩失败：${e.message ?: "未知错误"}", long = true)
+                showNotice("压缩失败：${e.message ?: "未知错误"}", autoClearMs = 0)
             }
         }
     }
