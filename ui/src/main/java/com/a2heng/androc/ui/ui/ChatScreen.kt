@@ -1792,14 +1792,15 @@ private fun MessageItem(
             )
             Spacer(Modifier.height(4.dp))
         }
-        msg.error?.let {
+        val errText = msg.error
+        if (errText != null && msg.parts.isEmpty() && msg.text.isBlank()) {
             ConversationCard(
                 title = "错误",
-                body = it,
+                body = errText,
                 detail = detail,
                 icon = Icons.Rounded.ErrorOutline,
                 isError = true,
-                onOpen = { onOpenCard("错误", it) },
+                onOpen = { onOpenCard("错误", errText) },
             )
         }
         msg.parts.forEach { part ->

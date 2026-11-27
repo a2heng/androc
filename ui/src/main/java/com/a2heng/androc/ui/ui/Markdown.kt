@@ -907,49 +907,13 @@ private fun LinkableText(
     fontWeight: FontWeight? = null,
     onOpenPath: ((String) -> Unit)? = null,
 ) {
-    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val uriHandler = LocalUriHandler.current
-    val tapModifier = if (onOpenPath == null) {
-        modifier.pointerInput(annotated) {
-            detectTapGestures { pos ->
-                val lr = layout ?: return@detectTapGestures
-                if (annotated.isEmpty()) return@detectTapGestures
-                val offset = lr.getOffsetForPosition(pos).coerceIn(0, annotated.length - 1)
-                val urlAnn = annotated.getLinkAnnotations(offset, offset + 1).firstOrNull()?.item
-                if (urlAnn is LinkAnnotation.Url) runCatching { uriHandler.openUri(urlAnn.url) }
-            }
-        }
-    } else {
-        modifier.pointerInput(annotated, onOpenPath, uriHandler) {
-            detectTapGestures { pos ->
-                val lr = layout ?: return@detectTapGestures
-                if (annotated.isEmpty()) return@detectTapGestures
-                val offset = lr.getOffsetForPosition(pos).coerceIn(0, annotated.length - 1)
-                // 1) Markdown 链接显式标注的文件目标
-                val fileAnn = annotated.getStringAnnotations("FILE_PATH", offset, offset + 1)
-                    .firstOrNull()?.item
-                if (fileAnn != null) {
-                    onOpenPath(fileAnn)
-                    return@detectTapGestures
-                }
-                // 2) http(s) 链接
-                val urlAnn = annotated.getLinkAnnotations(offset, offset + 1).firstOrNull()?.item
-                if (urlAnn is LinkAnnotation.Url) {
-                    runCatching { uriHandler.openUri(urlAnn.url) }
-                    return@detectTapGestures
-                }
-                // 3) 文本里裸露的路径（绝对/相对/file://）
-                pathAt(annotated.text, offset)?.let(onOpenPath)
-            }
-        }
-    }
+    // 不挂自定义 tap 手势：它会吞掉长按，导致 Markdown 文本无法选择/复制。
     Text(
         annotated,
         style = style,
-        modifier = tapModifier,
+        modifier = modifier,
         color = color,
         fontStyle = fontStyle,
         fontWeight = fontWeight,
-        onTextLayout = { layout = it },
     )
 }

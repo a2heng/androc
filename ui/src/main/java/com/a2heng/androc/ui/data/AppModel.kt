@@ -1555,6 +1555,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         messages = copy
     }
 
+    /** 本轮最终成功时，清掉过程中记录的临时错误（重试后成功就不该再显示）。 */
+    private fun clearTurnErrors() {
+        val lastUser = messages.indexOfLast { it.isUser }
+        if (lastUser < 0) return
+        messages = messages.filterIndexed { idx, m -> !(idx > lastUser && m.isError) }
+    }
+
     fun sendPrompt(text: String, attachments: List<Attachment> = emptyList()) {
         val c = client ?: return
         val s = current ?: return
@@ -1989,6 +1996,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 sending = false
                 activeIds = activeIds - sid
                 statusLine = ""
+                if (type == "session.execution.succeeded" ||
+                    (type == "session.idle" && data.str("outcome") != "failed")) {
+                    clearTurnErrors()
+                }
                 scheduleReload(immediate = true)
                 refreshSessions()
             }
