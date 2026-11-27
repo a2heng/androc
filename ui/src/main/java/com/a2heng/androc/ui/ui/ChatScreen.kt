@@ -513,8 +513,6 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            NoticeBanner(model)
-            ErrorBanner(model)
 
             if (pendingPermissions.isNotEmpty()) {
                 // 权限请求用弹窗，避免被长对话挤到屏幕外
@@ -613,6 +611,16 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                         onOpenReasoning = { reasoningView = ReasoningView(it, live = true) },
                                         onOpenPath = openPath,
                                     )
+                                }
+                            }
+                            model.statusNotice?.let { notice ->
+                                item(key = "status-notice") {
+                                    InlineNotice(notice) { model.clearNotice() }
+                                }
+                            }
+                            (model.lastError ?: model.connectionError)?.let { error ->
+                                item(key = "error-notice") {
+                                    InlineNotice(error, isError = true) { model.clearError() }
                                 }
                             }
                             items(model.messages.asReversed(), key = { it.id }) { msg ->
@@ -1531,6 +1539,32 @@ private fun ComposerAction(
 
 /** 思考详情打开时记住来源：live 表示底部流式区，内容要继续跟着 model.liveReasoning 长。 */
 private data class ReasoningView(val text: String, val live: Boolean)
+
+@Composable
+private fun InlineNotice(text: String, isError: Boolean = false, onClose: (() -> Unit)? = null) {
+    Surface(
+        color = if (isError) MaterialTheme.colorScheme.errorContainer
+        else AndrocColor.Medium,
+        contentColor = if (isError) MaterialTheme.colorScheme.onErrorContainer
+        else AndrocColor.OnMedium,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            if (onClose != null) {
+                TextButton(onClick = onClose) { Text("关闭", style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
