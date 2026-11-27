@@ -299,10 +299,20 @@ private fun parsePart(e: JsonElement): Part? {
     }
 }
 
+/** 从 SessionError 对象里取出最有信息量的详情（message / type / response.body）。 */
+fun errorDetail(err: JsonObject?): String {
+    if (err == null) return ""
+    return listOfNotNull(
+        err.str("message"),
+        err.str("type"),
+        err.obj("response")?.str("body")?.take(300),
+    ).filter { it.isNotBlank() }.distinct().joinToString("：")
+}
+
 /** 把常见的服务端/网络错误转成中文；未知错误保留原文并加前缀。 */
 fun localizeError(raw: String?): String {
     val m = raw?.trim().orEmpty()
-    if (m.isEmpty()) return "请求失败"
+    if (m.isEmpty()) return "请求失败（无错误详情）"
     val l = m.lowercase()
     return when {
         l.contains("region") || l.contains("country") || l.contains("not available in your") ->
@@ -349,12 +359,12 @@ fun parseMessage(o: JsonObject): Msg {
             model = ModelRef.from(o["model"]),
             agent = o.str("agent") ?: "",
             finish = o.str("finish"),
-            error = localizeError(o.obj("error")?.str("message")),
+            error = localizeError(errorDetail(o.obj("error"))),
             retryAttempt = o.obj("retry")?.let { r ->
                 (r["attempt"] as? JsonPrimitive)?.content?.toIntOrNull()
             },
             retryAt = o.obj("retry")?.long("at"),
-            retryError = localizeError(o.obj("retry")?.obj("error")?.str("message")),
+            retryError = localizeError(errorDetail(o.obj("retry")?.obj("error"))),
         )
         "compaction" -> Msg(
             id = o.str("id") ?: "",

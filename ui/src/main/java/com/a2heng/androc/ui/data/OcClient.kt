@@ -170,9 +170,13 @@ class OcClient(
         }
         val detail = try {
             val o = json.parseToJsonElement(body) as? JsonObject
-            o?.str("message") ?: o?.str("_tag") ?: body.take(200)
+            o?.str("message")
+                ?: o?.obj("error")?.str("message")
+                ?: o?.obj("error")?.str("type")
+                ?: o?.str("_tag")
+                ?: body.take(300)
         } catch (_: Exception) {
-            body.take(200)
+            body.take(300)
         }
         return ApiException(resp.code, "HTTP ${resp.code}: $detail")
     }

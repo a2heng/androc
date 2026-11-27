@@ -1453,9 +1453,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
                 if (current?.id != s.id) return@launch
                 val fresh = collapseMessages(page.messages).asReversed()
-                val freshIds = fresh.map { it.id }.toHashSet()
-                // 服务端顺序是权威的；错误消息保持在它发生的轮次，不再挪到末尾。
-                val merged = messages.filterNot { it.id in freshIds } + fresh
+                // 原地替换同 id 的消息，新消息追加到末尾；错误卡片保持在原来的位置。
+                val byId = fresh.associateBy { it.id }
+                val existing = messages.map { byId[it.id] ?: it }
+                val known = messages.map { it.id }.toHashSet()
+                val added = fresh.filterNot { it.id in known }
+                val merged = existing + added
                 messages = merged
                 autoBackgroundIfPending()
                 if (olderCursor == null || merged.size == fresh.size) {
@@ -1531,14 +1534,25 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun appendErrorMessage(sessionID: String, message: String) {
         if (current?.id != sessionID) return
         val text = localizeError(message)
-        val last = messages.lastOrNull()
-        if (last?.isError == true && last.error == text) return
-        messages = messages + Msg(
+        val lastUser = messages.indexOfLast { it.isUser }
+        val lastAssistant = messages.indexOfLast { it.isAssistant }
+        // 错误属于“这句话”：如果已经有回复，插在回复之前；否则接在这句话后面。
+        val insertAt = when {
+            lastUser < 0 -> messages.size
+            lastAssistant > lastUser -> lastUser + 1
+            else -> messages.size
+        }
+        val neighbour = messages.getOrNull(insertAt)
+        if (neighbour?.isError == true && neighbour.error == text) return
+        val err = Msg(
             id = "err_${System.currentTimeMillis()}_${messages.size}",
             role = "error",
             created = System.currentTimeMillis(),
             error = text,
         )
+        val copy = messages.toMutableList()
+        copy.add(insertAt.coerceIn(0, copy.size), err)
+        messages = copy
     }
 
     fun sendPrompt(text: String, attachments: List<Attachment> = emptyList()) {
@@ -1582,7 +1596,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
                 refreshSessions()
             } catch (e: Exception) {
-                appendErrorMessage(s.id, e.message ?: "请求失败")
+                appendErrorMessage(s.id, e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
                 if (mode != "queue" && mode != "steer") sending = false
             }
         }
@@ -1625,7 +1639,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
                 refreshSessions()
             } catch (e: Exception) {
-                appendErrorMessage(s.id, e.message ?: "请求失败")
+                appendErrorMessage(s.id, e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
                 if (mode != "queue" && mode != "steer") sending = false
             }
         }
@@ -1962,7 +1976,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 sending = false
                 activeIds = activeIds - sid
                 statusLine = ""
-                val msg = data.obj("error")?.str("message") ?: "服务器错误"
+                val msg = errorDetail(data.obj("error"))
+                    .ifBlank { data.str("message") ?: "" }
+                    .ifBlank { "服务器错误（无详情）" }
                 appendErrorMessage(sid, msg)
                 scheduleReload(immediate = true)
                 refreshSessions()
@@ -1978,10 +1994,14 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             }
             "session.error" -> {
                 sending = false
-                val msg = data.str("message")
-                    ?: data.obj("error")?.str("message")
-                    ?: data.obj("info")?.obj("error")?.str("message")
-                appendErrorMessage(sid, msg ?: "服务器错误")
+                val msg = listOf(
+                    data.str("message"),
+                    data.obj("error")?.str("message"),
+                    data.obj("error")?.str("type"),
+                    data.obj("info")?.obj("error")?.str("message"),
+                    data.obj("info")?.obj("error")?.str("type"),
+                ).firstOrNull { !it.isNullOrBlank() } ?: "服务器错误（无详情）"
+                appendErrorMessage(sid, msg)
                 scheduleReload(immediate = true)
             }
             "session.message.content.updated", "session.message" -> scheduleReload()

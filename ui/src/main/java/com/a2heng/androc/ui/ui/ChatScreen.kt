@@ -198,6 +198,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     var detailToolID by remember { mutableStateOf<String?>(null) }
     // 思考详情：live 表示点的是底部流式区，内容要继续跟着 model.liveReasoning 更新
     var reasoningView by remember { mutableStateOf<ReasoningView?>(null) }
+    var cardView by remember { mutableStateOf<Pair<String, String>?>(null) }
     var fileTarget by remember { mutableStateOf<String?>(null) }
     // 文本里的路径 → 文件预览卡。支持 file://、~/、绝对路径，以及相对当前会话目录的路径。
     val openPath: (String) -> Unit = { raw ->
@@ -626,6 +627,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                         detail = model.detailLevel,
                                         icon = Icons.Rounded.Sync,
                                         onClose = { model.clearNotice() },
+                                        onOpen = { cardView = "状态" to notice },
                                     )
                                     }
                                 }
@@ -650,6 +652,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                         onLongPressUser = { revertTarget = it },
                                         onOpenTool = { detailToolID = it.toolID },
                                         onOpenPath = openPath,
+                                        onOpenCard = { title, body -> cardView = title to body },
                                     )
                                 }
                             }
@@ -953,6 +956,11 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                 ReasoningDetailCard(view.text, view.live, close)
             }
         }
+        cardView?.let { (title, body) ->
+            SideDetailPane(onDismiss = { cardView = null }) { close ->
+                ReasoningDetailCard(body, false, close, title)
+            }
+        }
     } else {
         detailTool?.let { tool ->
             DetailOverlay(onDismiss = { detailToolID = null }) { close ->
@@ -962,6 +970,11 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
         reasoningShown?.let { view ->
             DetailOverlay(onDismiss = { reasoningView = null }) { close ->
                 ReasoningDetailCard(view.text, view.live, close)
+            }
+        }
+        cardView?.let { (title, body) ->
+            DetailOverlay(onDismiss = { cardView = null }) { close ->
+                ReasoningDetailCard(body, false, close, title)
             }
         }
     }
@@ -1556,25 +1569,68 @@ private fun ConversationCard(
     isError: Boolean = false,
     markdown: Boolean = false,
     status: String? = null,
+    previewLines: Int = 4,
     onClose: (() -> Unit)? = null,
+    onOpen: (() -> Unit)? = null,
 ) {
     if (body.isBlank()) return
-    val context = LocalContext.current
-    val previewLimit = if (detail == "compact") 120 else 220
-    val long = body.length > previewLimit
-    var expanded by rememberSaveable(body) { mutableStateOf(false) }
     val statusText = status ?: if (isError) "失败" else "完成"
     val statusColor = when {
         isError -> MaterialTheme.colorScheme.error
         statusText.contains("重试") -> Sky
         else -> Accent
     }
+    if (detail == "compact") {
+        // 精简：一行，点击打开卡片
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickableNoRipple { onOpen?.invoke() }
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = if (isError) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(5.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = if (isError) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "${body.length} 字",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "展开",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        return
+    }
+    var expanded by rememberSaveable(body) { mutableStateOf(false) }
+    val showFull = detail == "expanded" || expanded
     Surface(
         color = AndrocColor.Medium,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .clickableNoRipple {
+                if (onOpen != null) onOpen() else expanded = true
+            },
     ) {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1604,9 +1660,15 @@ private fun ConversationCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (onClose != null) {
-                    TextButton(onClick = onClose) {
-                        Text("关闭", style = MaterialTheme.typography.labelSmall)
-                    }
+                    Text(
+                        "关闭",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clickableNoRipple(onClose)
+                            .padding(start = 8.dp),
+                    )
                 }
             }
             LeftAccent(
@@ -1614,7 +1676,7 @@ private fun ConversationCard(
                 else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 4.dp),
             ) {
-                if (expanded) {
+                if (showFull) {
                     if (markdown) AssistantText(body, null)
                     else Text(
                         body,
@@ -1625,8 +1687,8 @@ private fun ConversationCard(
                 } else {
                     ClampedText(
                         body,
-                        maxLines = 16,
-                        onExpand = { expanded = true },
+                        maxLines = previewLines,
+                        onExpand = { if (onOpen != null) onOpen() else expanded = true },
                         maskColor = AndrocColor.Medium,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -1646,6 +1708,7 @@ private fun MessageItem(
     onLongPressUser: (Msg) -> Unit = {},
     onOpenTool: (Part.Tool) -> Unit = {},
     onOpenPath: ((String) -> Unit)? = null,
+    onOpenCard: (String, String) -> Unit = { _, _ -> },
 ) {
     val haptics = LocalHapticFeedback.current
     if (msg.isError) {
@@ -1666,6 +1729,7 @@ private fun MessageItem(
                 detail = detail,
                 icon = Icons.Rounded.Compress,
                 isError = true,
+                onOpen = { onOpenCard("上下文压缩失败", msg.error ?: "") },
             )
         } else {
             ConversationCard(
@@ -1674,6 +1738,8 @@ private fun MessageItem(
                 detail = detail,
                 icon = Icons.Rounded.Compress,
                 markdown = true,
+                previewLines = 3,
+                onOpen = { onOpenCard("上下文压缩", msg.text) },
             )
         }
         return
@@ -1726,6 +1792,16 @@ private fun MessageItem(
             )
             Spacer(Modifier.height(4.dp))
         }
+        msg.error?.let {
+            ConversationCard(
+                title = "错误",
+                body = it,
+                detail = detail,
+                icon = Icons.Rounded.ErrorOutline,
+                isError = true,
+                onOpen = { onOpenCard("错误", it) },
+            )
+        }
         msg.parts.forEach { part ->
             when (part) {
                 is Part.Reasoning -> ReasoningBlock(part.text, detail, onOpenReasoning = onOpenReasoning)
@@ -1734,15 +1810,6 @@ private fun MessageItem(
             }
         }
         if (msg.parts.isEmpty() && msg.text.isNotBlank()) AssistantText(msg.text, onOpenPath)
-        msg.error?.let {
-            ConversationCard(
-                title = "错误",
-                body = it,
-                detail = detail,
-                icon = Icons.Rounded.ErrorOutline,
-                isError = true,
-            )
-        }
         if (detail != "compact") Footer(msg)
     }
 }
@@ -1943,7 +2010,12 @@ private fun ReasoningBlock(
 }
 
 @Composable
-private fun ReasoningDetailCard(text: String, live: Boolean, onClose: () -> Unit) {
+private fun ReasoningDetailCard(
+    text: String,
+    live: Boolean,
+    onClose: () -> Unit,
+    title: String = "思考过程",
+) {
     val (contentMin, contentMax) = rememberDialogContentHeight()
     val scroll = rememberScrollState()
     // 流式思考：内容还在长，跟着滚到底部（用户往上翻过就不要再抢）
@@ -1964,7 +2036,7 @@ private fun ReasoningDetailCard(text: String, live: Boolean, onClose: () -> Unit
                 DialogBackButton(onClick = onClose)
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    "思考过程 · ${text.length} 字",
+                    "$title · ${text.length} 字",
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
