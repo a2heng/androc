@@ -1521,6 +1521,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             when {
                 it.isUser -> true
                 it.isAssistant -> it.parts.isNotEmpty() || it.text.isNotBlank()
+                it.isCompaction -> it.text.isNotBlank() || it.error != null
                 else -> false
             }
         }

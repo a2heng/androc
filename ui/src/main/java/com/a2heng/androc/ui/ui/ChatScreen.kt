@@ -1545,6 +1545,25 @@ private fun MessageItem(
     onOpenPath: ((String) -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
+    if (msg.isCompaction) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Text(
+                if (msg.finish == "failed") "上下文压缩失败" else "上下文压缩",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (msg.error != null) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (msg.text.isNotBlank()) AssistantText(msg.text, onOpenPath)
+            msg.error?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        return
+    }
     if (msg.isUser) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Surface(

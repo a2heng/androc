@@ -177,6 +177,7 @@ data class Msg(
 ) {
     val isUser get() = role == "user"
     val isAssistant get() = role == "assistant"
+    val isCompaction get() = role == "compaction"
 }
 
 private fun toolContentText(state: JsonObject): String {
@@ -287,6 +288,14 @@ fun parseMessage(o: JsonObject): Msg {
             model = ModelRef.from(o["model"]),
             agent = o.str("agent") ?: "",
             finish = o.str("finish"),
+            error = o.obj("error")?.str("message"),
+        )
+        "compaction" -> Msg(
+            id = o.str("id") ?: "",
+            role = "compaction",
+            created = created,
+            text = o.str("summary") ?: o.str("text") ?: "",
+            finish = o.str("status"),
             error = o.obj("error")?.str("message"),
         )
         else -> Msg(
