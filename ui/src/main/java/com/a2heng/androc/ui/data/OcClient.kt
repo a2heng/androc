@@ -1,6 +1,7 @@
 package com.a2heng.androc.ui.data
 
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -19,6 +20,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ApiException(val code: Int, message: String) : Exception(message)
@@ -29,7 +31,12 @@ class ApiException(val code: Int, message: String) : Exception(message)
  * 认证是 Basic：用户名固定 `opencode`，密码就是服务端 `OPENCODE_PASSWORD`。
  * 服务端没设密码时不会带 Authorization 头。
  */
-class OcClient(rawBase: String, private val password: String) {
+class OcClient(
+    rawBase: String,
+    private val password: String,
+    /** 网络/限流/5xx 重试时回调：attempt 从 1 开始，code 为 null 表示 IO 异常。 */
+    private val onRetry: ((attempt: Int, code: Int?, reason: String) -> Unit)? = null,
+) {
 
     val base: String = normalize(rawBase)
 
@@ -63,8 +70,40 @@ class OcClient(rawBase: String, private val password: String) {
         return b
     }
 
+    private suspend fun execute(req: Request): Response {
+        var attempt = 0
+        while (true) {
+            try {
+                val resp = http.newCall(req).execute()
+                if (isRetryable(resp.code) && attempt < MAX_RETRIES) {
+                    val retryAfter = resp.header("Retry-After")
+                        ?.toLongOrNull()?.times(1000)?.coerceIn(200L, 10_000L)
+                    resp.close()
+                    val wait = retryAfter ?: backoff(attempt)
+                    onRetry?.invoke(attempt + 1, resp.code, "HTTP ${resp.code}")
+                    delay(wait)
+                    attempt++
+                    continue
+                }
+                return resp
+            } catch (e: IOException) {
+                if (attempt >= MAX_RETRIES) throw e
+                val wait = backoff(attempt)
+                onRetry?.invoke(attempt + 1, null, e.message ?: e.javaClass.simpleName)
+                delay(wait)
+                attempt++
+            }
+        }
+    }
+
+    private fun isRetryable(code: Int): Boolean =
+        code == 408 || code == 429 || code in 500..599
+
+    private fun backoff(attempt: Int): Long =
+        minOf(1000L shl attempt, 8000L) + kotlin.random.Random.nextLong(0, 250)
+
     suspend fun get(path: String): JsonElement {
-        val resp = http.newCall(request(path).get().build()).execute()
+        val resp = execute(request(path).get().build())
         return resp.use { readJson(it) }
     }
 
@@ -73,7 +112,7 @@ class OcClient(rawBase: String, private val password: String) {
         val req = request(path)
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
-        val resp = http.newCall(req).execute()
+        val resp = execute(req)
         return resp.use { r ->
             if (!r.isSuccessful) throw errorOf(r)
             val text = r.body?.string().orEmpty()
@@ -85,7 +124,7 @@ class OcClient(rawBase: String, private val password: String) {
         val req = request(path)
             .put(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        val resp = http.newCall(req).execute()
+        val resp = execute(req)
         return resp.use { r ->
             if (!r.isSuccessful) throw errorOf(r)
             val text = r.body?.string().orEmpty()
@@ -97,7 +136,7 @@ class OcClient(rawBase: String, private val password: String) {
         val req = request(path)
             .patch(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        val resp = http.newCall(req).execute()
+        val resp = execute(req)
         return resp.use { r ->
             if (!r.isSuccessful) throw errorOf(r)
             val text = r.body?.string().orEmpty()
@@ -106,7 +145,7 @@ class OcClient(rawBase: String, private val password: String) {
     }
 
     suspend fun delete(path: String) {
-        val resp = http.newCall(request(path).delete().build()).execute()
+        val resp = execute(request(path).delete().build())
         resp.use { r -> if (!r.isSuccessful) throw errorOf(r) }
     }
 
@@ -241,8 +280,14 @@ class OcClient(rawBase: String, private val password: String) {
         }
     }
 
-    suspend fun compact(sessionID: String) {
-        post("/api/session/$sessionID/compact")
+    data class CompactResult(val status: String, val error: String?)
+
+    suspend fun compact(sessionID: String): CompactResult {
+        val body = post("/api/session/$sessionID/compact")
+        val data = (body as? JsonObject)?.obj("data")
+        val status = data?.str("status") ?: "completed"
+        val error = data?.obj("error")?.str("message")
+        return CompactResult(status, error)
     }
 
     /** 等价于原版 Ctrl+B：把当前阻塞执行的 shell 移到后台观察。 */
@@ -722,6 +767,8 @@ class OcClient(rawBase: String, private val password: String) {
     suspend fun ping(): JsonElement = get("/api/info")
 
     companion object {
+        private const val MAX_RETRIES = 3
+
         fun normalize(input: String): String {
             var s = input.trim()
             if (s.isEmpty()) return "http://127.0.0.1:42000"

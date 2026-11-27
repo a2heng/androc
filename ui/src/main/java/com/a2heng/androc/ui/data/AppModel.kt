@@ -1,6 +1,7 @@
 package com.a2heng.androc.ui.data
 
 import android.app.Application
+import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
@@ -673,6 +674,16 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private var hadConnected = false
     private val mainHandler = android.os.Handler(Looper.getMainLooper())
 
+    private fun postToast(message: String, long: Boolean = false) {
+        mainHandler.post {
+            Toast.makeText(
+                getApplication(),
+                message,
+                if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
     // =========================================================================
     // 连接
     // =========================================================================
@@ -684,8 +695,16 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         connectJob?.cancel()
         connectJob = viewModelScope.launch {
             try {
+                val retryNotice: (Int, Int?, String) -> Unit = { attempt, code, reason ->
+                    val what = when {
+                        code == 429 -> "服务器限流"
+                        code != null -> "服务器错误 $code"
+                        else -> "网络错误"
+                    }
+                    postToast("$what，重试 $attempt/3（$reason）")
+                }
                 var target = normalized
-                var c = OcClient(target, pwd)
+                var c = OcClient(target, pwd, retryNotice)
                 val info = try {
                     withContext(Dispatchers.IO) { c.ping() } as? JsonObject
                 } catch (e: Exception) {
@@ -694,7 +713,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     val fallback = OcClient.plainHttpFallback(target, e)
                     if (fallback == null) throw e
                     target = fallback
-                    c = OcClient(target, pwd)
+                    c = OcClient(target, pwd, retryNotice)
                     val retried = withContext(Dispatchers.IO) { c.ping() } as? JsonObject
                     Toast.makeText(
                         getApplication(),
@@ -2068,10 +2087,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         Toast.makeText(getApplication(), "正在压缩上下文…", Toast.LENGTH_SHORT).show()
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { c.compact(s.id) }
+                val result = withContext(Dispatchers.IO) { c.compact(s.id) }
+                val msg = when (result.status) {
+                    "completed" -> "上下文已压缩"
+                    "skipped" -> "无需压缩（上下文未到阈值）"
+                    "failed" -> "压缩失败：${result.error ?: "未知错误"}"
+                    else -> "压缩状态：${result.status}"
+                }
+                postToast(msg, long = true)
                 loadMessages(silent = true)
             } catch (e: Exception) {
                 lastError = e.message
+                postToast("压缩失败：${e.message ?: "未知错误"}", long = true)
             }
         }
     }
