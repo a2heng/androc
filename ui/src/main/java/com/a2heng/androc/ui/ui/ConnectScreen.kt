@@ -93,6 +93,12 @@ fun ConnectScreen(model: AppModel) {
                         }
                         if (model.connecting) {
                             CouiSpinner(size = 16, color = colors.accent)
+                            Spacer(Modifier.width(6.dp))
+                            CouiText(
+                                "正在启动本机…",
+                                style = type.bodySmall,
+                                color = colors.onSurfaceVariant,
+                            )
                         } else {
                             CouiTextButton("本机") { model.startLocalNow() }
                         }

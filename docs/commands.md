@@ -114,3 +114,24 @@ python scripts/fetch-runtime.py
 | `Android 插件（musl rootfs）未安装` | 没有可用 rootfs | oc/apk 确认内置 runtime 已解压；ui 无本机运行时 |
 | `OpenCode 组件未安装` | 当前是 ui | ui 只做远程客户端，本机能力用 oc/apk |
 | `java: cannot execute` / JVM 崩溃 | 没加载 fixexec shim | 先 `. /opt/androc/env.sh` |
+
+## 本机调试 API（开发期）
+
+仅 **debug 构建** 才有：App 进程内有一个只监听 `127.0.0.1:42010` 的只读调试服务，不需要看截图。release 不启动、R8 会移除：
+
+```sh
+adb -s 192.168.0.101:43203 forward tcp:42010 tcp:42010
+curl http://127.0.0.1:42010/state
+curl -G http://127.0.0.1:42010/git \
+  --data-urlencode dir=/data/data/com.a2heng.androc/files/home/workspace \
+  --data-urlencode 'args=log --oneline -5'
+curl -G http://127.0.0.1:42010/shell --data-urlencode 'cmd=git status --short'
+```
+
+- `/state`：连接地址、当前会话、Git 页状态/诊断、后台 shell、最近 40 条消息和 parts（不含密码）。
+- `/git?dir=&args=`：在 proot 里执行 `git -c safe.directory='*' <args>`，返回 stdout+stderr 和 `__RC__`。
+- `/shell?cmd=`：在 proot 里执行任意命令。
+- `/health`：存活检查。
+- 便捷脚本：`scripts/oc-debug.sh [serial] state|git <dir> <args...>|shell <cmd...>`。
+- 仅 loopback，不监听局域网；不暴露服务端密码。
+- **release 必须没有它**：发版前确认 `usage.txt` 里 `DebugApi` 被移除，并实测 `42010` 连不上；开发结束后按 `AGENTS.md` 第 13 条删除。

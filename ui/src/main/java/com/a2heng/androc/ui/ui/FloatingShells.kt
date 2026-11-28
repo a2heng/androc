@@ -2,6 +2,7 @@ package com.a2heng.androc.ui.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -64,14 +65,91 @@ import kotlin.math.roundToInt
  *   点外面/返回键关闭），并且**全部 shell 直接全展开**，不再有“查看/收起”；
  *   每条前面的亮色竖条用来区分不同的 shell。
  */
+/**
+ * 顶栏下方的运行胶囊：一条命令时显示名字 + 已运行时长；多条显示数量。
+ * 点击后由外层打开后台 shell 卡片。
+ */
 @Composable
-fun FloatingShells(model: AppModel, sessionID: String, modifier: Modifier = Modifier) {
-    // 只显示当前会话自己的后台 shell；别的会话在跑命令不在这里弹球
-    val shells = model.shells.filter { it.sessionID == sessionID }
+fun ShellsPill(shells: List<ShellInfo>, onClick: () -> Unit) {
     if (shells.isEmpty()) return
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    val single = shells.size == 1
+    val name = shells.first().command.trim().lineSequence().firstOrNull().orEmpty()
+    val elapsed = elapsedLabel(shells.minOf { it.started }, nowMs)
+    Surface(
+        color = AndrocColor.Medium,
+        contentColor = MaterialTheme.colorScheme.primary,
+        shape = RoundedCornerShape(50),
+        shadowElevation = 4.dp,
+        modifier = Modifier.clickableNoRipple(onClick),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(6.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (single) {
+                    "运行中 · " + name.ifBlank { "后台命令" }.take(26)
+                } else {
+                    "运行中 · ${shells.size} 个任务"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 210.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                elapsed,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            if (!single) {
+                Spacer(Modifier.width(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    repeat(minOf(3, shells.size)) {
+                        Box(
+                            Modifier
+                                .size(4.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                                    CircleShape,
+                                ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
-    var expanded by remember { mutableStateOf(false) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+@Composable
+fun FloatingShells(
+    model: AppModel,
+    sessionID: String,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 只显示当前会话自己的后台 shell；别的会话在跑命令不在这里弹
+    val shells = model.shells.filter { it.sessionID == sessionID }
+    if (shells.isEmpty() || !expanded) return
+
     var outputs by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var confirmStopId by remember { mutableStateOf<String?>(null) }
 
@@ -123,63 +201,7 @@ fun FloatingShells(model: AppModel, sessionID: String, modifier: Modifier = Modi
         )
     }
 
-    if (!expanded) {
-        Box(modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 90.dp)
-                    .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
-                    .size(52.dp)
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, drag ->
-                            change.consume()
-                            offset += drag
-                        }
-                    }
-                    .clickableNoRipple { expanded = true },
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = CircleShape,
-                    shadowElevation = 6.dp,
-                    modifier = Modifier
-                        .size(46.dp)
-                        .align(Alignment.BottomStart),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.PlaylistPlay,
-                            contentDescription = "后台 shell",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-                if (shells.size > 1) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.error,
-                        shape = CircleShape,
-                        modifier = Modifier
-                            .size(19.dp)
-                            .align(Alignment.TopEnd),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                shells.size.toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onError,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        return
-    }
-
-    DetailOverlay(onDismiss = { expanded = false }) { close ->
+    DetailOverlay(onDismiss = { onExpandedChange(false) }) { close ->
         Surface(
             color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(18.dp),

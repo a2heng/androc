@@ -31,17 +31,20 @@ public class MobileFrontendActivity extends AppCompatActivity {
     private static final String TAG = "OpenCodeLocal";
     private static final int PORT = BuildConfig.SERVER_PORT;
     private static final String URL = "http://127.0.0.1:" + PORT;
-    private static final long HEALTH_TIMEOUT_MS = 120_000L;
+    private static final long HEALTH_TIMEOUT_MS = 25_000L;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private boolean mounted;
     private boolean starting;
+    private volatile boolean preparingCancelled;
     private TextView status;
     private androidx.activity.result.ActivityResultLauncher<String> notifPermLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // 临时调试接口：只允许 debug 构建，release 绝不能有监听。
+        if (BuildConfig.DEBUG) DebugApi.start(this);
         if (BuildConfig.DEBUG) AutomationServer.start(this);
         if (!"mobile".equals(BuildConfig.UI_MODE)) {
             // Respaldo: el frontend WebView clasico.
@@ -72,11 +75,11 @@ public class MobileFrontendActivity extends AppCompatActivity {
                 new androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
                 granted -> { });
         requestNotifPermission();
-        // 两个发行版走同一条链路：先显示 UI，本机 OpenCode 只有在用户点
-        // 「本机 → 启动并登录」时才启动。thin 没有内置 runtime，装好市场里的
-        // OpenCode 组件后同样用 proot 启动。
-        // 启动只进 UI（远程模式），避免后台常驻耗电。
-        showFrontend();
+        // 先准备内置包（只解压一次），再显示 UI；本机 server 仍然等用户点
+        // 「本机 → 启动并登录」才启动。准备和连接分成两步，各自有固定展示。
+        // 每次启动都先 ensure（已解压时立即返回）：保证不会在解压完成前
+        // 自动恢复上次的本机连接。
+        showPreparation();
     }
 
     private void requestNotifPermission() {
@@ -109,12 +112,54 @@ public class MobileFrontendActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(14);
         root.addView(status, lp);
+        android.widget.Button cancel = new android.widget.Button(this);
+        cancel.setText("取消");
+        cancel.setAllCaps(false);
+        cancel.setOnClickListener(v -> {
+            preparingCancelled = true;
+            finish();
+        });
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = dp(18);
+        root.addView(cancel, clp);
         return root;
     }
 
     private int dp(int v) {
         return Math.round(TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+    }
+
+    /** 内置 runtime / Android 工具链是否已经解压好。 */
+    private boolean needsPreparation() {
+        if (BuildConfig.THIN) return false;
+        boolean runtime = RuntimeAssets.rootfs(this) != null;
+        boolean android = !BuildConfig.HAS_ANDROID_TOOLS || AndroidAssets.rootfs(this) != null;
+        return !runtime || !android;
+    }
+
+    /** 首次/升级后：单独的解压页，带取消；完成后再进登录/连接 UI。 */
+    private void showPreparation() {
+        // ui flavor 是纯客户端：没有本地 runtime，直接进登录/连接页。
+        if (BuildConfig.THIN) {
+            showFrontend();
+            return;
+        }
+        preparingCancelled = false;
+        setContentView(buildLoading());
+        if (status != null) status.setText("正在解压运行环境…");
+        new Thread(() -> {
+            try {
+                RuntimeAssets.ensure(MobileFrontendActivity.this);
+                AndroidAssets.ensure(MobileFrontendActivity.this);
+                if (!preparingCancelled) ui.post(this::showFrontend);
+            } catch (Exception e) {
+                ui.post(() -> {
+                    if (status != null) status.setText("准备失败：" + e.getMessage());
+                });
+            }
+        }, "androc-prepare").start();
     }
 
     private void startServerAndShow() {
@@ -210,7 +255,10 @@ public class MobileFrontendActivity extends AppCompatActivity {
                                         return;
                                     }
                                 }
-                                onError.invoke("本机服务没有启动起来");
+                                // 健康检查可能比 OkHttp 严格；到时间也让 connect 试一次，
+                                // 避免第一次点“本机”一直空等。
+                                onReady.invoke(URL,
+                                        LocalRuntime.serverPassword(MobileFrontendActivity.this));
                             }, "local-launcher").start();
                         }
 
@@ -223,6 +271,10 @@ public class MobileFrontendActivity extends AppCompatActivity {
             // "/" es la raiz Android y "~" el HOME de la app. Antes se pasaba
             // un rootfs de enlaces, pero el servidor v2 no lista symlinks y
             // dejaba la raiz vacia.
+            // 本机 Git：直接跑 proot 里的 git，不再走 OpenCode 的 location 缓存。
+            com.a2heng.androc.ui.data.LocalGitHost.INSTANCE.setRunner(
+                    (command, timeout) -> com.a2heng.androc.LocalRuntime.runInSandbox(
+                            MobileFrontendActivity.this, command, timeout, 4_000_000));
             LocalRuntime.workspaceDir(this);
             com.a2heng.androc.ui.LocalShellSpawner shell = () -> {
                 try {

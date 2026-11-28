@@ -309,6 +309,11 @@ class OcClient(
         post("/api/location/reload")
     }
 
+    /** 在项目目录初始化 Git；已经有仓库时服务端返回 409。 */
+    suspend fun initVcs(directory: String) {
+        post("/api/vcs/init" + locationQuery(directory))
+    }
+
     private fun locationQuery(directory: String?): String =
         if (directory.isNullOrBlank()) "" else
             "?location%5Bdirectory%5D=" + java.net.URLEncoder.encode(directory, "UTF-8")

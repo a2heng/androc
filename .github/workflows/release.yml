@@ -109,30 +109,34 @@ jobs:
           ANDROC_KEYSTORE_PASS: ${{ secrets.ANDROC_KEYSTORE_PASS || secrets.ADIA_KEYSTORE_PASS }}
           ANDROC_KEY_PASS: ${{ secrets.ANDROC_KEY_PASS || secrets.ADIA_KEY_PASS }}
         run: |
-          ./gradlew :app:assembleOcRelease --console=plain --stacktrace --no-daemon \
+          ./gradlew :app:assembleRelease --console=plain --stacktrace --no-daemon \
             -PandrocVersionName="${{ steps.version.outputs.name }}" \
             -PandrocVersionCode="${{ steps.version.outputs.code }}" \
             -PandrocRequireSigning=1
 
-      - name: 16 KB check (oc)
+      - name: 16 KB check (ui + oc + apk)
         env:
           ANDROC_16KB_STRICT: "1"
         run: |
-          for APK in app/build/outputs/apk/oc/release/*.apk; do
-            python3 scripts/check-16kb.py "$APK"
+          for FLAVOR in ui oc apk; do
+            for APK in app/build/outputs/apk/$FLAVOR/release/*.apk; do
+              python3 scripts/check-16kb.py "$APK"
+            done
           done
 
       - name: Verify signatures
         run: |
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          for APK in app/build/outputs/apk/oc/release/*.apk; do
-            "$BT/apksigner" verify --print-certs "$APK"
+          for FLAVOR in ui oc apk; do
+            for APK in app/build/outputs/apk/$FLAVOR/release/*.apk; do
+              "$BT/apksigner" verify --print-certs "$APK"
+            done
           done
 
       - name: Rename and checksum
         run: |
           mkdir -p out
-          for FLAVOR in oc; do
+          for FLAVOR in ui oc apk; do
             SRC=$(ls app/build/outputs/apk/$FLAVOR/release/*.apk | head -1)
             NAME="androc-${{ steps.version.outputs.name }}-$FLAVOR.apk"
             cp "$SRC" "out/$NAME"

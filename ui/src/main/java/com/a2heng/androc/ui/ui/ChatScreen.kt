@@ -86,6 +86,7 @@ import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AccountTree
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AttachFile
@@ -100,6 +101,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.FolderOpen
@@ -213,10 +215,15 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     var showFilePicker by remember { mutableStateOf(false) }
     var openMenu by remember { mutableStateOf(false) }
     var innerPage by remember { mutableStateOf<Int?>(null) } // 1=文件 2=终端
+    var shellsExpanded by remember { mutableStateOf(false) }
+    val runningShells = model.shells.filter { it.sessionID == session.id }
     var confirmStop by remember { mutableStateOf(false) }
     var backProgress by remember { mutableFloatStateOf(0f) }
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
+    LaunchedEffect(innerPage, runningShells.isEmpty()) {
+        if (innerPage != null || runningShells.isEmpty()) shellsExpanded = false
+    }
     val enterProgress by animateFloatAsState(
         targetValue = if (entered) 0f else 1f,
         animationSpec = tween(durationMillis = 260, easing = androidx.compose.animation.core.FastOutSlowInEasing),
@@ -247,11 +254,13 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     }
     val context = LocalContext.current
     val attachments = remember { mutableStateListOf<Attachment>() }
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNotEmpty()) {
             scope.launch {
-                val att = withContext(Dispatchers.IO) { loadImageAttachment(context, uri) }
-                if (att != null) attachments.add(att)
+                uris.take((6 - attachments.size).coerceAtLeast(0)).forEach { uri ->
+                    val att = withContext(Dispatchers.IO) { loadImageAttachment(context, uri) }
+                    if (att != null) attachments.add(att)
+                }
             }
         }
     }
@@ -340,6 +349,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     }
     BackHandler(enabled = innerPage != null) {
         innerPage = null
+        model.closeGit()
     }
 
     Scaffold(
@@ -351,6 +361,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
             },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
+            if (innerPage == null) {
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 3.dp,
@@ -372,6 +383,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             .clickableNoRipple {
                                 if (innerPage != null) {
                                     innerPage = null
+                                    model.closeGit()
                                 } else {
                                     model.closeSession()
                                     model.refreshSessions()
@@ -443,7 +455,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                     }
                 }
             }
-        },
+        }},
         bottomBar = {
             ChatComposer(
                 model = model,
@@ -457,6 +469,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                 onRemoveAttachment = { attachments.removeAt(it) },
                 onStop = { confirmStop = true },
                 focusRequester = composerFocus,
+                showInput = innerPage == null,
                 onSend = {
                     val text = input.trim()
                     if (text.isNotEmpty() || attachments.isNotEmpty()) {
@@ -518,20 +531,31 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                     onToggleDetail = {
                         model.updateDetailLevel(nextDetailLevel(model.detailLevel))
                     },
-                    onGit = { model.openGit(session.directory) },
+                    onGit = {
+                        if (innerPage == 3) {
+                            innerPage = null
+                            model.closeGit()
+                        } else {
+                            model.openGit(session.directory)
+                            innerPage = 3
+                        }
+                    },
                     onCache = { model.openCache(session) },
                     onFiles = {
-                        if (innerPage != null) {
+                        if (innerPage == 1) {
                             innerPage = null
+                            model.closeGit()
                         } else {
-                            model.loadDir(session.directory)
+                            model.closeGit()
                             innerPage = 1
                         }
                     },
                     onTerminal = {
                         if (innerPage == 2) {
                             innerPage = null
+                            model.closeGit()
                         } else {
+                            model.closeGit()
                             model.loadPtys()
                             innerPage = 2
                         }
@@ -624,9 +648,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                                 if (model.detailLevel == "compact") 8.dp else 12.dp,
                             ),
-                            verticalArrangement = Arrangement.spacedBy(
-                                if (model.detailLevel == "compact") 4.dp else 10.dp,
-                            ),
+                            verticalArrangement = Arrangement.spacedBy(0.dp),
                         ) {
                             val liveText = frozenLive?.first ?: model.liveText
                             val liveReasoning = frozenLive?.second ?: model.liveReasoning
@@ -713,6 +735,18 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                         PendingRows(model) { restored -> input = restored }
                     }
                 }
+            }
+        }
+
+        // 运行中的后台任务：悬在顶栏下面（模型/模式卡片下方），不占顶栏高度，
+        // 也不推内容；打开文件/终端/Git 子页时随顶栏一起消失。
+        if (innerPage == null && runningShells.isNotEmpty()) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 58.dp, top = 4.dp),
+            ) {
+                ShellsPill(runningShells) { shellsExpanded = true }
             }
         }
 
@@ -847,31 +881,18 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
         }
         if (innerPage != null) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        IconButton(onClick = { innerPage = null }) {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "返回聊天",
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                        InnerTab("文件", innerPage == 1) {
-                            model.loadDir(session.directory)
-                            innerPage = 1
-                        }
-                        InnerTab("终端", innerPage == 2) {
-                            model.loadPtys()
-                            innerPage = 2
-                        }
-                    }
-                    HorizontalDivider()
-                    Box(Modifier.fillMaxWidth().weight(1f)) {
-                        if (innerPage == 1) FilesScreen(model, wide) else TerminalScreen(model)
+                Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+                    when (innerPage) {
+                        1 -> FilesScreen(model, wide, startDir = session.directory)
+                        2 -> TerminalScreen(model)
+                        else -> GitScreen(
+                            model = model,
+                            directory = session.directory,
+                            onBack = {
+                                innerPage = null
+                                model.closeGit()
+                            },
+                        )
                     }
                 }
             }
@@ -879,9 +900,16 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
         }
     }
 
+
+
     // 后台 shell 悬浮球 + 展开卡片：放在 Scaffold 外面，和详情卡共用 DetailOverlay。
-    if (model.shells.any { it.sessionID == session.id }) {
-        FloatingShells(model = model, sessionID = session.id)
+    if (runningShells.isNotEmpty()) {
+        FloatingShells(
+            model = model,
+            sessionID = session.id,
+            expanded = shellsExpanded,
+            onExpandedChange = { shellsExpanded = it },
+        )
     }
 
     if (pickModel) {
@@ -985,11 +1013,11 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     }
 
     // 详情卡每次重组都从最新消息里取，运行中的工具/思考在弹窗里也能继续更新
+    val detailToolMsg = detailToolID?.let { id ->
+        model.messages.firstOrNull { m -> m.parts.any { it is Part.Tool && it.toolID == id } }
+    }
     val detailTool = detailToolID?.let { id ->
-        model.messages.asSequence()
-            .flatMap { it.parts.asSequence() }
-            .filterIsInstance<Part.Tool>()
-            .firstOrNull { it.toolID == id }
+        detailToolMsg?.parts?.filterIsInstance<Part.Tool>()?.firstOrNull { it.toolID == id }
     }
     // 流式思考：把最新内容持续写进状态，否则流式结束后会退回“点开那一刻”的旧内容
     LaunchedEffect(model.liveReasoning, reasoningView?.live) {
@@ -1004,33 +1032,45 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
         // 宽屏：详情做成右侧面板（聊天仍然可见），点另一张卡直接换内容
         detailTool?.let { tool ->
             SideDetailPane(onDismiss = { detailToolID = null }) { close ->
-                ToolDetailCard(tool, session.directory, close, openPath)
+                ToolDetailCard(
+                    tool,
+                    session.directory,
+                    close,
+                    openPath,
+                    rate = detailToolMsg?.tokens?.hitRate,
+                )
             }
         }
         reasoningShown?.let { view ->
             SideDetailPane(onDismiss = { reasoningView = null }) { close ->
-                ReasoningDetailCard(view.text, view.live, close)
+                ReasoningDetailCard(view.text, view.live, close, detail = model.detailLevel)
             }
         }
         cardView?.let { (title, body) ->
             SideDetailPane(onDismiss = { cardView = null }) { close ->
-                ReasoningDetailCard(body, false, close, title)
+                ReasoningDetailCard(body, false, close, title, cardIcon(title), model.detailLevel)
             }
         }
     } else {
         detailTool?.let { tool ->
             DetailOverlay(onDismiss = { detailToolID = null }) { close ->
-                ToolDetailCard(tool, session.directory, close, openPath)
+                ToolDetailCard(
+                    tool,
+                    session.directory,
+                    close,
+                    openPath,
+                    rate = detailToolMsg?.tokens?.hitRate,
+                )
             }
         }
         reasoningShown?.let { view ->
             DetailOverlay(onDismiss = { reasoningView = null }) { close ->
-                ReasoningDetailCard(view.text, view.live, close)
+                ReasoningDetailCard(view.text, view.live, close, detail = model.detailLevel)
             }
         }
         cardView?.let { (title, body) ->
             DetailOverlay(onDismiss = { cardView = null }) { close ->
-                ReasoningDetailCard(body, false, close, title)
+                ReasoningDetailCard(body, false, close, title, cardIcon(title), model.detailLevel)
             }
         }
     }
@@ -1101,10 +1141,12 @@ private fun ChatComposer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     focusRequester: FocusRequester,
+    showInput: Boolean = true,
     footer: @Composable () -> Unit = {},
 ) {
     var actionsOpen by rememberSaveable { mutableStateOf(false) }
     var confirmClear by rememberSaveable { mutableStateOf(false) }
+    var attachmentPreview by remember { mutableStateOf<Int?>(null) }
     val rotation by animateFloatAsState(if (actionsOpen) 45f else 0f, label = "plus-rotate")
     val slashQuery = if (value.startsWith("/") && !value.contains(' ')) value.substring(1) else null
     val suggestions = if (slashQuery == null) {
@@ -1120,6 +1162,7 @@ private fun ChatComposer(
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)),
         ) {
+            if (showInput) {
             if (suggestions.isNotEmpty()) {
                 Surface(
                     color = AndrocColor.Medium,
@@ -1169,14 +1212,21 @@ private fun ChatComposer(
                                 decodeDataUri("data:${att.mime};base64,${att.base64}", 240)
                             }
                             if (bmp != null) {
-                                Image(
-                                    bitmap = bmp.asImageBitmap(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
+                                Box(
+                                    Modifier
                                         .size(58.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                )
+                                        .background(AndrocColor.Medium, RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickableNoRipple { attachmentPreview = index },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Image(
+                                        bitmap = bmp.asImageBitmap(),
+                                        contentDescription = "查看附件",
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
                             }
                             Box(
                                 Modifier
@@ -1196,6 +1246,13 @@ private fun ChatComposer(
                         }
                     }
                 }
+                attachmentPreview?.let { index ->
+                    ZoomableImagePagerDialog(
+                        attachments.map { "data:${it.mime};base64,${it.base64}" },
+                        index,
+                        "附件图片",
+                    ) { attachmentPreview = null }
+                }
             }
             Row(
                 Modifier
@@ -1205,7 +1262,7 @@ private fun ChatComposer(
             ) {
                 Box(
                     Modifier
-                        .size(40.dp)
+                        .size(42.dp)
                         .background(MaterialTheme.colorScheme.primary, CircleShape)
                         .clickableNoRipple { actionsOpen = !actionsOpen },
                     contentAlignment = Alignment.Center,
@@ -1263,9 +1320,12 @@ private fun ChatComposer(
                         1.dp,
                         MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                     ),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).heightIn(min = 42.dp),
                 ) {
-                    Box(Modifier.padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 6.dp)) {
+                    Box(
+                        Modifier.padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 6.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
                         BasicTextField(
                             value = value,
                             onValueChange = onChange,
@@ -1345,6 +1405,7 @@ private fun ChatComposer(
                         modifier = Modifier.size(20.dp),
                     )
                 }
+            }
             }
             footer()
         }
@@ -1442,38 +1503,34 @@ private fun ChatStatusBar(
     onFiles: () -> Unit = {},
     onTerminal: () -> Unit = {},
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 1.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BarText("ctx", contextPct?.let { "${it.roundToInt()}%" } ?: "—", contextColor)
-            BarDivider()
-            BarText("命中", hitLabel, hitColor, onClick = onCache)
-            BarDivider()
-            BarText("", detailLevelLabel(model.detailLevel), onClick = onToggleDetail)
-            BarDivider()
-            BarText("Git", "", onClick = onGit)
-            if (costLabel != null) {
-                BarDivider()
-                BarText("", costLabel)
-            } else if (goLabel != null) {
-                BarDivider()
-                BarText("Go", goLabel, goColor, onClick = onUsage)
-            }
-            Spacer(Modifier.weight(1f))
-            BarDivider()
-            TokenInline(tokens, onClick = onFiles)
-            BarDivider()
-            IconButton(onClick = onFiles, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Rounded.FolderOpen, contentDescription = "文件", modifier = Modifier.size(15.dp))
-            }
-            IconButton(onClick = onTerminal, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Rounded.Terminal, contentDescription = "终端", modifier = Modifier.size(15.dp))
-            }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatusChip2("ctx", contextPct?.let { "${it.roundToInt()}%" } ?: "—", contextColor)
+        StatusChip2("命中", hitLabel, hitColor, onClick = onCache)
+        StatusChip2("显示", detailLevelLabel(model.detailLevel), onClick = onToggleDetail)
+        StatusIcon(Icons.Outlined.AccountTree, "Git", onGit)
+        StatusIcon(Icons.Rounded.FolderOpen, "文件", onFiles)
+        StatusIcon(Icons.Rounded.Terminal, "终端", onTerminal)
+        if (costLabel != null) {
+            StatusChip2("花费", costLabel)
+        } else if (goLabel != null) {
+            StatusChip2("Go", goLabel, goColor, onClick = onUsage)
+        } else {
+            StatusChip2("花费", "—")
         }
     }
+
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.BarSlot(
+    weight: Float,
+    content: @Composable () -> Unit,
+) {
+    Box(Modifier.weight(weight), contentAlignment = Alignment.Center) { content() }
 }
 
 @Composable
@@ -1490,10 +1547,54 @@ private fun BarText(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (label.isNotBlank()) {
-            Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                label,
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+            )
             if (value.isNotBlank()) Spacer(Modifier.width(2.dp))
         }
-        if (value.isNotBlank()) Text(value, fontSize = 9.sp, color = color)
+        if (value.isNotBlank()) Text(
+            value,
+            fontSize = 9.sp,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+@Composable
+private fun BarText2(
+    title: String,
+    value: String,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: (() -> Unit)? = null,
+) {
+    Column(
+        Modifier
+            .then(if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier)
+            .padding(horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            title,
+            fontSize = 8.sp,
+            lineHeight = 9.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false,
+        )
+        Text(
+            value,
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
+            color = valueColor,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -1509,15 +1610,67 @@ private fun BarDivider() {
 
 @Composable
 private fun TokenInline(tokens: Tokens?, onClick: (() -> Unit)? = null) {
-    Row(
-        Modifier
+    Text(
+        "↑ ${tokens?.let { formatTokens(it.input) } ?: "—"}  ↓ ${tokens?.let { formatTokens(it.output) } ?: "—"}",
+        fontSize = 9.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier
             .then(if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier)
             .padding(horizontal = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    )
+}
+
+@Composable
+private fun StatusChip2(
+    title: String,
+    value: String,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: (() -> Unit)? = null,
+) {
+    Column(
+        Modifier
+            .heightIn(min = 32.dp)
+            .background(AndrocColor.Medium, RoundedCornerShape(10.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text("↑ ${tokens?.let { formatTokens(it.input) } ?: "—"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(4.dp))
-        Text("↓ ${tokens?.let { formatTokens(it.output) } ?: "—"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            title,
+            fontSize = 8.sp,
+            lineHeight = 9.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false,
+        )
+        Text(
+            value,
+            fontSize = 9.sp,
+            lineHeight = 11.sp,
+            color = valueColor,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+@Composable
+private fun StatusIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(32.dp)
+            .background(AndrocColor.Medium, RoundedCornerShape(10.dp))
+            .clickableNoRipple(onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -1700,15 +1853,14 @@ private fun ConversationCard(
                 "${body.length} 字",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
             )
-            CopyLabel { copyToClipboard(context, body) }
-            Spacer(Modifier.weight(1f))
-            Text(
-                "展开",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            if (onOpen != null) {
+                ActionChip("展开") { onOpen.invoke() }
+                Spacer(Modifier.width(4.dp))
+            }
+            ActionChip("复制") { copyToClipboard(context, body) }
         }
         return
     }
@@ -1745,13 +1897,19 @@ private fun ConversationCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = statusColor,
                 )
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     "${body.length} 字",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
                 )
-                CopyLabel { copyToClipboard(context, body) }
+                if (!showFull && onOpen != null) {
+                    ActionChip("展开") { onOpen.invoke() }
+                    Spacer(Modifier.width(4.dp))
+                }
+                ActionChip("复制") { copyToClipboard(context, body) }
                 if (onClose != null) {
                     Text(
                         "关闭",
@@ -1778,11 +1936,13 @@ private fun ConversationCard(
                         else MaterialTheme.colorScheme.onSurface,
                     )
                 } else {
-                    ClampedText(
+                    Text(
                         body,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isError) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = previewLines,
-                        onExpand = { if (onOpen != null) onOpen() else expanded = true },
-                        maskColor = AndrocColor.Medium,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -1832,14 +1992,17 @@ private fun MessageItem(
                 detail = detail,
                 icon = Icons.Rounded.Compress,
                 markdown = true,
-                previewLines = 3,
+                previewLines = 4,
                 onOpen = { onOpenCard("上下文压缩", msg.text) },
             )
         }
         return
     }
     if (msg.isUser) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
             Surface(
                 color = AndrocColor.MediumStrong,
                 shape = RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp),
@@ -1854,7 +2017,11 @@ private fun MessageItem(
                     ),
             ) {
                 Column(Modifier.padding(horizontal = if (detail == "compact") 10.dp else 13.dp, vertical = if (detail == "compact") 6.dp else 9.dp)) {
-                    msg.images.forEach { DataUriImage(it) }
+                    if (msg.images.isNotEmpty()) {
+                        val thumb = if (detail == "compact") 64.dp else 104.dp
+                        DataUriImageStrip(msg.images, thumb, "消息图片")
+                        Spacer(Modifier.height(if (detail == "compact") 3.dp else 4.dp))
+                    }
                     Text(
                         msg.text,
                         style = MaterialTheme.typography.bodyMedium,
@@ -1905,7 +2072,7 @@ private fun MessageItem(
             }
         }
         if (msg.parts.isEmpty() && msg.text.isNotBlank()) AssistantText(msg.text, onOpenPath)
-        if (detail != "compact") Footer(msg)
+        if (detail == "expanded") Footer(msg)
     }
 }
 
@@ -2034,14 +2201,10 @@ private fun ReasoningBlock(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             )
-            CopyLabel { copyToClipboard(context, text) }
             Spacer(Modifier.weight(1f))
-            Text(
-                "展开",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            ActionChip("展开") { onOpenReasoning(text) }
+            Spacer(Modifier.width(4.dp))
+            ActionChip("复制") { copyToClipboard(context, text) }
         }
     } else {
     Surface(
@@ -2068,17 +2231,16 @@ private fun ReasoningBlock(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    if (live) "进行中" else "完成",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (live) Sky else Accent,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
                     "${text.length} 字",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                CopyLabel { copyToClipboard(context, text) }
+                Spacer(Modifier.weight(1f))
+                if (detail != "expanded") {
+                    ActionChip("展开") { onOpenReasoning(text) }
+                    Spacer(Modifier.width(4.dp))
+                }
+                ActionChip("复制") { copyToClipboard(context, text) }
             }
             // 卡片本身就是唯一容器：不再套一层深色背景 + padding
             LeftAccent(
@@ -2092,11 +2254,14 @@ private fun ReasoningBlock(
                         compact = true,
                     )
                 } else {
-                    ClampedText(
+                    Text(
                         text,
-                        maxLines = 16,
-                        onExpand = { onOpenReasoning(text) },
-                        maskColor = AndrocColor.Medium,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -2111,8 +2276,11 @@ private fun ReasoningDetailCard(
     text: String,
     live: Boolean,
     onClose: () -> Unit,
-    title: String = "思考过程",
+    title: String = "思考",
+    icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.Psychology,
+    detail: String = "expanded",
 ) {
+    val context = LocalContext.current
     val (contentMin, contentMax) = rememberDialogContentHeight()
     val scroll = rememberScrollState()
     // 流式思考：内容还在长，跟着滚到底部（用户往上翻过就不要再抢）
@@ -2120,9 +2288,8 @@ private fun ReasoningDetailCard(
         if (live && scroll.maxValue - scroll.value < 120) scroll.scrollTo(scroll.maxValue)
     }
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(18.dp),
-        tonalElevation = 6.dp,
+        color = AndrocColor.Medium,
+        shape = RoundedCornerShape(12.dp),
         modifier = Modifier
             .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp)
             .fillMaxWidth()
@@ -2131,13 +2298,29 @@ private fun ReasoningDetailCard(
         Column(Modifier.padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 DialogBackButton(onClick = onClose)
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "$title · ${text.length} 字",
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "${text.length} 字",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                ActionChip("复制") { copyToClipboard(context, text) }
             }
             Column(
                 Modifier
@@ -2146,14 +2329,30 @@ private fun ReasoningDetailCard(
                     .verticalScroll(scroll)
                     .padding(vertical = 5.dp),
             ) {
-                MarkdownText(text, Modifier.fillMaxWidth(), compact = true)
+                if (detail == "expanded") {
+                    MarkdownText(text, Modifier.fillMaxWidth(), compact = true)
+                } else {
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ShellBlock(text: String, command: Boolean, maxLines: Int) {
+private fun ShellBlock(
+    text: String,
+    command: Boolean,
+    maxLines: Int,
+    onLines: ((Int) -> Unit)? = null,
+) {
     val accent = if (command) Sky else MaterialTheme.colorScheme.outline
     val bg = if (command) Sky.copy(alpha = 0.10f) else AndrocColor.Medium
     Row(
@@ -2177,6 +2376,7 @@ private fun ShellBlock(text: String, command: Boolean, maxLines: Int) {
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { onLines?.invoke(it.lineCount) },
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
         )
     }
@@ -2207,6 +2407,8 @@ private fun ToolBlock(
     }
     val runningShell = part.name.lowercase() in setOf("shell", "bash", "sh") && part.status == "running"
     var backgrounded by remember(part.toolID) { mutableStateOf(false) }
+    // 适中模式 Shell 正文共用 4 行：命令最多 2 行，输出拿走剩下的（1 行命令 → 3 行输出）
+    var shellCmdLines by remember(part.toolID) { mutableStateOf(2) }
 
     if (detail == "compact") {
         val summary = part.input.lineSequence().firstOrNull()?.take(140).orEmpty()
@@ -2240,7 +2442,6 @@ private fun ToolBlock(
             } else {
                 Spacer(Modifier.weight(1f))
             }
-            CopyLabel { copyToClipboard(context, toolCopyText(part)) }
             val extra = when {
                 hasImages -> "图片"
                 hasDiff -> "diff"
@@ -2287,6 +2488,7 @@ private fun ToolBlock(
                     modifier = Modifier.width(48.dp),
                 )
             }
+            ActionChip("复制") { copyToClipboard(context, toolCopyText(part)) }
         }
         return
     }
@@ -2326,19 +2528,32 @@ private fun ToolBlock(
             .clickableNoRipple { onOpen(part) },
     ) {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+            val summary = part.input.lineSequence().firstOrNull()?.take(140).orEmpty()
+            val extra = when {
+                hasImages -> "图片"
+                hasDiff -> "diff"
+                part.payload.isNotBlank() -> "内容"
+                hasOutput -> "输出"
+                hasError -> "错误"
+                else -> ""
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(toolIcon(part.name), contentDescription = null, modifier = Modifier.size(15.dp), tint = statusColor)
                 Spacer(Modifier.width(6.dp))
-                Text(displayName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+                Text(part.name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    toolStatusLabel(part),
+                    summary,
                     style = MaterialTheme.typography.labelSmall,
-                    color = statusColor,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.weight(1f))
-                CopyLabel { copyToClipboard(context, toolCopyText(part)) }
                 if (runningShell && !backgrounded) {
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         "后台",
                         style = MaterialTheme.typography.labelSmall,
@@ -2351,11 +2566,32 @@ private fun ToolBlock(
                             }
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                     )
-                    Spacer(Modifier.width(4.dp))
                 }
-                if (part.truncated) {
-                    Text("已截断", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (rate != null) {
+                    Spacer(Modifier.width(6.dp))
+                    val dark = MaterialTheme.colorScheme.background.luminanceIsDark()
+                    Text(
+                        rateLabel(rate),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = rateColor(rate, dark),
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        modifier = Modifier.width(48.dp),
+                    )
+                } else if (extra.isNotEmpty()) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        extra,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = statusColor.copy(alpha = 0.9f),
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        modifier = Modifier.width(48.dp),
+                    )
                 }
+                Spacer(Modifier.width(4.dp))
+                ActionChip("复制") { copyToClipboard(context, toolCopyText(part)) }
             }
             if (subtitle.isNotBlank()) {
                 val canOpenFile = (isReadTool || isEditTool || isWriteTool) &&
@@ -2380,7 +2616,12 @@ private fun ToolBlock(
 
             if (isShellTool) {
                 if (part.input.isNotBlank()) {
-                    ShellBlock(part.input.take(4000), command = true, maxLines = 6)
+                    ShellBlock(
+                        part.input.take(4000),
+                        command = true,
+                        maxLines = if (isExpanded) Int.MAX_VALUE else 2,
+                        onLines = { if (!isExpanded) shellCmdLines = it.coerceIn(1, 2) },
+                    )
                 }
                 if (hasOutput) {
                     LeftAccent(
@@ -2397,11 +2638,14 @@ private fun ToolBlock(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         } else {
-                            ClampedText(
+                            Text(
                                 part.output.takeLast(12000),
-                                maxLines = TOOL_PREVIEW_LINES,
-                                onExpand = { onOpen(part) },
-                                maskColor = AndrocColor.Medium,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = if (part.input.isBlank()) 4 else (4 - shellCmdLines).coerceIn(1, 3),
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -2441,18 +2685,26 @@ private fun ToolBlock(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         } else {
-                            ClampedText(
+                            Text(
                                 readBody.take(20000),
-                                maxLines = TOOL_PREVIEW_LINES,
-                                onExpand = { onOpen(part) },
-                                maskColor = AndrocColor.Medium,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     }
                 }
                 if (hasImages) {
-                    part.images.forEach { DataUriImage(it) }
+                    DataUriImageStrip(
+                        part.images,
+                        104.dp,
+                        "工具图片",
+                        Modifier.fillMaxWidth().padding(top = 4.dp),
+                    )
                 }
                 if (hasDiff) {
                     if (isExpanded) {
@@ -2506,12 +2758,14 @@ private fun ToolBlock(
                                 .padding(6.dp),
                         )
                     } else {
-                        ClampedText(
+                        Text(
                             part.payload.take(12000),
-                            maxLines = TOOL_PREVIEW_LINES,
-                            onExpand = { onOpen(part) },
-                            maskColor = AndrocColor.Medium,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.5.sp,
                             color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 5.dp)
@@ -2534,11 +2788,14 @@ private fun ToolBlock(
                             modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                         )
                     } else {
-                        ClampedText(
+                        Text(
                             part.output.takeLast(12000),
-                            maxLines = TOOL_PREVIEW_LINES,
-                            onExpand = { onOpen(part) },
-                            maskColor = AndrocColor.Medium,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                         )
                     }
@@ -2562,7 +2819,9 @@ private fun ToolDetailCard(
     baseDir: String = "",
     onClose: () -> Unit,
     onOpenFile: ((String) -> Unit)? = null,
+    rate: Double? = null,
 ) {
+    val context = LocalContext.current
     val (contentMin, contentMax) = rememberDialogContentHeight()
     val isShellTool = part.name.lowercase() in setOf("shell", "bash", "sh")
     val isWriteTool = part.name == "write"
@@ -2590,9 +2849,8 @@ private fun ToolDetailCard(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(16.dp),
-                tonalElevation = 6.dp,
+                color = AndrocColor.Medium,
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .padding(start = 8.dp, end = 8.dp, top = 14.dp, bottom = 8.dp)
                     .fillMaxWidth()
@@ -2601,24 +2859,46 @@ private fun ToolDetailCard(
                 Column(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         DialogBackButton(onClick = onClose)
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(6.dp))
                         Icon(
                             toolIcon(part.name),
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(16.dp),
                             tint = statusColor,
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(6.dp))
                         Text(
-                            displayName,
-                            style = MaterialTheme.typography.titleSmall,
+                            part.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            part.input.lineSequence().firstOrNull()?.take(140).orEmpty(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
-                        Text(
-                            toolStatusLabel(part),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = statusColor,
-                        )
+                        if (rate != null) {
+                            Spacer(Modifier.width(6.dp))
+                            val dark = MaterialTheme.colorScheme.background.luminanceIsDark()
+                            Text(
+                                rateLabel(rate),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = rateColor(rate, dark),
+                                textAlign = TextAlign.End,
+                                maxLines = 1,
+                                modifier = Modifier.width(44.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        ActionChip("复制") { copyToClipboard(context, toolCopyText(part)) }
                     }
                     if (subtitle.isNotBlank()) {
                         val canOpenFile = (isReadTool || isEditTool || isWriteTool) &&
@@ -2689,9 +2969,6 @@ private fun ToolDetailCard(
                                     )
                                 }
                             }
-                            if (part.images.isNotEmpty()) {
-                                part.images.forEach { DataUriImage(it) }
-                            }
                             if (part.diff.isNotBlank()) {
                                 DiffView(cleanDiff(part.diff))
                             }
@@ -2713,6 +2990,14 @@ private fun ToolDetailCard(
                                     )
                                 }
                             }
+                        }
+                        if (part.images.isNotEmpty()) {
+                            DataUriImageStrip(
+                                part.images,
+                                128.dp,
+                                "工具图片",
+                                Modifier.fillMaxWidth().padding(top = 6.dp),
+                            )
                         }
                         if (part.error.isNotBlank()) {
                             Spacer(Modifier.height(6.dp))
@@ -2810,6 +3095,40 @@ private fun InnerTab(text: String, selected: Boolean, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
         )
+    }
+}
+
+@Composable
+private fun cardIcon(title: String): androidx.compose.ui.graphics.vector.ImageVector = when {
+    title.startsWith("上下文压缩") -> Icons.Rounded.Compress
+    title == "错误" -> Icons.Rounded.ErrorOutline
+    title == "状态" -> Icons.Rounded.Sync
+    else -> Icons.Rounded.Info
+}
+
+@Composable
+private fun ActionChip(text: String, onClick: () -> Unit) {
+    Surface(
+        color = AndrocColor.MediumStrong,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(6.dp),
+        modifier = Modifier.clickableNoRipple(onClick),
+    ) {
+        Text(
+            text,
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun CopyColumn(onClick: () -> Unit) {
+    Box(Modifier.width(42.dp), contentAlignment = Alignment.CenterEnd) {
+        CopyLabel(onClick = onClick)
     }
 }
 
@@ -2928,7 +3247,10 @@ private fun LiveBubble(
         if (text.isNotBlank()) {
             AssistantText(text, onOpenPath)
         } else if (sending) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(

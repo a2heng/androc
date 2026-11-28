@@ -402,7 +402,12 @@ private fun MarkdownTable(
     }
     // 网格线统一 1dp：以前每个格子自己画 0.5dp 边框，相邻两边叠成 1dp、
     // 靠外一侧只有 0.5dp，接缝粗细不齐才是表头错位的根源。
-    val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    // 表格边框：浅色用灰 #9E9E9E / 65%，深色用 #BDBDBD / 45%；不用纯黑/纯白。
+    val grid = if (MaterialTheme.colorScheme.background.luminanceIsDark()) {
+        Color(0xFFBDBDBD).copy(alpha = 0.45f)
+    } else {
+        Color(0xFF9E9E9E).copy(alpha = 0.65f)
+    }
     val headerBg = AndrocColor.MediumStrong
     val stripeBg = AndrocColor.Medium
     val padH = if (compact) 6.dp else 8.dp

@@ -47,3 +47,16 @@
     `ci`、`chore`、`revert`。`scope` 只用：`ui`、`app`、`server`、`proot`、
     `toolbox`、`plugin`、`skill`、`model`、`conn`、`chat`、`fs`、`build`、
     `release`（可省略）。
+
+13. **临时调试接口只允许 debug 构建，release 必须没有监听。** 开发期可以用 App 内的
+    loopback 调试服务（`DebugApi`，`127.0.0.1:42010` + `adb forward`）查 `/state`、
+    `/git`、`/shell`；它只用来让 agent 在不看截图的情况下看状态。规则：
+    - 启动必须包在 `if (BuildConfig.DEBUG)` 里；禁止监听 `0.0.0.0`，禁止暴露密码。
+    - 发版前检查 release 里没有它：`app/build/outputs/mapping/ocRelease/usage.txt`
+      中 `com.a2heng.androc.DebugApi` 必须出现在「removed」列表，且
+      `curl 127.0.0.1:42010/health` 连不上。
+    - 开发结束后删除：`app/src/main/java/com/a2heng/androc/DebugApi.java`、
+      `ui/src/main/java/com/a2heng/androc/ui/data/DebugState.kt`、
+      `MobileFrontendActivity` 的 `DebugApi.start`、`AppModel` 的 `DebugState.attach`、
+      `scripts/oc-debug.sh` 以及 `docs/commands.md` 的调试 API 段落。
+    - 这类接口是临时脚手架，不是产品功能；不要为了调试把用户内容接口带进 release。

@@ -1,6 +1,7 @@
 package com.a2heng.androc.ui.data
 
 import android.app.Application
+import com.a2heng.androc.ui.BuildConfig
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -40,6 +41,10 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 
 class AppModel(app: Application) : AndroidViewModel(app) {
+
+    init {
+        if (BuildConfig.DEBUG) DebugState.attach(this)
+    }
 
     private val prefs = app.getSharedPreferences("opencode-mobile", Application.MODE_PRIVATE)
 
@@ -150,6 +155,15 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * 本机内核还是远程服务器。只用于设置页展示插件，不参与连接逻辑。
      */
     fun isLocalServer(): Boolean = isLocalUrl(serverUrl)
+
+    /** 目录在手机应用私有路径下：即使是通过局域网地址连的本机，也按本机 Git 处理。 */
+    private fun isPhoneLocalDir(dir: String): Boolean =
+        dir.startsWith("/data/data/") || dir.startsWith("/data/user/0/")
+
+    /** 当前是否使用「手机本机 Git」（目录在应用私有路径下也算）。 */
+    val localGitActive: Boolean
+        get() = LocalGit.available() &&
+            (isLocalUrl(serverUrl) || isPhoneLocalDir(gitDirectory.orEmpty()))
 
     fun isLocalUrl(url: String): Boolean {
         if (url.isBlank()) return false
@@ -552,6 +566,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var gitLoading by mutableStateOf(false)
         private set
     var gitError by mutableStateOf<String?>(null)
+    /** 本机 Git 的原始输出/诊断，检测为空时显示在 Git 页里。 */
+    var gitDiagnostic by mutableStateOf<String?>(null)
         private set
     var gitSelectedFile by mutableStateOf<String?>(null)
         private set
@@ -571,29 +587,93 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         gitDiffFiles = emptyList()
         gitBaseLabel = null
         gitMode = "working"
+        gitDiagnostic = null
         gitLoading = true
-        loadGit("working", fallbackToCommitted = true)
+        loadGit("working")
+    }
+
+    /**
+     * 在服务端初始化 Git 仓库。
+     *
+     * 服务端会缓存「某个 location 有没有 VCS」；如果用户是在终端里手动
+     * `git init` 的，这里会先撞到 409（仓库已存在），随后重建 location 缓存，
+     * 再读一次就能看到仓库。两种情况都走同一套收尾。
+     */
+    fun initGit() {
+        val dir = gitDirectory ?: return
+        if (LocalGit.available() && (isLocalUrl(serverUrl) || isPhoneLocalDir(dir))) {
+            viewModelScope.launch {
+                gitLoading = true
+                gitError = null
+                val failure = runCatching {
+                    withContext(Dispatchers.IO) { LocalGit.init(dir) }
+                }.exceptionOrNull()
+                gitLoading = false
+                if (failure != null) gitError = failure.message else loadGit("working")
+            }
+            return
+        }
+        val c = client ?: return
+        viewModelScope.launch {
+            gitLoading = true
+            gitError = null
+            val failure = runCatching {
+                withContext(Dispatchers.IO) { c.initVcs(dir) }
+            }.exceptionOrNull()
+            val conflict = (failure as? ApiException)?.code == 409 ||
+                failure?.message?.contains("already", ignoreCase = true) == true
+            runCatching { withContext(Dispatchers.IO) { c.reloadConfig() } }
+            if (failure != null && !conflict) {
+                gitLoading = false
+                gitError = failure.message
+                return@launch
+            }
+            loadGit("working")
+        }
+    }
+
+    /** 手动 `git init` 之后刷新：重建 location 缓存，再读 VCS。 */
+    fun reloadGit() {
+        if (LocalGit.available() && (isLocalUrl(serverUrl) || isPhoneLocalDir(gitDirectory.orEmpty()))) {
+            loadGit("working")
+            return
+        }
+        val c = client ?: return
+        viewModelScope.launch {
+            gitLoading = true
+            gitError = null
+            runCatching { withContext(Dispatchers.IO) { c.reloadConfig() } }
+            loadGit("working")
+        }
     }
 
     fun closeGit() {
+        gitDiagnostic = null
         gitDirectory = null
         gitSelectedFile = null
         gitError = null
         gitLoading = false
     }
 
-    fun loadGit(mode: String = gitMode, fallbackToCommitted: Boolean = false) {
+    fun loadGit(mode: String = gitMode) {
         val c = client ?: return
         val dir = gitDirectory ?: return
+        // 本机直接用 proot 里的 git；远端仍走 OpenCode 的 /api/vcs。
+        val localGit = LocalGit.available() &&
+            (isLocalUrl(serverUrl) || isPhoneLocalDir(dir))
         viewModelScope.launch {
             gitLoading = true
             gitError = null
             gitMode = mode
             if (mode == "working") gitStatus = emptyList()
             gitDiffFiles = emptyList()
-            var switchToCommitted = false
             try {
                 val (info, base, status, diffs) = withContext(Dispatchers.IO) {
+                    if (localGit) {
+                        val snap = LocalGit.snapshot(dir, mode)
+                        gitDiagnostic = if (snap.info.provider.isBlank()) LocalGit.lastOutput else null
+                        return@withContext Quad(snap.info, null, snap.status, snap.diff)
+                    }
                     val i = runCatching { c.vcsInfo(dir) }.getOrDefault(VcsInfo())
                     val b = runCatching { c.vcsBase(dir) }.getOrNull()
                     val s = if (mode == "working") runCatching { c.vcsStatus(dir) }.getOrDefault(emptyList()) else emptyList()
@@ -616,15 +696,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 if (gitSelectedFile != null && diffs.none { it.file == gitSelectedFile }) {
                     gitSelectedFile = diffs.firstOrNull()?.file
                 }
-                // 工作区干净时打开 Git 会是一片空白；自动切到「上一次提交」，至少能看到最近一次改动。
-                switchToCommitted = fallbackToCommitted && mode == "working" &&
-                    info.provider.isNotBlank() && status.isEmpty() && diffs.isEmpty()
             } catch (e: Exception) {
                 gitError = e.message ?: "加载 Git 信息失败"
             } finally {
                 gitLoading = false
             }
-            if (switchToCommitted) loadGit("committed")
         }
     }
 
@@ -700,7 +776,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     // 连接
     // =========================================================================
 
-    fun connect(url: String, pwd: String, remember: Boolean = true) {
+    fun connect(
+        url: String,
+        pwd: String,
+        remember: Boolean = true,
+        fromLauncher: Boolean = false,
+    ) {
+        // 本机地址统一走 launcher：先启动/准备，再连；不要直接 connect 到还没起来
+        // 的 127.0.0.1，避免登录页出现 “Failed to connect”。
+        if (!fromLauncher && isLocalUrl(url)) {
+            startLocalNow()
+            return
+        }
         val normalized = OcClient.normalize(url)
         connecting = true
         connectionError = null
@@ -832,7 +919,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun autoConnect() {
-        if (serverUrl.isNotBlank() && !connected && !connecting) connectSmart(serverUrl, password)
+        if (serverUrl.isBlank() || connected || connecting) return
+        // 本机：先走 launcher（准备/启动），好了再 connect；远程：立即重连。
+        if (isLocalUrl(serverUrl)) startLocalNow() else connectSmart(serverUrl, password)
     }
 
     /**
@@ -842,6 +931,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      */
     /** 本机模式：直接启动并连接，不弹安装/校验对话框。 */
     fun startLocalNow() {
+        if (connecting) return
         val launcher = LocalRuntimeHost.launcher ?: run {
             connectionError = "当前版本没有本机模式"
             return
@@ -849,24 +939,20 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         connecting = true
         connectionError = null
         launcher.start(
-            { localUrl, localPwd -> connect(localUrl, localPwd, remember = true) },
+            { localUrl, localPwd ->
+                connect(localUrl, localPwd, remember = true, fromLauncher = true)
+            },
             { message ->
                 connecting = false
-                connectionError = message
+                connectionError = "本机 OpenCode 启动失败：$message"
             },
         )
     }
 
     fun connectSmart(url: String, pwd: String, remember: Boolean = true) {
         if (isLocalUrl(url)) {
-            val launcher = LocalRuntimeHost.launcher
-            if (launcher != null && launcher.installed) {
-                launcher.start(
-                    { localUrl, localPwd -> connect(localUrl, localPwd, remember) },
-                    { connect(url, pwd, remember) },
-                )
-                return
-            }
+            startLocalNow()
+            return
         }
         connect(url, pwd, remember)
     }
@@ -1284,7 +1370,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         retryJob = viewModelScope.launch {
             delay(delayMs)
             if (hadConnected && !connected && !connecting && serverUrl.isNotBlank()) {
-                connect(serverUrl, password)
+                if (isLocalUrl(serverUrl)) startLocalNow() else connect(serverUrl, password)
             }
         }
     }
@@ -1293,7 +1379,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun retryNow() {
         retryJob?.cancel()
         retryDelay = 5_000L
-        if (serverUrl.isNotBlank()) connect(serverUrl, password)
+        if (serverUrl.isBlank()) return
+        if (isLocalUrl(serverUrl)) startLocalNow() else connect(serverUrl, password)
     }
 
     /** 回到前台时调用：只在已经连过、掉线的情况下补一次；登录页上连不上就不重试。 */

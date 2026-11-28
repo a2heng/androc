@@ -32,7 +32,10 @@ public final class ThinRuntimeLauncher implements LocalRuntimeLauncher {
         ThinRuntimeService.start(context);
         new Thread(() -> {
             try {
-                if (ThinRuntime.awaitReady(context, 120_000L)) {
+                // 20s 内没等到健康检查也先交给 connect 试一次：
+                // 避免首次点“本机”在这里干等 120s，取消再连才秒进。
+                boolean ready = ThinRuntime.awaitReady(context, 20_000L);
+                if (ready || ThinRuntime.running()) {
                     onReady.invoke("http://127.0.0.1:" + ThinRuntime.port(context),
                             LocalRuntime.serverPassword(context));
                 } else {

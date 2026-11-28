@@ -496,6 +496,11 @@ public final class LocalRuntime {
      * comprobar el entorno y para el shim "pkg".
      */
     public static String runInSandbox(Context ctx, String command, int timeoutMs) {
+        return runInSandbox(ctx, command, timeoutMs, 20000);
+    }
+
+    /** 同上，但可以放宽输出上限（本机 Git 需要读 diff）。 */
+    public static String runInSandbox(Context ctx, String command, int timeoutMs, int maxChars) {
         try {
             Context app = ctx.getApplicationContext();
             File nd = new File(app.getApplicationInfo().nativeLibraryDir);
@@ -533,7 +538,7 @@ public final class LocalRuntime {
                 try (BufferedReader r = new BufferedReader(
                         new InputStreamReader(p.getInputStream()))) {
                     String line;
-                    while ((line = r.readLine()) != null && out.length() < 20000) {
+                    while ((line = r.readLine()) != null && out.length() < maxChars) {
                         out.append(line).append('\n');
                     }
                 } catch (IOException ignored) {

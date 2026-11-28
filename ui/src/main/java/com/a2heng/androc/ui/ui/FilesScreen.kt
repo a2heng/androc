@@ -80,10 +80,16 @@ import com.a2heng.androc.ui.data.joinPath
 import com.a2heng.androc.ui.data.normPath
 
 @Composable
-fun FilesScreen(model: AppModel, wide: Boolean = false) {
-    LaunchedEffect(Unit) {
+fun FilesScreen(
+    model: AppModel,
+    wide: Boolean = false,
+    startDir: String? = null,
+) {
+    // 对话内打开时直接用当前会话目录；外层「文件」页没给 startDir，保持原行为。
+    LaunchedEffect(startDir) {
         model.ensureDrives()
-        if (model.fsDir.isBlank()) model.loadDir(null)
+        if (!startDir.isNullOrBlank()) model.loadDir(startDir)
+        else if (model.fsDir.isBlank()) model.loadDir(null)
     }
 
     val rootBase = model.fsBase()

@@ -5,10 +5,15 @@ import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,12 +34,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -61,8 +69,16 @@ fun decodeDataUri(uri: String, maxSide: Int = 1600): Bitmap? {
     }.getOrNull()
 }
 
+/**
+ * 对话里的图片只显示缩略图，点一下全屏看原图（双指缩放、双击放大）。
+ * 缩略图固定方形 + Crop，多条图片排成一行，不会把整段对话顶高。
+ */
 @Composable
-fun DataUriImage(uri: String) {
+fun DataUriImage(
+    uri: String,
+    thumbSize: Dp = 112.dp,
+    title: String = "图片",
+) {
     val bitmap = remember(uri) { decodeDataUri(uri) }
     if (bitmap == null) {
         Text(
@@ -72,20 +88,72 @@ fun DataUriImage(uri: String) {
         )
         return
     }
-    // 点一下全屏看大图：双指缩放、双击放大
     var open by remember(bitmap) { mutableStateOf(false) }
-    Image(
-        bitmap = bitmap.asImageBitmap(),
-        contentDescription = "工具生成的图片",
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 300.dp)
-            .padding(top = 4.dp)
+    Box(
+        Modifier
+            .size(thumbSize)
+            .background(AndrocColor.Medium, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickableNoRipple { open = true },
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = title,
+            // 缩略图显示完整图片，不裁中间
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
     if (open) {
-        ZoomableImageDialog(bitmap, "工具生成的图片") { open = false }
+        ZoomableImageDialog(bitmap, title) { open = false }
+    }
+}
+
+/** 一组图片缩略图：整张图 Fit 显示，点击进入可左右翻页的全屏查看。 */
+@Composable
+fun DataUriImageStrip(
+    uris: List<String>,
+    thumbSize: Dp = 112.dp,
+    title: String = "图片",
+    modifier: Modifier = Modifier,
+) {
+    if (uris.isEmpty()) return
+    val thumbs = remember(uris) { uris.map { decodeDataUri(it) } }
+    var viewerIndex by remember(uris) { mutableStateOf<Int?>(null) }
+    Row(
+        modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        uris.forEachIndexed { index, _ ->
+            val bitmap = thumbs[index]
+            if (bitmap == null) {
+                Text(
+                    "[图片无法解码]",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Box(
+                    Modifier
+                        .size(thumbSize)
+                        .background(AndrocColor.Medium, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickableNoRipple { viewerIndex = index },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = title,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+    viewerIndex?.let { start ->
+        ZoomableImagePagerDialog(uris, start, title) { viewerIndex = null }
     }
 }
 
