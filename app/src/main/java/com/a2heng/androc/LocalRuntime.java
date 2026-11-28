@@ -387,6 +387,8 @@ public final class LocalRuntime {
         File nativeConfigDir = new File(home, ".config/opencode-android");
         mkdirs(nativeConfigDir);
         installSkills(app, nativeConfigDir);
+        installGlobalAgents(app, nativeConfigDir);
+        installGlobalAgents(app, new File(home, ".config/opencode"));
         String agentShell = "/bin/bash";
         NativeRuntimeConfig.write(nativeConfigDir, config, agentShell);
         prepareNetworkOverrides(home, etc);
@@ -805,9 +807,12 @@ public final class LocalRuntime {
                     if (!line.trim().isEmpty()) lines.add(line.trim());
                 }
             }
-            return lines.size() == 2
-                    && lines.get(0).equals("nameserver 1.1.1.1")
+            if (lines.size() != 2) return false;
+            boolean old = lines.get(0).equals("nameserver 1.1.1.1")
                     && lines.get(1).equals("nameserver 8.8.8.8");
+            boolean current = lines.get(0).equals("nameserver 223.5.5.5")
+                    && lines.get(1).equals("nameserver 119.29.29.29");
+            return old || current;
         } catch (Exception e) {
             return false;
         }
@@ -836,7 +841,7 @@ public final class LocalRuntime {
             w.write(body.toString());
         }
         try (FileWriter w = new FileWriter(new File(etc, "resolv.conf"), false)) {
-            w.write("nameserver 1.1.1.1\nnameserver 8.8.8.8\n");
+            w.write("nameserver 223.5.5.5\nnameserver 119.29.29.29\n");
         }
     }
 
@@ -858,6 +863,57 @@ public final class LocalRuntime {
             installSkills(app, config);
         } catch (Exception e) {
             Log.w(TAG, "no se pudieron instalar los tools grep/glob: " + e);
+        }
+    }
+
+    /** 写入手机场景的全局 AGENTS.md；用标记块做幂等更新，保留用户自己的内容。 */
+    private static void installGlobalAgents(Context app, File config) {
+        try {
+            if (!config.isDirectory() && !config.mkdirs()) return;
+            String body = readAssetText(app, "agents/AGENTS.md");
+            if (body == null || body.trim().isEmpty()) return;
+            final String startMark = "<!-- androc-mobile:start -->";
+            final String endMark = "<!-- androc-mobile:end -->";
+            String block = startMark + "\n" + body.trim() + "\n" + endMark + "\n";
+            File dest = new File(config, "AGENTS.md");
+            String old = dest.isFile() ? readText(dest) : "";
+            String next;
+            int start = old.indexOf(startMark);
+            int end = old.indexOf(endMark);
+            if (start >= 0 && end > start) {
+                next = old.substring(0, start) + block + old.substring(end + endMark.length());
+            } else if (old.trim().isEmpty()) {
+                next = block;
+            } else {
+                next = old.trim() + "\n\n" + block;
+            }
+            if (!next.equals(old)) {
+                try (FileWriter w = new FileWriter(dest, false)) {
+                    w.write(next);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "no se pudo escribir AGENTS.md: " + e);
+        }
+    }
+
+    private static String readText(File file) throws IOException {
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(
+                new FileInputStream(file), StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line).append('\n');
+            return sb.toString();
+        }
+    }
+
+    private static String readAssetText(Context app, String path) throws IOException {
+        try (InputStream in = app.getAssets().open(path)) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            return out.toString("UTF-8");
         }
     }
 

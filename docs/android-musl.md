@@ -45,3 +45,13 @@ Android 包解压到 `files/packs/android/<ver>/`。
 
 - 4 KB 页设备已验证；16 KB 页设备需要重新确认内置 ELF 的对齐。
 - Android 包首次安装耗时取决于网络与存储写入速度。
+
+## 网络与全局提示词
+
+- proot 的 `/etc/resolv.conf` 由启动器生成在 `~/.oc-etc/resolv.conf`，当前使用
+  `223.5.5.5` / `119.29.29.29`（旧的 `1.1.1.1` / `8.8.8.8` 在很多移动网络不可达）。
+- 首次/每次启动都会写入手机场景的全局提示词：
+  `~/.config/opencode-android/AGENTS.md` 和 `~/.config/opencode/AGENTS.md`，
+  使用 `<!-- androc-mobile:start/end -->` 标记块，幂等更新，保留用户自己的内容。
+- 内置 `skill-installer` 的 `description` 明确写了「只在安装/列出/删除技能时使用」，
+  避免普通对话误加载。

@@ -301,7 +301,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) { c.stopShell(id, current?.directory) }
                 refreshShells()
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -868,7 +868,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 connecting = false
                 connected = false
-                connectionError = e.message ?: e.javaClass.simpleName
+                connectionError = friendlyError(e.message ?: e.javaClass.simpleName)
                 // 登录页第一次连不上就停在这里，不要一直「连接中」；
                 // 只有用过一段时间后掉线才自动退避重连。
                 if (hadConnected) scheduleReconnect() else stopRetry()
@@ -1067,7 +1067,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             val ok = try {
                 withContext(Dispatchers.IO) { c.setDefaultModel(model) }
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
                 false
             }
             if (ok) {
@@ -1308,7 +1308,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             } catch (e: Exception) {
-                updateMessage = "检查失败：" + (e.message ?: "")
+                updateMessage = "检查失败：" + friendlyError(e.message)
             } finally {
                 checkingUpdate = false
             }
@@ -1456,7 +1456,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
                 restoreOpenSessions()
             } catch (e: Exception) {
-                connectionError = e.message
+                connectionError = friendlyError(e.message)
             } finally {
                 sessionsLoading = false
             }
@@ -1578,7 +1578,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             } catch (e: Exception) {
-                if (!silent) lastError = e.message
+                if (!silent) lastError = friendlyError(e.message)
             } finally {
                 messagesLoading = false
             }
@@ -1609,7 +1609,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 olderCursor = page.next
                 hasOlderMessages = page.next != null
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             } finally {
                 loadingOlderMessages = false
             }
@@ -1778,7 +1778,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) { c.cancelInbox(s.id, id) }
                 queue = queue.filterNot { it.id == id }
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1794,7 +1794,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 queue = queue.filterNot { it.id == id }
                 onDone(item.text)
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1828,7 +1828,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             try {
                 withContext(Dispatchers.IO) { c.interrupt(s.id) }
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1864,7 +1864,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 refreshSessions()
                 if (s != null) openSession(s)
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1888,7 +1888,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 delay(400)
                 onDone()
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1902,7 +1902,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) { c.renameSession(id, title) }
                 refreshSessions()
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1917,7 +1917,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 if (current?.id == id) closeSession()
                 refreshSessions()
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1932,7 +1932,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 rememberRecentModel(model)
                 refreshSessions()
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -1946,7 +1946,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 current = s.copy(agent = agent)
                 refreshSessions()
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -2160,7 +2160,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) { c.replyPermission(req.sessionID, req.id, decision) }
                 permissions = permissions.filterNot { it.id == req.id }
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -2183,7 +2183,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) { c.replyForm(form.sessionID, form.id, answer) }
                 forms = forms.filterNot { it.id == form.id }
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -2272,7 +2272,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 showNotice(msg, autoClearMs = 6000)
                 loadMessages(silent = true)
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
                 showNotice("压缩失败：${e.message ?: "未知错误"}", autoClearMs = 0)
             }
         }
@@ -2297,7 +2297,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 refreshShells()
                 scheduleReload(immediate = true)
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }
@@ -2317,7 +2317,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 loadMeta(current?.directory)
                 refreshSessions()
             } catch (e: Exception) {
-                lastError = e.message
+                lastError = friendlyError(e.message)
             }
         }
     }

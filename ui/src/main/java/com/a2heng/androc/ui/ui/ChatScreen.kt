@@ -176,6 +176,7 @@ import com.a2heng.androc.ui.data.PermissionReq
 import com.a2heng.androc.ui.data.SessionInfo
 import com.a2heng.androc.ui.data.Tokens
 import com.a2heng.androc.ui.data.formatCost
+import com.a2heng.androc.ui.data.friendlyError
 import com.a2heng.androc.ui.data.formatTokens
 import com.a2heng.androc.ui.data.rateLabel
 import com.a2heng.androc.ui.data.str
@@ -1968,7 +1969,7 @@ private fun MessageItem(
     if (msg.isError) {
         ConversationCard(
             title = "错误",
-            body = msg.error ?: msg.text.ifBlank { "请求失败" },
+            body = friendlyError(msg.error ?: msg.text.ifBlank { "请求失败" }),
             detail = detail,
             icon = Icons.Rounded.ErrorOutline,
             isError = true,
@@ -2057,7 +2058,7 @@ private fun MessageItem(
         if (errText != null && msg.parts.isEmpty() && msg.text.isBlank()) {
             ConversationCard(
                 title = "错误",
-                body = errText,
+                body = friendlyError(errText),
                 detail = detail,
                 icon = Icons.Rounded.ErrorOutline,
                 isError = true,
