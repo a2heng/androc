@@ -1574,6 +1574,7 @@ private fun ConversationCard(
     onOpen: (() -> Unit)? = null,
 ) {
     if (body.isBlank()) return
+    val context = LocalContext.current
     val statusText = status ?: if (isError) "失败" else "完成"
     val statusColor = when {
         isError -> MaterialTheme.colorScheme.error
@@ -1610,6 +1611,7 @@ private fun ConversationCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             )
+            CopyLabel { copyToClipboard(context, body) }
             Spacer(Modifier.weight(1f))
             Text(
                 "展开",
@@ -1659,6 +1661,7 @@ private fun ConversationCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                CopyLabel { copyToClipboard(context, body) }
                 if (onClose != null) {
                     Text(
                         "关闭",
@@ -1940,6 +1943,7 @@ private fun ReasoningBlock(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             )
+            CopyLabel { copyToClipboard(context, text) }
             Spacer(Modifier.weight(1f))
             Text(
                 "展开",
@@ -1983,6 +1987,7 @@ private fun ReasoningBlock(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                CopyLabel { copyToClipboard(context, text) }
             }
             // 卡片本身就是唯一容器：不再套一层深色背景 + padding
             LeftAccent(
@@ -2144,6 +2149,7 @@ private fun ToolBlock(
             } else {
                 Spacer(Modifier.weight(1f))
             }
+            CopyLabel { copyToClipboard(context, toolCopyText(part)) }
             val extra = when {
                 hasImages -> "图片"
                 hasDiff -> "diff"
@@ -2240,6 +2246,7 @@ private fun ToolBlock(
                     color = statusColor,
                 )
                 Spacer(Modifier.weight(1f))
+                CopyLabel { copyToClipboard(context, toolCopyText(part)) }
                 if (runningShell && !backgrounded) {
                     Text(
                         "后台",
@@ -2680,6 +2687,35 @@ private fun toolStatusLabel(part: Part.Tool): String = when {
     part.status == "running" -> "运行中"
     part.status == "error" || part.status == "failed" -> "失败"
     else -> part.status.ifBlank { "—" }
+}
+
+private fun toolCopyText(part: Part.Tool): String = buildString {
+    if (part.input.isNotBlank()) append(part.input)
+    if (part.output.isNotBlank()) {
+        if (isNotEmpty()) append("\n\n")
+        append(part.output)
+    }
+    if (part.error.isNotBlank()) {
+        if (isNotEmpty()) append("\n\n")
+        append(part.error)
+    }
+    if (part.diff.isNotBlank()) {
+        if (isNotEmpty()) append("\n\n")
+        append(part.diff)
+    }
+}.trim()
+
+@Composable
+private fun CopyLabel(onClick: () -> Unit) {
+    Text(
+        "复制",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .clickableNoRipple(onClick)
+            .padding(start = 8.dp),
+    )
 }
 
 /** 复制用户消息到系统剪贴板。 */

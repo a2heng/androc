@@ -1,5 +1,6 @@
 package com.a2heng.androc.ui.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,11 +16,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +45,22 @@ import com.a2heng.androc.ui.data.normPath
  * 从工作目录里选一个文件，插入 `@相对路径` 引用（opencode 的 mention 写法）。
  * 全屏子页（PickerPage），不是弹窗；目录优先，文件点了就插入。
  */
+@Composable
+private fun QuickDir(text: String, onClick: () -> Unit) {
+    Surface(
+        color = AndrocColor.Medium,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.clickableNoRipple(onClick),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+        )
+    }
+}
+
 @Composable
 fun FileMentionPage(
     model: AppModel,
@@ -113,6 +132,15 @@ fun FileMentionPage(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val fileDir = model.fsDir.ifBlank { model.homeDir }
+            QuickDir("工作目录") { path = startDir }
+            QuickDir("文件浏览") { path = fileDir }
+            QuickDir("Home") { path = model.homeDir }
         }
         HorizontalDivider()
         when {
