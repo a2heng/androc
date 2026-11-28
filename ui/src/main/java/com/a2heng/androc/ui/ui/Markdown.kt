@@ -543,7 +543,8 @@ private fun MarkdownLines(
     Column(Modifier.fillMaxWidth()) {
         lines.forEach { line ->
             when (line) {
-                is Line.Heading -> LinkableText(
+                is Line.Heading -> SelectionContainer {
+                    LinkableText(
                     inline(line.text, codeColor, linkColor, onOpenPath),
                     style = if (compact) {
                         when (line.level) {
@@ -559,10 +560,12 @@ private fun MarkdownLines(
                         }
                     },
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = if (compact) 4.dp else 6.dp, bottom = 2.dp),
-                    onOpenPath = onOpenPath,
-                )
-                is Line.Quote -> Row(
+                        modifier = Modifier.padding(top = if (compact) 4.dp else 6.dp, bottom = 2.dp),
+                        onOpenPath = onOpenPath,
+                    )
+                }
+                is Line.Quote -> SelectionContainer {
+                    Row(
                     Modifier
                         .fillMaxWidth()
                         .height(IntrinsicSize.Min)
@@ -582,8 +585,10 @@ private fun MarkdownLines(
                         modifier = Modifier.padding(start = 8.dp),
                         onOpenPath = onOpenPath,
                     )
+                    }
                 }
-                is Line.ListItem -> Row(
+                is Line.ListItem -> SelectionContainer {
+                    Row(
                     Modifier.padding(start = (line.indent * 12).dp, top = 1.dp, bottom = 1.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
@@ -599,8 +604,11 @@ private fun MarkdownLines(
                         modifier = Modifier.weight(1f),
                         onOpenPath = onOpenPath,
                     )
+                    }
                 }
-                is Line.Table -> MarkdownTable(line, codeColor, linkColor, compact, onOpenPath)
+                is Line.Table -> SelectionContainer {
+                    MarkdownTable(line, codeColor, linkColor, compact, onOpenPath)
+                }
                 is Line.Image -> MarkdownImageCard(line.alt, line.src, compact, onOpenPath)
                 Line.Rule -> HorizontalDivider(Modifier.padding(vertical = if (compact) 4.dp else 6.dp))
                 Line.Gap -> Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
