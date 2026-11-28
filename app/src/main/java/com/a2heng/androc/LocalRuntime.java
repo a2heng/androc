@@ -2,6 +2,9 @@ package com.a2heng.androc;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
 import android.system.Os;
 import android.util.Log;
 
@@ -391,7 +394,7 @@ public final class LocalRuntime {
         installGlobalAgents(app, new File(home, ".config/opencode"));
         String agentShell = "/bin/bash";
         NativeRuntimeConfig.write(nativeConfigDir, config, agentShell);
-        prepareNetworkOverrides(home, etc);
+        prepareNetworkOverrides(app, home, etc);
 
         File bin = runtimeBinary(app);
         if (bin == null) bin = new File(nd, "libopencode2_bin.so");
@@ -448,7 +451,7 @@ public final class LocalRuntime {
         mkdirs(etc);
         mkdirs(lib);
         mkdirs(prootTmp);
-        prepareNetworkOverrides(home, etc);
+        prepareNetworkOverrides(app, home, etc);
         File proot = new File(nd, "libproot.so");
         File loader = new File(nd, "libproot_loader.so");
         Map<String, String> env = buildEnv(app, home, tmp, etc, lib, nd, loader, prootTmp);
@@ -519,7 +522,7 @@ public final class LocalRuntime {
             mkdirs(prootTmp);
             mkdirs(lib);
             mkdirs(etc);
-            prepareNetworkOverrides(home, etc);
+            prepareNetworkOverrides(app, home, etc);
             File proot = new File(nd, "libproot.so");
             File loader = new File(nd, "libproot_loader.so");
             Map<String, String> env = buildEnv(app, home, tmp, etc, lib, nd, loader, prootTmp);
@@ -747,9 +750,9 @@ public final class LocalRuntime {
         }
     }
 
-    private static void prepareNetworkOverrides(File home, File etc) throws IOException {
+    private static void prepareNetworkOverrides(Context app, File home, File etc) throws IOException {
         migrateNetworkOverrides(home);
-        writeNetworkOverrides(etc);
+        writeNetworkOverrides(app, etc);
     }
 
     /**
@@ -818,7 +821,7 @@ public final class LocalRuntime {
         }
     }
 
-    private static void writeNetworkOverrides(File etc) throws IOException {
+    private static void writeNetworkOverrides(Context app, File etc) throws IOException {
         String[][] hosts = {
                 {"opencode.ai", "172.65.90.20"},
                 {"models.opencode.ai", "172.66.173.149"}
@@ -840,8 +843,34 @@ public final class LocalRuntime {
         try (FileWriter w = new FileWriter(new File(etc, "hosts"), false)) {
             w.write(body.toString());
         }
+        List<String> servers = new ArrayList<>();
+        try {
+            ConnectivityManager cm = (ConnectivityManager) app.getSystemService(Context.CONNECTIVITY_SERVICE);
+            Network network = cm == null ? null : cm.getActiveNetwork();
+            LinkProperties lp = network == null ? null : cm.getLinkProperties(network);
+            if (lp != null) {
+                for (InetAddress address : lp.getDnsServers()) {
+                    if (address instanceof Inet4Address) {
+                        String ip = address.getHostAddress();
+                        if (!servers.contains(ip)) servers.add(ip);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        // 本地/当前网络 DNS 优先；再用国内公共 DNS 兜底。musl 最多读 3 个。
+        if (servers.size() > 2) servers = new ArrayList<>(servers.subList(0, 2));
+        for (String fallback : new String[]{"223.5.5.5", "119.29.29.29"}) {
+            if (!servers.contains(fallback) && servers.size() < 3) servers.add(fallback);
+        }
+        StringBuilder resolv = new StringBuilder();
+        for (String server : servers) {
+            resolv.append("nameserver ").append(server).append('\n');
+        }
+        // 本地 DNS 失败时 1 秒就切下一个，避免卡住
+        resolv.append("options timeout:1 attempts:1\n");
         try (FileWriter w = new FileWriter(new File(etc, "resolv.conf"), false)) {
-            w.write("nameserver 223.5.5.5\nnameserver 119.29.29.29\n");
+            w.write(resolv.toString());
         }
     }
 

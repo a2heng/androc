@@ -48,8 +48,9 @@ Android 包解压到 `files/packs/android/<ver>/`。
 
 ## 网络与全局提示词
 
-- proot 的 `/etc/resolv.conf` 由启动器生成在 `~/.oc-etc/resolv.conf`，当前使用
-  `223.5.5.5` / `119.29.29.29`（旧的 `1.1.1.1` / `8.8.8.8` 在很多移动网络不可达）。
+- proot 的 `/etc/resolv.conf` 由启动器生成在 `~/.oc-etc/resolv.conf`：优先使用
+  当前网络的 DNS，再追加 `223.5.5.5` / `119.29.29.29` 兜底，`options timeout:1 attempts:1`；
+  不再写死 `1.1.1.1` / `8.8.8.8`。
 - 首次/每次启动都会写入手机场景的全局提示词：
   `~/.config/opencode-android/AGENTS.md` 和 `~/.config/opencode/AGENTS.md`，
   使用 `<!-- androc-mobile:start/end -->` 标记块，幂等更新，保留用户自己的内容。
