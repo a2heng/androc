@@ -880,6 +880,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("send_mode", mode).apply()
     }
 
+    /** 从聊天里请求切到某个主 tab（0 会话 / 1 文件 / 2 终端 / 3 设置）。 */
+    var requestedTab by mutableStateOf<Int?>(null)
+        private set
+
+    fun requestTab(tab: Int) {
+        requestedTab = tab
+    }
+
+    fun clearTabRequest() {
+        requestedTab = null
+    }
+
     fun updateDetailLevel(level: String) {
         detailLevel = level
         prefs.edit().putString("detail_level", level).apply()

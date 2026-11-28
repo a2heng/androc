@@ -112,6 +112,11 @@ private fun tabTitle(tab: Int): String = when (tab) {
 fun MainScreen(model: AppModel, wide: Boolean = false) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showNewSession by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(model.requestedTab) {
+        val req = model.requestedTab ?: return@LaunchedEffect
+        tab = req
+        model.clearTabRequest()
+    }
 
     // 不再放刷新按钮：进入页面就自动刷新一次（回到前台的刷新在 refreshOnResume）
     LaunchedEffect(tab, wide) {

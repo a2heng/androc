@@ -102,6 +102,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.UTurnLeft
@@ -211,6 +212,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     var showUsage by remember { mutableStateOf(false) }
     var showFilePicker by remember { mutableStateOf(false) }
     var openMenu by remember { mutableStateOf(false) }
+    var innerPage by remember { mutableStateOf<Int?>(null) } // 1=文件 2=终端
     var confirmStop by remember { mutableStateOf(false) }
     var backProgress by remember { mutableFloatStateOf(0f) }
     var entered by remember { mutableStateOf(false) }
@@ -320,7 +322,7 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
     } ?: MaterialTheme.colorScheme.onSurfaceVariant
     val backOwner = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
     if (backOwner != null) {
-        PredictiveBackHandler { events ->
+        PredictiveBackHandler(enabled = innerPage == null) { events ->
             try {
                 events.collect { event -> backProgress = event.progress }
                 model.closeSession()
@@ -331,10 +333,13 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
             }
         }
     } else {
-        BackHandler {
+        BackHandler(enabled = innerPage == null) {
             model.closeSession()
             model.refreshSessions()
         }
+    }
+    BackHandler(enabled = innerPage != null) {
+        innerPage = null
     }
 
     Scaffold(
@@ -365,8 +370,12 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                             .size(40.dp)
                             .background(MaterialTheme.colorScheme.primary, CircleShape)
                             .clickableNoRipple {
-                                model.closeSession()
-                                model.refreshSessions()
+                                if (innerPage != null) {
+                                    innerPage = null
+                                } else {
+                                    model.closeSession()
+                                    model.refreshSessions()
+                                }
                             },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -511,6 +520,22 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                     },
                     onGit = { model.openGit(session.directory) },
                     onCache = { model.openCache(session) },
+                    onFiles = {
+                        if (innerPage != null) {
+                            innerPage = null
+                        } else {
+                            model.loadDir(session.directory)
+                            innerPage = 1
+                        }
+                    },
+                    onTerminal = {
+                        if (innerPage == 2) {
+                            innerPage = null
+                        } else {
+                            model.loadPtys()
+                            innerPage = 2
+                        }
+                    },
                 )
             }
         },
@@ -816,6 +841,37 @@ fun ChatScreen(model: AppModel, session: SessionInfo, wide: Boolean = false) {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+        if (innerPage != null) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        IconButton(onClick = { innerPage = null }) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "返回聊天",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        InnerTab("文件", innerPage == 1) {
+                            model.loadDir(session.directory)
+                            innerPage = 1
+                        }
+                        InnerTab("终端", innerPage == 2) {
+                            model.loadPtys()
+                            innerPage = 2
+                        }
+                    }
+                    HorizontalDivider()
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        if (innerPage == 1) FilesScreen(model, wide) else TerminalScreen(model)
                     }
                 }
             }
@@ -1365,7 +1421,7 @@ private fun InfoChip(
 }
 
 /**
- * 输入区下方的一排状态底栏：模型 / 模式 / 命中 / 花费。
+ * 输入区下方的一排状态底栏：ctx / 命中 / 颗粒度 / Git / ↑↓ / 花费。
  * 不横向滚动；其余信息（上下文、tokens、显示细节、Git、打开的会话）在顶栏「⋮」里。
  */
 @Composable
@@ -1383,52 +1439,85 @@ private fun ChatStatusBar(
     onToggleDetail: () -> Unit,
     onGit: () -> Unit,
     onCache: () -> Unit,
+    onFiles: () -> Unit = {},
+    onTerminal: () -> Unit = {},
 ) {
-    // 左右各留 12dp：圆角屏幕不会切到胶囊的圆角。
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatusChip(
-                "ctx",
-                contextPct?.let { "${it.roundToInt()}%" } ?: "—",
-                valueColor = contextColor,
-            )
-            StatusChip(
-                "",
-                detailLevelLabel(model.detailLevel),
-                onClick = onToggleDetail,
-            )
-            StatusChip(
-                "Git",
-                "",
-                onClick = onGit,
-            )
-            StatusChip(
-                "命中",
-                hitLabel,
-                valueColor = hitColor,
-                onClick = onCache,
-            )
-            // Go 订阅没有会话花费（服务端 cost 为 0），改用本月额度占用当消费显示。
+            BarText("ctx", contextPct?.let { "${it.roundToInt()}%" } ?: "—", contextColor)
+            BarDivider()
+            BarText("命中", hitLabel, hitColor, onClick = onCache)
+            BarDivider()
+            BarText("", detailLevelLabel(model.detailLevel), onClick = onToggleDetail)
+            BarDivider()
+            BarText("Git", "", onClick = onGit)
             if (costLabel != null) {
-                StatusChip("", costLabel)
+                BarDivider()
+                BarText("", costLabel)
             } else if (goLabel != null) {
-                StatusChip("Go", goLabel, valueColor = goColor, onClick = onUsage)
-            } else {
-                StatusChip("", "—")
+                BarDivider()
+                BarText("Go", goLabel, goColor, onClick = onUsage)
             }
             Spacer(Modifier.weight(1f))
-            // ↑/↓ 放最末尾：这里位置最宽裕，顶栏就不用再挤一行
-            TokenStack(tokens)
+            BarDivider()
+            TokenInline(tokens, onClick = onFiles)
+            BarDivider()
+            IconButton(onClick = onFiles, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Rounded.FolderOpen, contentDescription = "文件", modifier = Modifier.size(15.dp))
+            }
+            IconButton(onClick = onTerminal, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Rounded.Terminal, contentDescription = "终端", modifier = Modifier.size(15.dp))
+            }
         }
+    }
+}
+
+@Composable
+private fun BarText(
+    label: String,
+    value: String,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: (() -> Unit)? = null,
+) {
+    Row(
+        Modifier
+            .then(if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier)
+            .padding(horizontal = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (label.isNotBlank()) {
+            Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (value.isNotBlank()) Spacer(Modifier.width(2.dp))
+        }
+        if (value.isNotBlank()) Text(value, fontSize = 9.sp, color = color)
+    }
+}
+
+@Composable
+private fun BarDivider() {
+    Box(
+        Modifier
+            .width(1.dp)
+            .height(12.dp)
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+    )
+}
+
+@Composable
+private fun TokenInline(tokens: Tokens?, onClick: (() -> Unit)? = null) {
+    Row(
+        Modifier
+            .then(if (onClick != null) Modifier.clickableNoRipple(onClick) else Modifier)
+            .padding(horizontal = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("↑ ${tokens?.let { formatTokens(it.input) } ?: "—"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(4.dp))
+        Text("↓ ${tokens?.let { formatTokens(it.output) } ?: "—"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1477,12 +1566,13 @@ private fun StatusChip(
 
 /** 顶栏右侧：tokens 上下两行（上是输入、下是输出），单位自动 k / M。 */
 @Composable
-private fun TokenStack(tokens: Tokens?) {
+private fun TokenStack(tokens: Tokens?, onClick: (() -> Unit)? = null) {
     // 和左边胶囊同一套中强调底，左对齐，上下两行
     Column(
         Modifier
             .clip(RoundedCornerShape(10.dp))
             .background(AndrocColor.Medium)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 9.dp, vertical = 3.dp),
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -1714,6 +1804,7 @@ private fun MessageItem(
     onOpenCard: (String, String) -> Unit = { _, _ -> },
 ) {
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
     if (msg.isError) {
         ConversationCard(
             title = "错误",
@@ -2706,9 +2797,26 @@ private fun toolCopyText(part: Part.Tool): String = buildString {
 }.trim()
 
 @Composable
-private fun CopyLabel(onClick: () -> Unit) {
+private fun InnerTab(text: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        color = if (selected) AndrocColor.MediumStrong else AndrocColor.Medium,
+        contentColor = if (selected) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.clickableNoRipple(onClick),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+        )
+    }
+}
+
+@Composable
+private fun CopyLabel(text: String = "复制", onClick: () -> Unit) {
     Text(
-        "复制",
+        text,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.primary,

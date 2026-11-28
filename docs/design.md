@@ -78,7 +78,64 @@ Androc 的复杂度集中在宿主：启动、挂载、校验、解压、自愈�
 
 ---
 
-## 4. 文档索引
+## 4. UI 主题：Excel 表格风格（紧凑分栏）
+
+目标：用“横线 + 竖线”的分栏表达信息密度，像 Excel 表格；不使用胶囊 chip，不堆空白。
+
+### 4.1 视觉 token
+
+| 元素 | 值 |
+|---|---|
+| 顶部横线 | 1dp，outline 18% |
+| 分栏竖线 | 1dp × 12dp，outline 22% |
+| 字号 | 9sp（标签和数值同一行） |
+| 标签色 | `onSurfaceVariant` |
+| 数值色 | `onSurface`；命中率/ctx/错误保留语义色 |
+| 横向 padding | 每栏 5dp；栏与栏之间不再加额外 gap |
+| 图标 | 15dp，放在 24dp 触摸目标内 |
+| 背景 | 透明或所在 Surface 底色；分栏本身不加圆角胶囊 |
+| 圆角 | 只给外层容器；分栏内部保持直角 |
+
+### 4.2 布局
+
+- 单行，禁止折行；左边状态（ctx、命中、颗粒度、Git、钱），右边导航（↑↓、文件、终端）。
+- **↑↓ 必须一行**：`↑ 4.5k  ↓ 307`，不再上下两行。
+- 钱：Go 显示额度并可点开额度；普通花费只读；不绑定终端跳转。
+- 文件/终端用图标；点击打开**对话内子页**，不是外层 tab；返回或再点图标回到聊天。
+- 没有内容的项直接省略，不显示空的 `—` 胶囊。
+- 溢出时横向滚动或省略标签，绝不折成第二行。
+
+### 4.3 交互
+
+- 每栏用 `clickableNoRipple`，点击区域至少 24dp。
+- 图标必须有 `contentDescription`。
+- 文件/终端子页：只替换内容区，顶部“文件 / 终端”标签，返回键回到聊天；不关闭会话、不切换外层 tab。
+
+### 4.4 实现
+
+| 元素 | 代码 |
+|---|---|
+| 状态栏 | `ChatStatusBar` |
+| 单栏文本 | `BarText` |
+| 竖线 | `BarDivider` |
+| 单行 token | `TokenInline` |
+| 内部子页 | `ChatScreen.innerPage` + `InnerTab` |
+
+### 4.5 反例
+
+- 胶囊 chip + 空白 + 双行 token 混排。
+- 用 `TextButton` 放状态栏/卡片头（48dp 最小高度会撑出 gap）。
+- 空 `—` 占位。
+- 状态栏跳到外层 tab 并关闭会话。
+
+### 4.6 后续
+
+- 把字号/线宽/透明度提成 `CompactBarTheme` 常量，文件列表、工具头复用。
+- 窄屏溢出时优先隐藏“命中”标签，只留数值。
+
+---
+
+## 5. 文档索引
 
 | 文档 | 内容 |
 |---|---|
@@ -98,11 +155,11 @@ Androc 的复杂度集中在宿主：启动、挂载、校验、解压、自愈�
 
 ---
 
-## 5. 改动检查
+## 6. 改动检查
 
 - [ ] 新增路径时，先确认它属于 `$HOME`、rootfs 还是 `nativeLibraryDir`，并写进 [`paths.md`](paths.md)。
 - [ ] 新增 rootfs 来源时，同时改 `MuslRootfs.dir` 与本文 §1。
 - [ ] 新增内置组件时，同时更新 flavor 资产、`AndroidAssets` 与文档。
-- [ ] 新增 UI 行为时，保持 [`mobile-integration.md`](mobile-integration.md) 的不变量。
+- [ ] 新增 UI 行为时，保持 [`mobile-integration.md`](mobile-integration.md) 的不变量；密集栏遵循 §4 的 Excel 表格风格。
 - [ ] 改启动链路时，跑完 [`handover.md`](handover.md) §5 的六步验收。
 - [ ] 发版前跑 `check-opencode-latest.py --strict`，并确认 thin/bundle/full 都能安装启动。

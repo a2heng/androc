@@ -39,6 +39,7 @@ files/
 | [`docs/handover.md`](docs/handover.md) | 总览与接手 |
 | [`docs/paths.md`](docs/paths.md) | 路径、挂载、rootfs 优先级 |
 | [`docs/plugins.md`](docs/plugins.md) | 发行版与内置组件 |
+| [`docs/design.md`](docs/design.md) | 设计不变量与 Excel 表格风格 |
 | [`docs/commands.md`](docs/commands.md) | 构建、调试、发布 |
 | [`docs/connections.md`](docs/connections.md) | 连接管理 |
 | [`docs/model.md`](docs/model.md) | 模型与 Provider |
